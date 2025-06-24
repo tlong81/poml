@@ -9,7 +9,7 @@ import './presentation';
 import './essentials';
 import "./components";
 import { reactRender } from './util/reactRender';
-import { dumpTrace, setTrace, clearTrace, isTracing, parseJsonWithBuffers } from './trace';
+import { dumpTrace, setTrace, clearTrace, isTracing, parseJsonWithBuffers } from './util/trace';
 
 export { RichContent, Message };
 
@@ -86,12 +86,17 @@ interface CliArgs {
   prettyPrint?: boolean;
   strict?: boolean;
   cwd?: string;
+  traceDir?: string;
 }
 
 export async function commandLine(args: CliArgs) {
   const readOptions = {
     trim: args.trim,
   };
+
+  if (args.traceDir) {
+    setTrace(true, args.traceDir);
+  }
 
   // Determine the working directory
   let workingDirectory: string;
