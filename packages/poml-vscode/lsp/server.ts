@@ -338,7 +338,10 @@ class PomlLspServer {
       text: text,
       speakerMode: true,
       displayFormat: 'rendered',
-      returnAllErrors: true
+      returnAllErrors: true,
+      // FIXME: should use the binded contexts and stylesheets when running the validation.
+      contexts: [],
+      stylesheets: [],
     });
     const errors = Array.isArray(response.error) ? response.error : response.error ? [response.error] : [];
 

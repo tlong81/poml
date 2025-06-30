@@ -44,8 +44,8 @@ export interface WebviewConfig {
 export interface WebviewUserOptions {
   speakerMode: boolean;
   displayFormat: 'rendered' | 'plain' | 'ir';
-  contexts?: string[];
-  stylesheets?: string[];
+  contexts: string[];
+  stylesheets: string[];
 }
 
 export const PreviewMethodName = 'poml/preview';

@@ -14,21 +14,26 @@ function basename(p: string): string {
 function updateChips(options: WebviewUserOptions) {
   const contexts = options.contexts ?? [];
   const stylesheets = options.stylesheets ?? [];
-  const contextContainer = $('#context-chips').empty();
-  const stylesheetContainer = $('#stylesheet-chips').empty();
 
+  // Remove existing chips other than #add-context and #add-stylesheet
+  $('#context-stylesheet-files .chip').not('#add-context, #add-stylesheet').remove();
+
+  // Add the chips onto #context-stylesheet-files before the add buttons
+  const addContextBtn = $('#add-context');
   for (const file of contexts) {
     const chip = $('<span class="chip"/>').attr('data-file', file);
+    $('<span class="context codicon codicon-file-symlink-file"></span>').appendTo(chip);
     chip.text(basename(file));
     $('<span class="remove codicon codicon-close"/>').appendTo(chip);
-    contextContainer.append(chip);
+    chip.insertBefore(addContextBtn);
   }
 
   for (const file of stylesheets) {
     const chip = $('<span class="chip"/>').attr('data-file', file);
+    $('<span class="stylesheet codicon codicon-symbol-color"></span>').appendTo(chip);
     chip.text(basename(file));
     $('<span class="remove codicon codicon-close"/>').appendTo(chip);
-    stylesheetContainer.append(chip);
+    chip.insertBefore(addContextBtn);
   }
 }
 
@@ -59,6 +64,7 @@ export const setupToolbar = (vscode: any, messaging: MessagePoster) => {
     navigator.clipboard.writeText(copyText);
   });
 
+  // Calls the prompting menu from vscode to add a context/stylesheet file.
   $('#add-context').on('click', function () {
     messaging.postCommand('poml.addContextFile', []);
   });
@@ -150,8 +156,11 @@ window.addEventListener('message', e => {
     $('#content').html(message.content);
   }
   if (message.type === WebviewMessage.UpdateUserOptions) {
+    // The contexts and stylesheets are updated from the server side,
+    // though the update is initially initiated by the client side.
     const newState: WebviewState = { ...getState(), ...message.options };
     vscodeApi?.setState(newState);
+    console.log('Updated state:', newState);
     updateChips(message.options);
   }
 });

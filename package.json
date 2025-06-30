@@ -16,20 +16,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onWebviewPanel:poml.preview",
-    "onCommand:poml.test",
-    "onCommand:poml.testNonChat",
-    "onCommand:poml.testRerun",
-    "onCommand:poml.testAbort",
-    "onCommand:poml.showPreview",
-    "onCommand:poml.showPreviewToSide",
-    "onCommand:poml.showLockedPreviewToSide",
-    "onCommand:poml.showSource",
-    "onCommand:poml.addContextFile",
-    "onCommand:poml.addStylesheetFile",
-    "onCommand:poml.removeContextFile",
-    "onCommand:poml.removeStylesheetFile",
-    "onCommand:poml.telemetry.completion"
+    "onWebviewPanel:poml.preview"
   ],
   "main": "./dist/extension.js",
   "contributes": {

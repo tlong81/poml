@@ -38,57 +38,74 @@ function ToolBar(props: WebviewUserOptions) {
 
   return (
     <div className="toolbar">
-      <div className="button oneclick" id="copy">
-        <ButtonContent icon="copy" content="Copy" />
-      </div>
-      <div className="button oneclick" id="add-context">
-        <ButtonContent icon="file-symlink-file" content="Add Context" />
-      </div>
-      <div className="chips" id="context-chips">
-        {props.contexts?.map(f => (
-          <span className="chip" data-file={f} key={f}>
-            {f.split(/[\\/]/).pop()}
-            <span className="remove codicon codicon-close"></span>
-          </span>
-        ))}
-      </div>
-      <div className="button oneclick" id="add-stylesheet">
-        <ButtonContent icon="symbol-color" content="Add Stylesheet" />
-      </div>
-      <div className="chips" id="stylesheet-chips">
-        {props.stylesheets?.map(f => (
-          <span className="chip" data-file={f} key={f}>
-            {f.split(/[\\/]/).pop()}
-            <span className="remove codicon codicon-close"></span>
-          </span>
-        ))}
-      </div>
-      <div
-        className={`button onoff ${speakerMode ? 'active' : ''}`}
-        id="speaker-mode"
-        data-value={speakerMode}
-      >
-        <ButtonContent icon="comment-discussion" content="Speaker Mode" />
-      </div>
-      <div className="button menu-selection" id="display-format" data-value={displayFormat}>
-        <ButtonContent
-          icon="code-oss"
-          content={`Display: ${applicableDisplayFormats.find(val => val.value === displayFormat)?.content}`}
-        />
-        <div className="expand">
-          <i className="codicon codicon-triangle-down"></i>
+      <div className="toolbar-buttons">
+        <div className="button oneclick" id="copy">
+          <ButtonContent icon="copy" content="Copy" />
         </div>
-        <div className="menu">
-          {applicableDisplayFormats.map(item => (
-            <div
-              className={`item ${displayFormat === item.value ? 'selected' : ''}`}
-              data-value={item.value}
-              key={item.value}
-            >
-              <ButtonContent icon="check" content={item.content} />
+
+        <div
+          className="button" id="context-stylesheet"
+        >
+          <ButtonContent icon="attach" content="Context & Stylesheet" />
+          {props.contexts.length + props.stylesheets.length > 0 && (
+            <div className="expand">
+              {props.contexts.length + props.stylesheets.length}
             </div>
-          ))}
+          )}
         </div>
+
+        <div
+          className={`button onoff ${speakerMode ? 'active' : ''}`}
+          id="speaker-mode"
+          data-value={speakerMode}
+        >
+          <ButtonContent icon="comment-discussion" content="Speaker Mode" />
+        </div>
+        <div className="button menu-selection" id="display-format" data-value={displayFormat}>
+          <ButtonContent
+            icon="code-oss"
+            content={`Display: ${applicableDisplayFormats.find(val => val.value === displayFormat)?.content}`}
+          />
+          <div className="expand">
+            <i className="codicon codicon-triangle-down"></i>
+          </div>
+          <div className="menu">
+            {applicableDisplayFormats.map(item => (
+              <div
+                className={`item ${displayFormat === item.value ? 'selected' : ''}`}
+                data-value={item.value}
+                key={item.value}
+              >
+                <ButtonContent icon="check" content={item.content} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="toolbar-files chips" id="context-stylesheet-files">
+        {props.contexts.map(f => (
+          <span className="chip" data-file={f} key={f}>
+            <span className="context codicon codicon-file-symlink-file"></span>
+            {f.split(/[\\/]/).pop()}
+            <span className="remove codicon codicon-close"></span>
+          </span>
+        ))}
+        {props.stylesheets.map(f => (
+          <span className="chip" data-file={f} key={f}>
+            <span className="stylesheet codicon codicon-symbol-color"></span>
+            {f.split(/[\\/]/).pop()}
+            <span className="remove codicon codicon-close"></span>
+          </span>
+        ))}
+        <span className="chip add" id="add-context">
+          <span className="codicon codicon-plus"></span>
+          Add Context
+        </span>
+        <span className="chip add" id="add-stylesheet">
+          <span className="codicon codicon-plus"></span>
+          Add Stylesheet
+        </span>
       </div>
     </div>
   );

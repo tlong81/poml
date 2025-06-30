@@ -44,10 +44,22 @@ body {
 }
 
 /* toolbar */
-
 .toolbar {
   display: flex;
+  flex-direction: column;
   gap: var(--poml-padding);
+}
+
+.toolbar-buttons {
+  display: flex;
+  gap: var(--poml-padding);
+  align-items: center;
+}
+
+.toolbar-files {
+  display: flex;
+  gap: var(--poml-padding-05);
+  flex-wrap: wrap;
   align-items: center;
 }
 
@@ -133,6 +145,43 @@ body {
 
 .toolbar .menu .item:hover {
   background: var(--vscode-list-hoverBackground);
+}
+
+.chips {
+  display: flex;
+  gap: var(--poml-padding-05);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--poml-padding-05);
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: 4px;
+  font-size: var(--poml-font-size-08);
+}
+
+.chip .codicon {
+  font-size: var(--poml-font-size-08);
+}
+
+.chip .remove {
+  margin-left: var(--poml-padding-035);
+  cursor: pointer;
+}
+
+.chip .remove:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.chip.add {
+  cursor: pointer;
+}
+
+.chip.add:hover {
+  background: var(--vscode-toolbar-hoverBackground);
 }
 
 .menu .item .avatar {
@@ -285,27 +334,4 @@ pre code {
 
 .chat-message-content {
   padding: 0 var(--poml-padding-02);
-}
-
-/* chip lists */
-.chips {
-  display: flex;
-  gap: var(--poml-padding-05);
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.chip {
-  display: flex;
-  align-items: center;
-  padding: 0 var(--poml-padding-035);
-  background: var(--vscode-toolbar-hoverBackground);
-  border: 1px solid var(--vscode-editorWidget-border);
-  border-radius: 10px;
-  font-size: var(--poml-font-size-08);
-}
-
-.chip .remove {
-  margin-left: var(--poml-padding-035);
-  cursor: pointer;
 }
