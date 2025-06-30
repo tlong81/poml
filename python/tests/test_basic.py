@@ -21,7 +21,6 @@ def test_prompt():
                 p.text("This is a paragraph in the document.")
 
         xml_output = p.dump_xml()
-        print(xml_output)
         assert xml_output == (
             """<Task caption="My Task">This is a task description.<Paragraph>
     <Header>Subheading</Header>This is a paragraph in the document.</Paragraph>
@@ -34,6 +33,51 @@ def test_prompt():
                 "content": "# My Task\n\nThis is a task description.\n\n## Subheading\n\nThis is a paragraph in the document.",
             }
         ]
+
+
+def test_document():
+    with open(Path(__file__).parent / "assets" / "pdf_latex_image.pdf", "rb") as f:
+        pdf_contents = f.read()
+    with Prompt() as p:
+        with p.document(buffer=pdf_contents, parser="pdf"):
+            p.text("This is a PDF document.")
+        xml_output = p.dump_xml()
+        assert "<Document" in xml_output
+        assert "base64=" in xml_output
+
+        result = p.render()
+        assert isinstance(result, list)
+        assert "Lorem ipsum" in result[0]["content"]
+
+
+def test_prompt_reuse_appendable():
+    """Ensure a Prompt instance can be reused across multiple context blocks."""
+
+    prompt = Prompt()
+
+    with prompt:
+        with prompt.role():
+            prompt.text("You are helpful.")
+        with prompt.task(caption="First"):
+            prompt.text("Describe A.")
+
+    # Results should be available outside the context
+    first_xml = prompt.dump_xml()
+    assert first_xml.count("<Task") == 1
+    first_render = prompt.render()
+    assert "Describe A." in first_render[0]["content"]
+
+    # Re-enter the context and append more content
+    with prompt:
+        with prompt.task(caption="Second"):
+            prompt.text("Describe B.")
+
+    second_xml = prompt.dump_xml()
+    # Both tasks should be present
+    assert second_xml.count("<Task") == 2
+    second_render = prompt.render()
+    assert "Describe A." in second_render[0]["content"]
+    assert "Describe B." in second_render[0]["content"]
 
 
 def test_trace():

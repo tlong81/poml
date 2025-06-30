@@ -82,6 +82,34 @@ export const setupToolbar = (vscode: any, messaging: MessagePoster) => {
     navigator.clipboard.writeText(copyText);
   });
 
+  $(document).on('click', '.chat-message-toolbar .codicon-code', function () {
+    const line = parseInt($(this).data('line'));
+    if (!isNaN(line)) {
+      messaging.postMessage(WebviewMessage.DidClick, { line });
+    }
+  });
+
+  $(document).on('dblclick', '[data-line]', function (e) {
+    // Stop the event from bubbling up to parent elements that also match '[data-line]'.
+    // This ensures the code inside only runs ONCE for the innermost element clicked.
+    e.stopPropagation();
+
+    if (!getState().doubleClickToSwitchToEditor) {
+      return;
+    }
+
+    const line = $(this).attr('data-line');
+    if (line) {
+      const num = parseInt(line, 10);
+      if (!isNaN(num)) {
+        messaging.postMessage(WebviewMessage.DidClick, { line: num });
+
+        // Prevent the browser's default double-click action (e.g., selecting text).
+        e.preventDefault();
+      }
+    }
+  });
+
   $('.toolbar .button.onoff').on('click', function () {
     $(this).toggleClass('active');
     $(this).data('value', $(this).hasClass('active'));

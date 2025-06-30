@@ -61,27 +61,6 @@ window.addEventListener('message', event => {
   }
 }, false);
 
-document.addEventListener('dblclick', event => {
-  if (!state.doubleClickToSwitchToEditor) {
-    return;
-  }
-
-  // FIXME: dblclick for switch to editor
-
-  // Ignore clicks on links
-  // for (let node = event.target as HTMLElement; node; node = node.parentNode as HTMLElement) {
-  //     if (node.tagName === 'A') {
-  //         return;
-  //     }
-  // }
-
-  // const offset = event.pageY;
-  // const line = getEditorLineNumberForPageOffset(offset);
-  // if (typeof line === 'number' && !isNaN(line)) {
-  //     messaging.postMessage('didClick', { line: Math.floor(line) });
-  // }
-});
-
 document.addEventListener('click', event => {
   if (!event) {
     return;

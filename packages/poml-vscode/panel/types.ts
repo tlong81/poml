@@ -1,4 +1,4 @@
-import { Message, RichContent } from 'poml';
+import { Message, RichContent, SourceMapMessage, SourceMapRichContent } from 'poml';
 import * as vscode from 'vscode';
 
 /**
@@ -61,6 +61,7 @@ export interface PreviewResponse {
   ir: string;
   content: RichContent | Message[];
   error?: string | any[];
+  sourceMap?: SourceMapRichContent[] | SourceMapMessage[];
 }
 
 /**
