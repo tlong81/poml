@@ -1,0 +1,21 @@
+{
+  "name": "poml",
+  "version": "0.0.5",
+  "description": "Prompt Orchestration Markup Language",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "assets"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/poml"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tspc -p tsconfig.lib.json",
+    "prepack": "npm run build"
+  }
+}

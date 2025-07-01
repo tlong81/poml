@@ -273,7 +273,10 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint packages",
     "test": "jest",
-    "test-vscode": "vscode-test"
+    "test-vscode": "vscode-test",
+    "build-poml-lib": "tspc -p packages/poml/tsconfig.lib.json",
+    "pack-poml-lib": "npm run build-poml-lib && npm pack ./packages/poml --pack-destination packages/poml",
+    "publish-poml-lib": "npm run build-poml-lib && cd packages/poml && npm publish --access public"
   },
   "devDependencies": {
     "@accessibility-insights/eslint-plugin": "^1.3.2",
