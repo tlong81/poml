@@ -13,6 +13,8 @@ export class AddContextFileCommand implements Command {
     }
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: true,
+      openLabel: 'Add Context',
+      title: 'Select Context JSON Files to Associate with POML',
       filters: { 'JSON Files': ['json'], 'All Files': ['*'] }
     });
     if (!uris) {
@@ -35,6 +37,8 @@ export class AddStylesheetFileCommand implements Command {
     }
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: true,
+      openLabel: 'Add Stylesheet',
+      title: 'Select Stylesheet JSON Files to Associate with POML',
       filters: { 'JSON Files': ['json'], 'All Files': ['*'] }
     });
     if (!uris) {

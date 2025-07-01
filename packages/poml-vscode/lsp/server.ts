@@ -197,13 +197,17 @@ class PomlLspServer {
       for (const c of params.contexts ?? []) {
         try {
           context = { ...context, ...parseJsonWithBuffers(readFileSync(c, 'utf-8')) };
-        } catch {}
+        } catch (e) {
+          console.error(`Failed to parse context file ${c}: ${e}`);
+        }
       }
       let stylesheet: { [key: string]: any } = {};
       for (const s of params.stylesheets ?? []) {
         try {
           stylesheet = { ...stylesheet, ...parseJsonWithBuffers(readFileSync(s, 'utf-8')) };
-        } catch {}
+        } catch (e) {
+          console.error(`Failed to parse stylesheet file ${s}: ${e}`);
+        }
       }
       ir = await read(documentContent, undefined, context, stylesheet, filePath);
     } catch (e) {
