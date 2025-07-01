@@ -44,11 +44,11 @@ function ToolBar(props: WebviewUserOptions) {
         </div>
 
         <div
-          className="button" id="context-stylesheet"
+          className={`button onoff ${props.contexts.length + props.stylesheets.length ? 'active' : ''}`} id="context-stylesheet"
         >
-          <ButtonContent icon="attach" content="Context & Stylesheet" />
+          <ButtonContent icon="references" content="Context & Stylesheet" />
           {props.contexts.length + props.stylesheets.length > 0 && (
-            <div className="expand">
+            <div className="badge">
               {props.contexts.length + props.stylesheets.length}
             </div>
           )}
@@ -83,29 +83,8 @@ function ToolBar(props: WebviewUserOptions) {
         </div>
       </div>
 
-      <div className="toolbar-files chips" id="context-stylesheet-files">
-        {props.contexts.map(f => (
-          <span className="chip" data-file={f} key={f}>
-            <span className="context codicon codicon-file-symlink-file"></span>
-            {f.split(/[\\/]/).pop()}
-            <span className="remove codicon codicon-close"></span>
-          </span>
-        ))}
-        {props.stylesheets.map(f => (
-          <span className="chip" data-file={f} key={f}>
-            <span className="stylesheet codicon codicon-symbol-color"></span>
-            {f.split(/[\\/]/).pop()}
-            <span className="remove codicon codicon-close"></span>
-          </span>
-        ))}
-        <span className="chip add" id="add-context">
-          <span className="codicon codicon-plus"></span>
-          Add Context
-        </span>
-        <span className="chip add" id="add-stylesheet">
-          <span className="codicon codicon-plus"></span>
-          Add Stylesheet
-        </span>
+      <div className={`toolbar-files chips ${props.contexts.length + props.stylesheets.length ? '' : 'hidden'}`} id="context-stylesheet-files">
+        {/* This is set on the client side. */}
       </div>
     </div>
   );
@@ -194,16 +173,16 @@ function ChatMessages(props: { messages: Message[]; toRender: boolean; mappings?
             <h3 className="name">{role}</h3>
           </div>
           <div className="chat-message-toolbar">
-            <div className="toolbar-item">
+            <div className="toolbar-item tooltip-anchor">
               <a
                 className="codicon codicon-code"
                 role="button"
                 aria-label="Jump to Source Code"
                 data-line={line}
               ></a>
-              <span className="toolbar-tooltip">Source Code</span>
+              <span className="tooltip">Source Code</span>
             </div>
-            <div className="toolbar-item">
+            <div className="toolbar-item tooltip-anchor">
               <a
                 className="codicon codicon-copy"
                 role="button"
@@ -214,7 +193,7 @@ function ChatMessages(props: { messages: Message[]; toRender: boolean; mappings?
                     : JSON.stringify(message.content, null, 2)
                 }
               ></a>
-              <span className="toolbar-tooltip">Copy</span>
+              <span className="tooltip">Copy</span>
             </div>
           </div>
         </div>
