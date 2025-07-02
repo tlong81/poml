@@ -7,5 +7,5 @@
     "composite": false
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["tests/**/*"]
+  "exclude": ["tests/**/*", "node_modules", "dist"]
 }
