@@ -5,8 +5,10 @@ import * as PDFJS from 'pdfjs-dist/legacy/build/pdf.js';
 let pdfjs = PDFJS;
 
 if (PDFJS.GlobalWorkerOptions === undefined) {
+  // in esm
   pdfjs = (PDFJS as any).default;
 } else {
+  // in commonjs
   pdfjs = PDFJS;
 }
 
