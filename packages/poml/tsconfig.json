@@ -4,7 +4,9 @@
     "outDir": "dist",
     "rootDir": "./",
     "declaration": true,
-    "composite": false
+    "composite": false,
+    "module": "ESNext",
+    "moduleResolution": "bundler"
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["tests/**/*", "node_modules", "dist"]

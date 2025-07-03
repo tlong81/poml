@@ -2,20 +2,31 @@
   "name": "poml",
   "version": "0.0.5",
   "description": "Prompt Orchestration Markup Language",
+  "type": "module",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": ["dist"],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/poml"
   },
+  "homepage": "https://github.com/microsoft/poml",
+  "keywords": ["poml", "prompt", "markup", "language", "ai", "llm"],
   "engines": {
     "node": ">=18"
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tspc -p tsconfig.lib.json",
+    "build": "tspc -p tsconfig.json",
     "prepack": "cp ../../README.md . && cp ../../LICENSE . && npm run build",
     "postpack": "rm README.md LICENSE"
   },
