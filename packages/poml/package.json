@@ -3,15 +3,16 @@
   "version": "0.0.5",
   "description": "Prompt Orchestration Markup Language",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": ["dist"],
   "license": "MIT",
@@ -26,9 +27,11 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tspc -p tsconfig.json",
+    "clean": "rm -rf dist .build README.md LICENSE",
+    "prebuild": "npm run clean",
+    "build": "tspc -p tsconfig.lib.json && cp util/xmlContentAssist.js .build/util/xmlContentAssist.js && cp util/xmlContentAssist.d.ts .build/util/xmlContentAssist.d.ts && rollup -c rollup.confg.js",
     "prepack": "cp ../../README.md . && cp ../../LICENSE . && npm run build",
-    "postpack": "rm README.md LICENSE"
+    "postpack": "rm -rf README.md LICENSE"
   },
   "dependencies": {
     "@xml-tools/ast": "^5.0.5",

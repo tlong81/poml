@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist",
+    "outDir": ".build",
     "rootDir": "./",
     "declaration": true,
     "composite": false,
@@ -9,5 +9,5 @@
     "moduleResolution": "bundler"
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["tests/**/*", "node_modules", "dist"]
+  "exclude": ["tests/**/*", "node_modules", "dist", ".build"]
 }
