@@ -7,7 +7,10 @@ const external = [...Object.keys(pkg.dependencies || {}), ...peerDependencies];
 
 export default {
   // The entry point of your library
-  input: '.build/index.js',
+  input: [
+    '.build/index.js',
+    '.build/cli.js',
+  ],
   output: [
     {
       dir: 'dist',

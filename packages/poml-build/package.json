@@ -36,9 +36,9 @@
   },
   "sideEffects": false,
   "scripts": {
-    "clean": "rm -rf dist .build README.md LICENSE",
+    "clean": "rm -rf dist .build README.md LICENSE poml-*.tgz",
     "prebuild": "npm run clean",
-    "build": "tspc -p tsconfig.lib.json && cp util/xmlContentAssist.js .build/util/xmlContentAssist.js && cp util/xmlContentAssist.d.ts .build/util/xmlContentAssist.d.ts && rollup -c rollup.confg.js",
+    "build": "tspc -p tsconfig.json && rollup -c rollup.confg.js",
     "prepack": "cp ../../README.md . && cp ../../LICENSE . && npm run build",
     "postpack": "rm -rf README.md LICENSE"
   },
@@ -62,5 +62,8 @@
     "xlsx": "^0.18.5",
     "xmlbuilder2": "^3.1.1",
     "yargs": "^17.7.2"
+  },
+  "bin": {
+    "poml": "./dist/cli.cjs"
   }
 }
