@@ -4,7 +4,7 @@ import * as mammoth from 'mammoth';
 import * as cheerio from 'cheerio';
 
 import { Header, Newline, Text, Image, Paragraph, PropsSyntaxBase, List, ListItem, Bold, Italic } from 'poml/essentials';
-import pdf from 'pdf-parse';
+import pdf from '../util/safePdfParse';
 import { component, expandRelative, useWithCatch } from 'poml/base';
 import { Table } from './table';
 import { parsePythonStyleSlice } from './utils';
