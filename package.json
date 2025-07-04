@@ -311,14 +311,6 @@
     "webpack": "^5.93.0",
     "webpack-cli": "^5.1.4"
   },
-  "peerDependencies": {
-    "canvas": "^2.11.2",
-    "path2d-polyfill": "^2.0.1"
-  },
-  "optionalDependencies": {
-    "canvas": "^2.11.2",
-    "path2d-polyfill": "^2.0.1"
-  },
   "dependencies": {
     "@azure-rest/ai-inference": "^1.0.0-beta.5",
     "@azure/core-sse": "^2.1.3",
