@@ -84,6 +84,7 @@ function ToolBar(props: WebviewUserOptions) {
                 key={item.value}
                 role="menuitem"
                 tabIndex={0}
+                aria-label={`Display format: ${item.content}`}
               >
                 <ButtonContent icon="check" content={item.content} />
               </div>
