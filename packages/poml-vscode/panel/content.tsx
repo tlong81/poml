@@ -233,11 +233,11 @@ function Content(props: WebviewUserOptions & PreviewResponse) {
   } else {
     content = content as RichContent;
     if (displayFormat === 'ir') {
-      result = <CodeBlock content={ir} />;
+      result = <div class="main-container"><CodeBlock content={ir} /></div>;
     } else if (displayFormat === 'plain') {
-      result = <CodeBlock content={content} mappings={sourceMap as SourceMapRichContent[]} rawText={rawText} />;
+      result = <div class="main-container"><CodeBlock content={content} mappings={sourceMap as SourceMapRichContent[]} rawText={rawText} /></div>;
     } else if (displayFormat === 'rendered') {
-      result = <Markdown content={content} />;
+      result = <div class="main-container"><Markdown content={content} /></div>;
     } else {
       result = <div>Invalid display format</div>;
     }

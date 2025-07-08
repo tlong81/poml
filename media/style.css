@@ -335,6 +335,10 @@ pre code {
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 
+.main-container {
+  padding: var(--poml-padding-15) 0;
+}
+
 .tooltip {
   visibility: hidden;
   width: auto;
