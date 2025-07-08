@@ -20,7 +20,7 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext) {
     const pomlContext = {
       prompt: request.prompt,
       files: files.map(f => fileURLToPath(f.toString())),
-    }
+    };
 
     const params: PreviewParams = {
       uri: filePath.toString(),
@@ -32,8 +32,7 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext) {
     };
     const response: PreviewResponse = await getClient().sendRequest(PreviewMethodName, params);
     if (response.error) {
-      stream.markdown(`Error rendering POML: ${response.error}`);
-      return;
+      throw new Error(`Error rendering POML: ${response.error}`);
     } else {
       console.log('Rendered POML:', response.content);
       // stream.button('View Rendered Prompt', )
@@ -48,8 +47,7 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext) {
 
     const [model] = await vscode.lm.selectChatModels();
     if (!model) {
-      stream.markdown('No chat model available.');
-      return;
+      throw new Error('No chat model available.');
     }
     const chatResponse = await model.sendRequest(chatMessages, {}, token);
     for await (const part of chatResponse.text) {
