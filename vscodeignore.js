@@ -7,6 +7,7 @@ const path = require('path');
 // Add the names of the packages you need to ship in node_modules.
 // For example:
 // const rootPackages = ['sharp', 'pdf-parse', 'pdfjs-dist'];
+// pdf-parse and pdfjs-dist are already manually handled.
 const rootPackages = ['sharp'];
 // -------------------
 

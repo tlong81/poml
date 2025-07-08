@@ -38,7 +38,7 @@
   "scripts": {
     "clean": "rm -rf dist .build README.md LICENSE poml-*.tgz",
     "prebuild": "npm run clean",
-    "build": "tspc -p tsconfig.json && rollup -c rollup.confg.js",
+    "build": "tspc -p tsconfig.json && rollup -c rollup.config.js",
     "prepack": "cp ../../README.md . && cp ../../LICENSE . && npm run build",
     "postpack": "rm -rf README.md LICENSE"
   },
