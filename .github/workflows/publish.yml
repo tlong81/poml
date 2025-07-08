@@ -87,7 +87,7 @@ jobs:
         WHEEL_NAME=$(basename "$WHEEL_FILE" .whl)
         
         # Split wheel name into components: name-version-python_tag-abi_tag-platform_tag
-        # Example: poml-0.0.5-py3-none-any -> poml, 0.0.5, py3, none, any
+        # Example: poml-999.0-py3-none-any -> poml, 999.0, py3, none, any
         IFS='-' read -ra PARTS <<< "$WHEEL_NAME"
         
         if [ ${#PARTS[@]} -ge 5 ]; then
@@ -119,4 +119,19 @@ jobs:
       with:
         name: ${{ steps.find-wheel.outputs.platform-wheel-name }}
         path: ${{ steps.find-wheel.outputs.renamed-wheel-file }}
+        compression-level: 0
+
+    # Build and pack npm library only once
+    - name: Pack NPM package
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        cd packages/poml
+        npm pack
+
+    - name: Upload NPM package
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: poml-npm-universal
+        path: packages/poml/poml-*.tgz
         compression-level: 0

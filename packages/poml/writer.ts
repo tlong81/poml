@@ -1596,7 +1596,7 @@ export class XmlWriter extends SerializeWriter<XmlOptions> {
   }
 }
 
-interface FreeOptions { }
+type FreeOptions = any;
 
 export class FreeWriter extends Writer<FreeOptions> {
   protected initializeOptions(options?: FreeOptions | undefined): FreeOptions {
@@ -1648,7 +1648,7 @@ export class FreeWriter extends Writer<FreeOptions> {
   }
 }
 
-interface MultiMediaOptions { }
+type MultiMediaOptions = any;
 
 export class MultiMediaWriter extends Writer<MultiMediaOptions> {
   protected initializeOptions(options?: MultiMediaOptions | undefined): MultiMediaOptions {

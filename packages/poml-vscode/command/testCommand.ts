@@ -5,7 +5,7 @@ import { PanelSettings } from 'poml-vscode/panel/types';
 import { PreviewMethodName, PreviewParams, PreviewResponse } from '../panel/types';
 import { getClient } from '../extension';
 import { Message, RichContent } from 'poml';
-const { BaseChatModel } = require('@langchain/core/language_models/chat_models');  // eslint-disable-line @typescript-eslint/no-var-requires
+const { BaseChatModel } = require('@langchain/core/language_models/chat_models');  // eslint-disable-line
 const {
   HumanMessage,
   AIMessage,
@@ -13,10 +13,10 @@ const {
   BaseMessage,
   MessageContent,
   MessageContentComplex
-} = require('@langchain/core/messages');  // eslint-disable-line @typescript-eslint/no-var-requires
+} = require('@langchain/core/messages');  // eslint-disable-line
 // import { ChatAnthropic } from "@langchain/anthropic";
-const { AzureChatOpenAI, ChatOpenAI, AzureOpenAI, OpenAI } = require('@langchain/openai');  // eslint-disable-line @typescript-eslint/no-var-requires
-const { ChatGoogleGenerativeAI, GoogleGenerativeAI } = require('@langchain/google-genai');  // eslint-disable-line @typescript-eslint/no-var-requires
+const { AzureChatOpenAI, ChatOpenAI, AzureOpenAI, OpenAI } = require('@langchain/openai');  // eslint-disable-line
+const { ChatGoogleGenerativeAI, GoogleGenerativeAI } = require('@langchain/google-genai');  // eslint-disable-line
 import ModelClient from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
 import { createSseStream } from '@azure/core-sse';
