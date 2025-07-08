@@ -39,7 +39,7 @@ function ToolBar(props: WebviewUserOptions) {
   return (
     <div className="toolbar">
       <div className="toolbar-buttons">
-        <div className="button oneclick" id="copy" role="button" tabIndex={0}>
+        <div className="button oneclick" id="copy" role="button" tabIndex={0} aria-label="Copy content">
           <ButtonContent icon="copy" content="Copy" />
         </div>
 
@@ -48,6 +48,7 @@ function ToolBar(props: WebviewUserOptions) {
           id="context-stylesheet"
           role="button"
           tabIndex={0}
+          aria-label="Toggle context and stylesheet view"
         >
           <ButtonContent icon="references" content="Context & Stylesheet" />
           {props.contexts.length + props.stylesheets.length > 0 && (
@@ -63,10 +64,11 @@ function ToolBar(props: WebviewUserOptions) {
           data-value={speakerMode}
           role="button"
           tabIndex={0}
+          aria-label="Toggle speaker mode"
         >
           <ButtonContent icon="comment-discussion" content="Speaker Mode" />
         </div>
-        <div className="button menu-selection" id="display-format" data-value={displayFormat} role="button" tabIndex={0}>
+        <div className="button menu-selection" id="display-format" data-value={displayFormat} role="button" tabIndex={0} aria-label="Select display format">
           <ButtonContent
             icon="code-oss"
             content={`Display: ${applicableDisplayFormats.find(val => val.value === displayFormat)?.content}`}
