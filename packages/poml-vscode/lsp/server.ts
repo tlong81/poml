@@ -39,7 +39,7 @@ import { PomlFile, PomlToken } from 'poml/file';
 import { readdirSync, readFileSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { PreviewParams, PreviewMethodName, PreviewResponse } from '../panel/types';
+import { PreviewParams, PreviewMethodName, PreviewResponse, WebviewUserOptions } from '../panel/types';
 import { formatComponentDocumentation, formatParameterDocumentation } from './documentFormatter';
 import {
   DelayedTelemetryReporter,
@@ -68,6 +68,7 @@ class PomlLspServer {
   private throttleTime: number;
   private cache: Map<string, ComputationCache>;
   private diagnosticCache: Map<string, DiagnosticCache>;
+  private associatedOptions: Map<string, WebviewUserOptions>;
   private telemetryReporter: TelemetryServer;
   private statisticsReporter: DelayedTelemetryReporter;
   private edittingReporter: DelayedTelemetryReporter;
@@ -87,6 +88,8 @@ class PomlLspServer {
     this.throttleTime = 10; // 10 ms
     this.cache = new Map();
     this.diagnosticCache = new Map();
+    // this is a hack to store the options in the preview into the server.
+    this.associatedOptions = new Map();
 
     this.statistics = {};
 
@@ -277,6 +280,15 @@ class PomlLspServer {
     const elapsed = completeTime - computedTime;
     const allocatedTime = elapsed * 2; // Double the time for the next request
 
+    // NOTE: The lsp server uses the configuration from preview as the associated options.
+    // This is a hack to set the options in the server.
+    this.associatedOptions.set(params.uri.toString(), {
+      speakerMode: params.speakerMode,
+      displayFormat: params.displayFormat,
+      contexts: [...params.contexts],
+      stylesheets: [...params.stylesheets]
+    });
+
     // Send telemetry
     this.incrementStatistics('preview');
     this.edittingReporter.reportTelemetry(TelemetryEvent.EdittingCurrently, {
@@ -338,15 +350,21 @@ class PomlLspServer {
     const diagnostics: Diagnostic[] = [];
     const otherDiagnostics: Record<string, { text: string; diags: Diagnostic[] }> = {};
 
+    const options = this.associatedOptions.get(textDocument.uri.toString()) ?? {
+      speakerMode: true,
+      displayFormat: 'plain',
+      contexts: [],
+      stylesheets: []
+    };
+
     const response = await this.onPreview({
       uri: textDocument.uri,
       text: text,
-      speakerMode: true,
-      displayFormat: 'rendered',
+      speakerMode: options.speakerMode,
+      displayFormat: options.displayFormat,
       returnAllErrors: true,
-      // FIXME: should use the binded contexts and stylesheets when running the validation.
-      contexts: [],
-      stylesheets: [],
+      contexts: options.contexts,
+      stylesheets: options.stylesheets,
     });
     const errors = Array.isArray(response.error) ? response.error : response.error ? [response.error] : [];
 
