@@ -7,7 +7,7 @@ import { getState, setCachedState } from './state';
 let toolbarUpdate: (() => void) | undefined = undefined;
 
 /* Rerender chips when the user adds/removes context or stylesheet files.
-   This is called when the backend sends an update to th webview to update the chip contents. */
+   This is called when the backend sends an update to the webview to update the chip contents. */
 let chipUpdate: (() => void) | undefined = undefined;
 
 let vscodeApi: any = undefined;
@@ -74,26 +74,33 @@ export const setupToolbar = (vscode: any, messaging: MessagePoster) => {
 
   chipUpdate = function () {
     rerenderChips(getState());
+  };
 
-    // Calls the prompting menu from vscode to add a context/stylesheet file.
-    $('#add-context').on('click', function () {
-      messaging.postCommand('poml.addContextFile', []);
-    });
+  /* ------------------------------------------------------------------ */
+  /* Delegated click-handlers (registered ONCE)                         */
+  /* ------------------------------------------------------------------ */
 
-    $('#add-stylesheet').on('click', function () {
-      messaging.postCommand('poml.addStylesheetFile', []);
-    });
-
-    $(document).on('click', '.context .remove', function () {
+  $(document)
+    // Add context / stylesheet
+    .off('click', '#add-context')
+    .on('click', '#add-context', () => messaging.postCommand('poml.addContextFile', []))
+    .off('click', '#add-stylesheet')
+    .on('click', '#add-stylesheet', () => messaging.postCommand('poml.addStylesheetFile', []))
+    // Remove context / stylesheet
+    .off('click', '.context .remove')
+    .on('click', '.context .remove', function () {
       const file = $(this).parent().data('file');
       messaging.postCommand('poml.removeContextFile', [file]);
-    });
-
-    $(document).on('click', '.stylesheet .remove', function () {
+    })
+    .off('click', '.stylesheet .remove')
+    .on('click', '.stylesheet .remove', function () {
       const file = $(this).parent().data('file');
       messaging.postCommand('poml.removeStylesheetFile', [file]);
     });
-  }
+
+  /* ------------------------------------------------------------------ */
+  /* One-time toolbar button handlers                                   */
+  /* ------------------------------------------------------------------ */
 
   $('#copy').on('click', function () {
     const copyText = $('#copy-content').attr('data-value') ?? '';
@@ -140,9 +147,7 @@ export const setupToolbar = (vscode: any, messaging: MessagePoster) => {
   $('.toolbar .button.onoff').on('click', function () {
     $(this).toggleClass('active');
     $(this).data('value', $(this).hasClass('active'));
-    if (toolbarUpdate) {
-      toolbarUpdate();
-    }
+    toolbarUpdate?.();
   });
 
   $('.toolbar .button.menu-selection').on('click', function (e) {
@@ -157,19 +162,18 @@ export const setupToolbar = (vscode: any, messaging: MessagePoster) => {
     $(this).addClass('selected');
     button.removeClass('active');
     e.stopPropagation();
-    if (toolbarUpdate) {
-      toolbarUpdate();
-    }
+    toolbarUpdate?.();
   });
   $(document).on('click', function () {
     $('.toolbar .button.menu-selection').removeClass('active');
   });
 
-  if (chipUpdate) {
-    chipUpdate();
-  }
+  chipUpdate?.(); // initial render
 };
 
+/* -------------------------------------------------------------------- */
+/* Handle messages from the extension                                   */
+/* -------------------------------------------------------------------- */
 window.addEventListener('message', e => {
   const message = e.data as any;
   if (message === undefined) {
@@ -184,8 +188,6 @@ window.addEventListener('message', e => {
     const newState: WebviewState = { ...getState(), ...message.options };
     vscodeApi?.setState(newState);
     setCachedState(newState);
-    if (chipUpdate) {
-      chipUpdate();
-    }
+    chipUpdate?.();
   }
 });

@@ -37,6 +37,7 @@ import {
 } from 'poml/base';
 import { PomlFile, PomlToken } from 'poml/file';
 import { readdirSync, readFileSync } from 'fs';
+import { readFile } from 'fs/promises';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { PreviewParams, PreviewMethodName, PreviewResponse } from '../panel/types';
 import { formatComponentDocumentation, formatParameterDocumentation } from './documentFormatter';
@@ -177,7 +178,7 @@ class PomlLspServer {
         // Sometimes the request happens before the document is opened
         // so we need to read the file from disk
         try {
-          documentContent = readFileSync(filePath, 'utf-8');
+          documentContent = await readFile(filePath, 'utf-8');
         } catch (e) {
           // Unable to read the file
           return {
@@ -196,7 +197,7 @@ class PomlLspServer {
       let context: { [key: string]: any } = {};
       for (const c of params.contexts ?? []) {
         try {
-          context = { ...context, ...parseJsonWithBuffers(readFileSync(c, 'utf-8')) };
+          context = { ...context, ...parseJsonWithBuffers(await readFile(c, 'utf-8')) };
         } catch (e) {
           console.error(`Failed to parse context file ${c}: ${e}`);
         }
@@ -204,7 +205,7 @@ class PomlLspServer {
       let stylesheet: { [key: string]: any } = {};
       for (const s of params.stylesheets ?? []) {
         try {
-          stylesheet = { ...stylesheet, ...parseJsonWithBuffers(readFileSync(s, 'utf-8')) };
+          stylesheet = { ...stylesheet, ...parseJsonWithBuffers(await readFile(s, 'utf-8')) };
         } catch (e) {
           console.error(`Failed to parse stylesheet file ${s}: ${e}`);
         }
@@ -378,7 +379,7 @@ class PomlLspServer {
           doc = cached;
         } else {
           try {
-            targetText = readFileSync((e as any).sourcePath, 'utf-8');
+            targetText = await readFile((e as any).sourcePath, 'utf-8');
           } catch {
             targetText = '';
           }

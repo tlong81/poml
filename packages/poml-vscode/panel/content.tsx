@@ -39,12 +39,15 @@ function ToolBar(props: WebviewUserOptions) {
   return (
     <div className="toolbar">
       <div className="toolbar-buttons">
-        <div className="button oneclick" id="copy">
+        <div className="button oneclick" id="copy" role="button" tabIndex={0}>
           <ButtonContent icon="copy" content="Copy" />
         </div>
 
         <div
-          className={`button onoff ${props.contexts.length + props.stylesheets.length ? 'active' : ''}`} id="context-stylesheet"
+          className={`button onoff ${props.contexts.length + props.stylesheets.length ? 'active' : ''}`} 
+          id="context-stylesheet"
+          role="button"
+          tabIndex={0}
         >
           <ButtonContent icon="references" content="Context & Stylesheet" />
           {props.contexts.length + props.stylesheets.length > 0 && (
@@ -58,10 +61,12 @@ function ToolBar(props: WebviewUserOptions) {
           className={`button onoff ${speakerMode ? 'active' : ''}`}
           id="speaker-mode"
           data-value={speakerMode}
+          role="button"
+          tabIndex={0}
         >
           <ButtonContent icon="comment-discussion" content="Speaker Mode" />
         </div>
-        <div className="button menu-selection" id="display-format" data-value={displayFormat}>
+        <div className="button menu-selection" id="display-format" data-value={displayFormat} role="button" tabIndex={0}>
           <ButtonContent
             icon="code-oss"
             content={`Display: ${applicableDisplayFormats.find(val => val.value === displayFormat)?.content}`}
@@ -75,6 +80,8 @@ function ToolBar(props: WebviewUserOptions) {
                 className={`item ${displayFormat === item.value ? 'selected' : ''}`}
                 data-value={item.value}
                 key={item.value}
+                role="menuitem"
+                tabIndex={0}
               >
                 <ButtonContent icon="check" content={item.content} />
               </div>
