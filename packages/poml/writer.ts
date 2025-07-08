@@ -677,6 +677,8 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
     const multimedia: PositionalContentMultiMedia[] = [];
 
     // Remove all spaces children before and after block elements
+    // or between two multimedia-only nodes so images do not create
+    // stray blank lines when placed consecutively.
     let removedSpace = boxes;
 
     while (true) {
@@ -686,7 +688,18 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         const beforeBlock =
           i < removedSpace.length - 1 && (
             removedSpace[i + 1].before.includes('\n') || /^\n+$/.test(removedSpace[i + 1].text));
-        return !((afterBlock || beforeBlock) && /^[ \t]*$/.test(child.text));
+        // When a whitespace-only box is sandwiched between two multimedia
+        // boxes (e.g., two consecutive images), we treat it like the spaces
+        // around a block element so it doesn't generate a blank line.
+        const afterMedia =
+          i > 0 &&
+          removedSpace[i - 1].multimedia.length > 0 &&
+          removedSpace[i - 1].multimedia.length === removedSpace[i - 1].text.length;
+        const beforeMedia =
+          i < removedSpace.length - 1 &&
+          removedSpace[i + 1].multimedia.length > 0 &&
+          removedSpace[i + 1].multimedia.length === removedSpace[i + 1].text.length;
+        return !((afterBlock || beforeBlock || afterMedia || beforeMedia) && /^[ \t]*$/.test(child.text));
       });
       if (afterRemoveSpace.length === removedSpace.length) {
         break;
@@ -1583,7 +1596,7 @@ export class XmlWriter extends SerializeWriter<XmlOptions> {
   }
 }
 
-interface FreeOptions { }
+type FreeOptions = any;
 
 export class FreeWriter extends Writer<FreeOptions> {
   protected initializeOptions(options?: FreeOptions | undefined): FreeOptions {
@@ -1635,7 +1648,7 @@ export class FreeWriter extends Writer<FreeOptions> {
   }
 }
 
-interface MultiMediaOptions { }
+type MultiMediaOptions = any;
 
 export class MultiMediaWriter extends Writer<MultiMediaOptions> {
   protected initializeOptions(options?: MultiMediaOptions | undefined): MultiMediaOptions {
