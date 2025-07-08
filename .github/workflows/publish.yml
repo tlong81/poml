@@ -122,20 +122,16 @@ jobs:
         compression-level: 0
 
     # Build and pack npm library only once
-    - name: Pack poml npm package
+    - name: Pack NPM package
       if: matrix.os == 'ubuntu-latest'
-      run: npm run pack-poml-lib
+      run: |
+        cd packages/poml
+        npm pack
 
-    - name: Upload poml npm package
+    - name: Upload NPM package
       if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
-        name: poml-npm
+        name: poml-npm-universal
         path: packages/poml/poml-*.tgz
         compression-level: 0
-
-    - name: Publish poml npm package
-      if: matrix.os == 'ubuntu-latest'
-      run: npm run publish-poml-lib
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
