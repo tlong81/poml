@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import re
 from pathlib import Path
 import multiprocessing
 
@@ -100,6 +101,14 @@ def test_trace_directory(tmp_path: Path):
     assert result == [{"speaker": "human", "content": "Dir"}]
     files = list(run_dir.glob("*_markup.poml"))
     assert len(files) == 1
+
+
+def test_trace_directory_name_format(tmp_path: Path):
+    clear_trace()
+    run_dir = set_trace(True, tmp_path)
+    assert run_dir is not None
+    assert re.fullmatch(r"\d{20}", run_dir.name)
+    set_trace(False)
 
 
 def _mp_worker():
