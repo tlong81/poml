@@ -176,7 +176,7 @@ window.addEventListener('message', e => {
     return;
   }
   if (message.type === WebviewMessage.UpdateContent) {
-    $('#content').html(message.content);
+    $('#content').replaceWith(message.content);
   }
   if (message.type === WebviewMessage.UpdateUserOptions) {
     // The contexts and stylesheets are updated from the server side,
