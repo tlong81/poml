@@ -53,6 +53,7 @@ export const PreviewMethodName = 'poml/preview';
 export interface PreviewParams extends WebviewUserOptions {
   uri: string;
   text?: string;
+  inlineContext?: { [key: string]: any };
   returnAllErrors?: boolean;
 }
 

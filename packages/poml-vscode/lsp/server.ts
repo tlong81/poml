@@ -197,7 +197,7 @@ class PomlLspServer {
     ErrorCollection.clear();
     let ir: string;
     try {
-      let context: { [key: string]: any } = {};
+      let context: { [key: string]: any } = params.inlineContext ?? {};
       for (const c of params.contexts ?? []) {
         try {
           context = { ...context, ...parseJsonWithBuffers(await readFile(c, 'utf-8')) };

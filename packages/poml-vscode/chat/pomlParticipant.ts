@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { getClient } from 'poml-vscode/extension';
 import { PreviewMethodName, PreviewParams, PreviewResponse } from 'poml-vscode/panel/types';
 import { Message } from 'poml';
+import { fileURLToPath } from 'url';
 
 export function registerPomlChatParticipant(context: vscode.ExtensionContext) {
   const handler: vscode.ChatRequestHandler = async (
@@ -15,19 +16,27 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext) {
       .map(v => (v instanceof vscode.Location ? v.uri : v))
       .filter((v): v is vscode.Uri => v instanceof vscode.Uri);
 
-    const docs = files.map(f => `  <document src="${f.toString()}" parser="txt" />`).join('\n');
-    const markup = `<poml>\n  <task>${request.prompt}</task>\n  <cp caption="References">\n${docs}\n  </cp>\n</poml>`;
+    const filePath = vscode.Uri.joinPath(context.extensionUri, 'gallery', 'chat.poml');
+    const pomlContext = {
+      prompt: request.prompt,
+      files: files.map(f => fileURLToPath(f.toString())),
+    }
 
     const params: PreviewParams = {
-      uri: 'inmemory://poml/chat.poml',
-      text: markup,
+      uri: filePath.toString(),
       speakerMode: true,
-      displayFormat: 'rendered'
+      displayFormat: 'rendered',
+      inlineContext: pomlContext,
+      contexts: [], 
+      stylesheets: [],
     };
     const response: PreviewResponse = await getClient().sendRequest(PreviewMethodName, params);
     if (response.error) {
       stream.markdown(`Error rendering POML: ${response.error}`);
       return;
+    } else {
+      console.log('Rendered POML:', response.content);
+      // stream.button('View Rendered Prompt', )
     }
     const messages = response.content as Message[];
     const chatMessages = messages.map(m => {
