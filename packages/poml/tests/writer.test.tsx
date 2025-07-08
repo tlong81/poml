@@ -108,6 +108,14 @@ describe('markdown', () => {
   });
 
   test('emptyMessages', () => {
+    // Turn off console.warn in this test case.
+    const originalWarn = console.warn;
+    console.warn = (m, ...a) => {
+      if (m.includes('output')) {
+        return;
+      }
+      originalWarn(m, ...a);
+    };
     const writer = new MarkdownWriter();
     const ir = `<p><p speaker="human"></p><p speaker="ai"></p></p>`;
     const direct = writer.writeMessages(ir);
@@ -120,6 +128,7 @@ describe('markdown', () => {
     expect(segs).toStrictEqual([
       { startIndex: 0, endIndex: 0, irStartIndex: 0, irEndIndex: 0, speaker: 'human', content: [] }
     ]);
+    console.warn = originalWarn; // Restore console.warn
   });
 
   test('markdownWriteMatchesSegments', () => {

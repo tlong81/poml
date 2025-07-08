@@ -1,3 +1,7 @@
+const log = console.log;
+console.log = (m, ...a) =>
+  /Cannot polyfill `(DOMMatrix|Path2D)`/.test(m) ? null : log(m, ...a);
+
 // import * as PDFJS from 'pdfjs-dist';
 // import PDFJS from 'pdfjs-dist/legacy/build/pdf.js';
 import * as PDFJS from 'pdfjs-dist/legacy/build/pdf.js';
@@ -13,6 +17,8 @@ if (PDFJS.GlobalWorkerOptions === undefined) {
 }
 
 pdfjs.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.js';
+
+console.log = log; // restore original console.log
 
 export async function getNumPages(pdfBuffer: ArrayBuffer | Buffer): Promise<number> {
   const uint8Array = pdfBuffer instanceof ArrayBuffer ? new Uint8Array(pdfBuffer) : new Uint8Array(pdfBuffer);
