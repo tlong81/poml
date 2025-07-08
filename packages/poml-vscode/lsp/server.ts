@@ -37,14 +37,16 @@ import {
 } from 'poml/base';
 import { PomlFile, PomlToken } from 'poml/file';
 import { readdirSync, readFileSync } from 'fs';
+import { readFile } from 'fs/promises';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { PreviewParams, PreviewMethodName, PreviewResponse } from '../panel/types';
+import { PreviewParams, PreviewMethodName, PreviewResponse, WebviewUserOptions } from '../panel/types';
 import { formatComponentDocumentation, formatParameterDocumentation } from './documentFormatter';
 import {
   DelayedTelemetryReporter,
   TelemetryEvent,
   TelemetryServer
 } from 'poml-vscode/util/telemetryServer';
+import { parseJsonWithBuffers } from 'poml/util/trace';
 
 interface ComputationCache {
   key: string; // Can be file uri, file content, ...
@@ -66,6 +68,7 @@ class PomlLspServer {
   private throttleTime: number;
   private cache: Map<string, ComputationCache>;
   private diagnosticCache: Map<string, DiagnosticCache>;
+  private associatedOptions: Map<string, WebviewUserOptions>;
   private telemetryReporter: TelemetryServer;
   private statisticsReporter: DelayedTelemetryReporter;
   private edittingReporter: DelayedTelemetryReporter;
@@ -85,6 +88,8 @@ class PomlLspServer {
     this.throttleTime = 10; // 10 ms
     this.cache = new Map();
     this.diagnosticCache = new Map();
+    // this is a hack to store the options in the preview into the server.
+    this.associatedOptions = new Map();
 
     this.statistics = {};
 
@@ -176,7 +181,7 @@ class PomlLspServer {
         // Sometimes the request happens before the document is opened
         // so we need to read the file from disk
         try {
-          documentContent = readFileSync(filePath, 'utf-8');
+          documentContent = await readFile(filePath, 'utf-8');
         } catch (e) {
           // Unable to read the file
           return {
@@ -192,7 +197,23 @@ class PomlLspServer {
     ErrorCollection.clear();
     let ir: string;
     try {
-      ir = await read(documentContent, undefined, undefined, undefined, filePath);
+      let context: { [key: string]: any } = {};
+      for (const c of params.contexts ?? []) {
+        try {
+          context = { ...context, ...parseJsonWithBuffers(await readFile(c, 'utf-8')) };
+        } catch (e) {
+          console.error(`Failed to parse context file ${c}: ${e}`);
+        }
+      }
+      let stylesheet: { [key: string]: any } = {};
+      for (const s of params.stylesheets ?? []) {
+        try {
+          stylesheet = { ...stylesheet, ...parseJsonWithBuffers(await readFile(s, 'utf-8')) };
+        } catch (e) {
+          console.error(`Failed to parse stylesheet file ${s}: ${e}`);
+        }
+      }
+      ir = await read(documentContent, undefined, context, stylesheet, filePath);
     } catch (e) {
       this.telemetryReporter.reportTelemetryError(TelemetryEvent.ReadUncaughtException, e);
       console.error(e);
@@ -259,6 +280,15 @@ class PomlLspServer {
     const elapsed = completeTime - computedTime;
     const allocatedTime = elapsed * 2; // Double the time for the next request
 
+    // NOTE: The lsp server uses the configuration from preview as the associated options.
+    // This is a hack to set the options in the server.
+    this.associatedOptions.set(params.uri.toString(), {
+      speakerMode: params.speakerMode,
+      displayFormat: params.displayFormat,
+      contexts: [...params.contexts],
+      stylesheets: [...params.stylesheets]
+    });
+
     // Send telemetry
     this.incrementStatistics('preview');
     this.edittingReporter.reportTelemetry(TelemetryEvent.EdittingCurrently, {
@@ -320,12 +350,21 @@ class PomlLspServer {
     const diagnostics: Diagnostic[] = [];
     const otherDiagnostics: Record<string, { text: string; diags: Diagnostic[] }> = {};
 
+    const options = this.associatedOptions.get(textDocument.uri.toString()) ?? {
+      speakerMode: true,
+      displayFormat: 'plain',
+      contexts: [],
+      stylesheets: []
+    };
+
     const response = await this.onPreview({
       uri: textDocument.uri,
       text: text,
-      speakerMode: true,
-      displayFormat: 'rendered',
-      returnAllErrors: true
+      speakerMode: options.speakerMode,
+      displayFormat: options.displayFormat,
+      returnAllErrors: true,
+      contexts: options.contexts,
+      stylesheets: options.stylesheets,
     });
     const errors = Array.isArray(response.error) ? response.error : response.error ? [response.error] : [];
 
@@ -358,7 +397,7 @@ class PomlLspServer {
           doc = cached;
         } else {
           try {
-            targetText = readFileSync((e as any).sourcePath, 'utf-8');
+            targetText = await readFile((e as any).sourcePath, 'utf-8');
           } catch {
             targetText = '';
           }

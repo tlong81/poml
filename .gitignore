@@ -1,11 +1,14 @@
 out
 dist
+.build
 node_modules
 .vscode-test/
 *.vsix
+*.whl
 /media/index.js
 /media/codicons
 /packages/poml-vscode-webview/*.js
 /packages/poml-vscode-webview/*.js.map
 /debug
 __pycache__/
+poml-*.tgz

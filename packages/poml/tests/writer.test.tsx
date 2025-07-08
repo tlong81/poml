@@ -108,18 +108,30 @@ describe('markdown', () => {
   });
 
   test('emptyMessages', () => {
-    const writer = new MarkdownWriter();
-    const ir = `<p><p speaker="human"></p><p speaker="ai"></p></p>`;
-    const direct = writer.writeMessages(ir);
-    const segs = writer.writeMessagesWithSourceMap(ir);
-    const reconstructed = segs.map(m => ({
-      speaker: m.speaker,
-      content: richContentFromSourceMap(m.content)
-    }));
-    expect(direct).toStrictEqual(reconstructed);
-    expect(segs).toStrictEqual([
-      { startIndex: 0, endIndex: 0, irStartIndex: 0, irEndIndex: 0, speaker: 'human', content: [] }
-    ]);
+    // Turn off console.warn in this test case.
+    const originalWarn = console.warn;
+    try {
+      console.warn = (m, ...a) => {
+        if (m.includes('output')) {
+          return;
+        }
+        originalWarn(m, ...a);
+      };
+      const writer = new MarkdownWriter();
+      const ir = `<p><p speaker="human"></p><p speaker="ai"></p></p>`;
+      const direct = writer.writeMessages(ir);
+      const segs = writer.writeMessagesWithSourceMap(ir);
+      const reconstructed = segs.map(m => ({
+        speaker: m.speaker,
+        content: richContentFromSourceMap(m.content)
+      }));
+      expect(direct).toStrictEqual(reconstructed);
+      expect(segs).toStrictEqual([
+        { startIndex: 0, endIndex: 0, irStartIndex: 0, irEndIndex: 0, speaker: 'human', content: [] }
+      ]);
+    } finally {
+      console.warn = originalWarn; // Restore console.warn
+    }
   });
 
   test('markdownWriteMatchesSegments', () => {
