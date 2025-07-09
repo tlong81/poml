@@ -36,7 +36,7 @@ import {
   WriteError
 } from 'poml/base';
 import { PomlFile, PomlToken } from 'poml/file';
-import { readdirSync, readFileSync } from 'fs';
+import { encodingForModel, Tiktoken } from 'js-tiktoken';
 import { readFile } from 'fs/promises';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { PreviewParams, PreviewMethodName, PreviewResponse, WebviewUserOptions } from '../panel/types';
@@ -47,6 +47,8 @@ import {
   TelemetryServer
 } from 'poml-vscode/util/telemetryServer';
 import { parseJsonWithBuffers } from 'poml/util/trace';
+import { getImageWidthHeight } from 'poml/util/image';
+import { estimateImageTokens } from 'poml/util/tokenCounterImage';
 
 interface ComputationCache {
   key: string; // Can be file uri, file content, ...
@@ -68,6 +70,7 @@ class PomlLspServer {
   private throttleTime: number;
   private cache: Map<string, ComputationCache>;
   private diagnosticCache: Map<string, DiagnosticCache>;
+  private encodingCache: Map<string, Tiktoken>;
   private associatedOptions: Map<string, WebviewUserOptions>;
   private telemetryReporter: TelemetryServer;
   private statisticsReporter: DelayedTelemetryReporter;
@@ -90,6 +93,8 @@ class PomlLspServer {
     this.diagnosticCache = new Map();
     // this is a hack to store the options in the preview into the server.
     this.associatedOptions = new Map();
+
+    this.encodingCache = new Map();
 
     this.statistics = {};
 
@@ -165,6 +170,41 @@ class PomlLspServer {
     }
   }
 
+  private getModelEncoding(model: string): Tiktoken {
+    if (this.encodingCache.has(model)) {
+      return this.encodingCache.get(model)!;
+    }
+    try {
+      const enc = encodingForModel(model as any);
+      this.encodingCache.set(model, enc);
+      return enc;
+    } catch (e) {
+      console.warn(`Unknown model "${model}"; using gpt-4o as default: ${e}`);
+      const enc = encodingForModel('gpt-4o');
+      this.encodingCache.set(model, enc);
+      return enc;
+    }
+  }
+
+  private async computeTokens(content: RichContent, model: string): Promise<number> {
+    const enc = this.getModelEncoding(model);
+    if (typeof content === 'string') {
+      return enc.encode(content).length;
+    } else {
+      let total = 0;
+      for (const part of content) {
+        if (typeof part === 'string') {
+          total += enc.encode(part).length;
+        } else {
+          const { width, height } = await getImageWidthHeight(part.base64);
+          // For images, we can use a heuristic based on width and height
+          total += estimateImageTokens(width, height, { model: model as any });
+        }
+      }
+      return total;
+    }
+  }
+
   private async computePreviewResponse(params: PreviewParams): Promise<PreviewResponse> {
     const { speakerMode, uri } = params;
 
@@ -226,6 +266,7 @@ class PomlLspServer {
     }
     let result: Message[] | RichContent;
     let sourceMap: SourceMapMessage[] | SourceMapRichContent[] | undefined;
+    let tokens: { perMessage?: number[]; total: number } | undefined = undefined;
     try {
       if (speakerMode) {
         const map = writeWithSourceMap(ir, { speaker: true }) as SourceMapMessage[];
@@ -234,10 +275,26 @@ class PomlLspServer {
           speaker: m.speaker,
           content: richContentFromSourceMap(m.content)
         }));
+        if (params.returnTokenCounts) {
+          const model = params.returnTokenCounts.model;
+          const perMessageTokens = await Promise.all(
+            result.map(async m => await this.computeTokens(m.content, model))
+          );
+          tokens = {
+            perMessage: perMessageTokens,
+            total: perMessageTokens.reduce((a, b) => a + b, 0)
+          };
+        }
       } else {
         const map = writeWithSourceMap(ir) as SourceMapRichContent[];
         sourceMap = map;
         result = richContentFromSourceMap(map);
+        if (params.returnTokenCounts) {
+          const model = params.returnTokenCounts.model;
+          tokens = {
+            total: await this.computeTokens(result, model)
+          };
+        }
       }
     } catch (e) {
       this.telemetryReporter.reportTelemetryError(TelemetryEvent.WriteUncaughtException, e);
@@ -249,10 +306,12 @@ class PomlLspServer {
         error: `Unable to perform "write" step when rendering file: ${e}`
       };
     }
+
     return {
       rawText: documentContent,
       ir,
       content: result,
+      tokens,
       sourceMap,
       error: params.returnAllErrors
         ? ErrorCollection.list()

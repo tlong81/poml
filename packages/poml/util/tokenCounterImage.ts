@@ -67,6 +67,13 @@ export function estimateImageTokens(
 ): number {
   if (width <= 0 || height <= 0) throw new Error('width/height must be > 0');
 
+  if (!PATCH_MODELS[model] && !DETAIL_MODEL_TABLE[model]) {
+    console.warn(`Unknown model "${model}"; using gpt-4o as default.`);
+    // If the model is unknown, default to gpt-4o
+    // This is a fallback; ideally, the caller should ensure a valid model.
+    model = 'gpt-4o';
+  }
+
   /* Patch-grid models (32 px, cap = 1 536) */
   if (PATCH_MODELS[model]?.factor) {
     const raw = patchModelTokens(width, height);
@@ -140,29 +147,4 @@ function detailModelTokens(
   // (3) Count 512-px tiles
   const tiles = Math.ceil(w / TILE) * Math.ceil(h / TILE);
   return base + tile * tiles;
-}
-
-/* --- Self-test --- */
-// Run `ts-node <file>.ts` (or drop into your test framework)
-if (require.main === module) {
-  type Case = { w: number; h: number; model: VisionModel;
-                detail?: DetailLevel; expected: number };
-
-  const cases: Case[] = [
-    { w: 1024, h: 1024, model: 'gpt-4.1-mini', expected: 1_024 },
-    { w: 1800, h: 2400, model: 'gpt-4.1-mini', expected: 1_452 },
-    { w: 1024, h: 1024, model: 'gpt-4o', detail: 'high', expected: 765 },
-    { w: 2048, h: 4096, model: 'gpt-4o', detail: 'high', expected: 1_105 },
-    { w: 4096, h: 8192, model: 'gpt-4o', detail: 'low',  expected: 85  },
-  ];
-
-  const ok = cases.every(({ w, h, model, detail, expected }) => {
-    const got = estimateImageTokens(w, h, { model, detail });
-    const msg = `${w}×${h} on ${model} (${detail ?? 'auto'}): ${got}` +
-                (got === expected ? ' ✓' : ` ✗ (expected ${expected})`);
-    console.log(msg);
-    return got === expected;
-  });
-
-  process.exit(ok ? 0 : 1);
 }

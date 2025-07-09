@@ -54,6 +54,7 @@ export interface PreviewParams extends WebviewUserOptions {
   uri: string;
   text?: string;
   returnAllErrors?: boolean;
+  returnTokenCounts?: { model: string };
 }
 
 export interface PreviewResponse {
@@ -62,6 +63,10 @@ export interface PreviewResponse {
   content: RichContent | Message[];
   error?: string | any[];
   sourceMap?: SourceMapRichContent[] | SourceMapMessage[];
+  tokens?: {
+    perMessage?: number[];
+    total: number;
+  };
 }
 
 /**
