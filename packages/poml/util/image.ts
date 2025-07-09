@@ -70,3 +70,12 @@ export async function preprocessImage(args: PreprocessImageArgs): Promise<Proces
     mimeType: 'image/' + fileType
   }
 }
+
+export async function getImageWidthHeight(base64: string): Promise<{ width: number; height: number }> {
+  const image = sharp(Buffer.from(base64, 'base64'));
+  const metadata = await image.metadata();
+  if (!metadata.width || !metadata.height) {
+    throw new Error('Cannot determine image dimensions');
+  }
+  return { width: metadata.width, height: metadata.height };
+}
