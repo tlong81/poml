@@ -10,9 +10,9 @@ const {
   identity,
   last,
   isEmpty
-} = require('lodash');  // eslint-disable-line @typescript-eslint/no-var-requires
-const { BaseXmlCstVisitor } = require('@xml-tools/parser');  // eslint-disable-line @typescript-eslint/no-var-requires
-const { findNextTextualToken } = require('@xml-tools/common');  // eslint-disable-line @typescript-eslint/no-var-requires
+} = require('lodash');  // eslint-disable-line
+const { BaseXmlCstVisitor } = require('@xml-tools/parser');  // eslint-disable-line
+const { findNextTextualToken } = require('@xml-tools/common');  // eslint-disable-line
 
 function getSuggestions(options) {
   const actualOptions = defaultsDeep(options, {
