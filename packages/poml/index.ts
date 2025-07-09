@@ -5,6 +5,7 @@ import path from 'path';
 import { EnvironmentDispatcher } from "./writer";
 import { ErrorCollection, Message, RichContent, StyleSheetProvider, SystemError, SourceMapRichContent, SourceMapMessage, richContentFromSourceMap } from './base';
 import { PomlFile, PomlReaderOptions } from './file';
+import { ExtendedPomlReader } from './readers';
 import './presentation';
 import './essentials';
 import "./components";
@@ -23,7 +24,12 @@ export const read = async (
 ): Promise<string> => {
   let readElement: React.ReactElement;
   if (typeof element === 'string') {
-    readElement = new PomlFile(element, options, sourcePath).react(context);
+    // Use ExtendedPomlReader for string input to handle mixed content
+    const extendedReader = ExtendedPomlReader.createForContent(element, {
+      ...options,
+      sourcePath
+    });
+    readElement = extendedReader.read(element, context);
   } else {
     if (options || context) {
       console.warn('Options and context are ignored when element is React.ReactElement');

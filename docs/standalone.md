@@ -16,7 +16,79 @@ To create a POML file, simply create a file with the `.poml` extension and wrap 
 </poml>
 ```
 
-You can also type anything without a `poml` tag, and it will be treated as a string. It's called "free text mode" in POML. However, it has several limitations currently, including unabling to render any XML tags wrapped with `<>`, unabling to use many special characters, and unabling to use all the wonderful features of POML. So, it's always recommended to use the `poml` tag before everything.
+### Extended POML Format (Mixed Content)
+
+POML now supports **Extended Format** which allows you to mix pure text content (like Markdown) with POML elements seamlessly. This means you can:
+
+1. **Write primarily text-based documents** with occasional POML components
+2. **Use existing Markdown or text files** and add POML elements incrementally  
+3. **Combine structured and unstructured content** in a single file
+
+#### Pure Text with POML Elements
+
+You can create files that are primarily text-based with embedded POML elements:
+
+```markdown
+# My Analysis Task
+
+This is regular **Markdown** content that explains the context.
+
+<task>
+  Analyze the following data and provide insights about user behavior.
+</task>
+
+Here are the key metrics to focus on:
+
+- User engagement rates
+- Conversion funnel performance
+- Retention patterns
+
+<examples>
+  <example>
+    <input>What's the average session duration?</input>
+    <output>The average session duration is 4.2 minutes with a median of 2.8 minutes.</output>
+  </example>
+</examples>
+
+## Conclusion
+
+Based on the analysis above, we can see...
+```
+
+Any POML element defined in the component library (like `<task>`, `<examples>`, `<role>`, etc.) will be automatically detected and processed, while the surrounding text remains as regular content.
+
+#### Text Blocks within POML
+
+You can also embed pure text content within POML sections using the `<text>` tag:
+
+```xml
+<poml>
+  <role>You are a data analyst</role>
+  
+  <text>
+    ## Background Information
+    
+    This is **markdown** content that will be preserved exactly as written.
+    
+    ```python
+    def calculate_metrics():
+        return {"engagement": 0.85, "conversion": 0.12}
+    ```
+    
+    The above code shows the current metrics calculation.
+  </text>
+  
+  <task>Analyze the metrics and suggest improvements</task>
+</poml>
+```
+
+The content within `<text>` tags is processed as pure text without any POML parsing, preserving formatting and special characters.
+
+#### Migration from Text Files
+
+You can easily upgrade existing text files by simply adding POML elements where needed. The file will automatically be processed using the extended format, maintaining your existing content while adding POML functionality.
+
+You can also type anything without a `poml` tag, and it will be treated as a string. It's called "free text mode" in POML. However, it has several limitations currently, including unabling to render any XML tags wrapped with `<>`, unabling to use many special characters, and unabling to use all the wonderful features of POML. The new Extended POML Format addresses these limitations by supporting mixed content files.
 
 **Tip: Glossary for Beginners:**
 
