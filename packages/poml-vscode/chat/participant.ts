@@ -32,7 +32,10 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext) {
     };
     const response: PreviewResponse = await getClient().sendRequest(PreviewMethodName, params);
     if (response.error) {
-      throw new Error(`Error rendering POML: ${response.error}`);
+      const errorMessage = Array.isArray(response.error) 
+        ? response.error.map(err => typeof err === 'object' ? JSON.stringify(err) : String(err)).join(', ')
+        : String(response.error);
+      throw new Error(`Error rendering POML: ${errorMessage}`);
     } else {
       console.log('Rendered POML:', response.content);
       // stream.button('View Rendered Prompt', )
