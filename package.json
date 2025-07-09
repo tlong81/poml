@@ -10,13 +10,14 @@
   "icon": "media/icon/poml-icon-128.png",
   "version": "0.0.6",
   "engines": {
-    "vscode": "^1.92.0"
+    "vscode": "^1.95.0"
   },
   "categories": [
     "Other"
   ],
   "activationEvents": [
-    "onWebviewPanel:poml.preview"
+    "onWebviewPanel:poml.preview",
+    "onChatParticipant:poml.runner"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -135,6 +136,14 @@
         "command": "poml.telemetry.completion",
         "title": "Telemetry: Completion",
         "category": "POML"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "poml.runner",
+        "fullName": "POML",
+        "name": "poml",
+        "description": "Run a POML chat"
       }
     ],
     "menus": {
@@ -309,7 +318,7 @@
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@types/showdown": "^2.0.6",
-    "@types/vscode": "^1.92.0",
+    "@types/vscode": "^1.95.0",
     "@typescript-eslint/eslint-plugin": "^8.36.0",
     "@typescript-eslint/parser": "^8.36.0",
     "@vscode/test-cli": "^0.0.9",
