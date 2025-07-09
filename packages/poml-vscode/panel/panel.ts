@@ -442,6 +442,11 @@ export class POMLWebviewPanel {
     };
   }
 
+  private getLanguageModelSettings(uri: vscode.Uri) {
+    const settings = this._previewConfigurations.loadAndCacheSettings(uri);
+    return settings.languageModel;
+  }
+
   private extensionResourcePath(mediaFile: string): string {
     return this.editor.webview
       .asWebviewUri(vscode.Uri.joinPath(this._context.extensionUri, 'media', mediaFile))
@@ -475,8 +480,10 @@ export class POMLWebviewPanel {
     this.currentVersion = { resource, version: document.version };
     const webviewConfig = this.getWebviewConfig(document);
 
+    const languageModelSettings = this.getLanguageModelSettings(resource);
     const requestParams: PreviewParams = {
       uri: resource.toString(),
+      returnTokenCounts: { model: languageModelSettings.model },
       ...this._userOptions
     };
 
@@ -564,8 +571,10 @@ export class POMLWebviewPanel {
 
   private async onDidUserOptionsChange(): Promise<void> {
     const resource = this._pomlUri;
+    const languageModelSettings = this.getLanguageModelSettings(resource);
     const requestParams: PreviewParams = {
       uri: resource.toString(),
+      returnTokenCounts: { model: languageModelSettings.model },
       ...this._userOptions
     };
 
