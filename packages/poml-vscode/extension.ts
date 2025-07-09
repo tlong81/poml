@@ -14,7 +14,7 @@ import {
 } from 'vscode-languageclient/node';
 import { initializeReporter, getTelemetryReporter, TelemetryClient } from './util/telemetryClient';
 import { TelemetryEvent } from './util/telemetryServer';
-import { registerPomlChatParticipant } from './chat/pomlParticipant';
+import { registerPomlChatParticipant } from './chat/participant';
 
 let extensionPath = "";
 

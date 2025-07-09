@@ -19,7 +19,7 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext) {
     const filePath = vscode.Uri.joinPath(context.extensionUri, 'gallery', 'chat.poml');
     const pomlContext = {
       prompt: request.prompt,
-      files: files.map(f => fileURLToPath(f.toString())),
+      files: files.map(f => f.fsPath),
     };
 
     const params: PreviewParams = {

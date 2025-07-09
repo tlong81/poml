@@ -113,11 +113,6 @@
         }
       },
       {
-        "command": "poml.telemetry.completion",
-        "title": "Telemetry: Completion",
-        "category": "POML"
-      },
-      {
         "command": "poml.addContextFile",
         "title": "Add Context File",
         "category": "POML"
