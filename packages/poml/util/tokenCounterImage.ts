@@ -71,6 +71,7 @@ export function estimateImageTokens(
     console.warn(`Unknown model "${model}"; using gpt-4o as default.`);
     // If the model is unknown, default to gpt-4o
     // This is a fallback; ideally, the caller should ensure a valid model.
+    model = 'gpt-4o';
   }
 
   /* Patch-grid models (32 px, cap = 1 536) */
