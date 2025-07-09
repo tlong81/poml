@@ -1,7 +1,7 @@
 import json
 import os
 import tempfile
-import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from .cli import run
@@ -15,7 +15,7 @@ def set_trace(enabled: bool = True, tempdir: Optional[str | Path] = None) -> Opt
     """Enable or disable tracing of ``poml`` calls.
 
     If ``tempdir`` is provided when enabling tracing, a subdirectory named by
-    the current timestamp (in nanoseconds) is created inside ``tempdir``. The
+    the current timestamp (``YYYYMMDDHHMMSSffffff``) is created inside ``tempdir``. The
     returned directory may be shared with subprocesses by setting the
     ``POML_TRACE`` environment variable in the invoking script.
     """
@@ -31,7 +31,8 @@ def set_trace(enabled: bool = True, tempdir: Optional[str | Path] = None) -> Opt
     if tempdir is not None:
         base = Path(tempdir)
         base.mkdir(parents=True, exist_ok=True)
-        run_dir = base / str(time.time_ns())
+        ts = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        run_dir = base / ts
         run_dir.mkdir(parents=True, exist_ok=True)
         _trace_dir = run_dir
     elif env_dir:
