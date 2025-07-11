@@ -302,7 +302,7 @@ pre code {
   margin: 0;
 }
 
-.chat-message-header .content .name .token-count {
+.chat-message-header .token-count {
   margin-left: var(--poml-padding);
   font-weight: normal;
   font-size: var(--poml-font-size-09);
