@@ -16,6 +16,8 @@ To create a POML file, simply create a file with the `.poml` extension and wrap 
 </poml>
 ```
 
+You can also type anything without a `poml` tag, and it will be treated as a string. It's called "free text mode" in POML. However, it has several limitations currently, including unabling to render any XML tags wrapped with `<>`, unabling to use many special characters, and unabling to use all the wonderful features of POML. So, it's always recommended to use the `poml` tag before everything.
+
 **Tip: Glossary for Beginners:**
 
 - **Tag:** A tag is a fundamental building block in XML (and POML). It's used to mark the beginning and end of an element. Tags are enclosed in angle brackets (`<` and `>`). For example, `<p>` is an opening tag, and `</p>` is a closing tag. Everything between the opening and closing tags is considered part of that element.

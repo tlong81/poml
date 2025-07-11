@@ -161,7 +161,7 @@ export const AnyOrFree = component('AnyOrFree')((
  * </poml>
  * ```
  */
-export const Poml = component('Text', ['div', 'poml'])((
+export const Text = component('Text', ['div', 'poml'])((
   props: React.PropsWithChildren<PropsSyntaxAny>
 ) => {
   const { syntax, children, name, type, ...others } = props;
@@ -188,6 +188,8 @@ export const Poml = component('Text', ['div', 'poml'])((
     );
   }
 });
+
+export const Poml = Text;
 
 /**
  * Paragraph (`<p>`) is a standalone section preceded by and followed by two blank lines in markup syntaxes.
