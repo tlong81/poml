@@ -156,8 +156,14 @@ function Markdown(props: { content: RichContent }) {
   return <div dangerouslySetInnerHTML={{ __html: converter.makeHtml(concatenatedMarkdown) }} />;
 }
 
-function ChatMessages(props: { messages: Message[]; toRender: boolean; mappings?: SourceMapMessage[]; rawText?: string }) {
-  const { messages, toRender, mappings, rawText } = props;
+function ChatMessages(props: {
+  messages: Message[];
+  toRender: boolean;
+  tokens?: number[];
+  mappings?: SourceMapMessage[];
+  rawText?: string;
+}) {
+  const { messages, toRender, tokens, mappings, rawText } = props;
   return messages.map((message, idx) => {
     const map = mappings ? mappings[idx] : undefined;
     const line = map && rawText !== undefined ? lineFromIndex(rawText, map.startIndex) : undefined;
@@ -180,7 +186,12 @@ function ChatMessages(props: { messages: Message[]; toRender: boolean; mappings?
             <div className="avatar">
               <div className={`codicon codicon-${icon}`}></div>
             </div>
-            <h3 className="name">{role}</h3>
+            <h3 className="name">
+              {role}
+              {tokens && tokens[idx] !== undefined && (
+                <span className="token-count">{tokens[idx]}</span>
+              )}
+            </h3>
           </div>
           <div className="chat-message-toolbar">
             <div className="toolbar-item tooltip-anchor">
@@ -220,7 +231,7 @@ function ChatMessages(props: { messages: Message[]; toRender: boolean; mappings?
 }
 
 function Content(props: WebviewUserOptions & PreviewResponse) {
-  let { displayFormat, ir, content, sourceMap, rawText } = props;
+  let { displayFormat, ir, content, sourceMap, rawText, tokens } = props;
 
   let toCopy: string =
     typeof content === 'string'
@@ -233,10 +244,16 @@ function Content(props: WebviewUserOptions & PreviewResponse) {
       result = <CodeBlock content={ir} />;
     } else if (displayFormat === 'plain') {
       result = (
-        <ChatMessages messages={content} toRender={false} mappings={sourceMap as SourceMapMessage[]} rawText={rawText} />
+        <ChatMessages
+          messages={content}
+          toRender={false}
+          tokens={tokens?.perMessage}
+          mappings={sourceMap as SourceMapMessage[]}
+          rawText={rawText}
+        />
       );
     } else if (displayFormat === 'rendered') {
-      result = <ChatMessages messages={content} toRender={true} />;
+      result = <ChatMessages messages={content} toRender={true} tokens={tokens?.perMessage} />;
     } else {
       result = <div>Invalid display format</div>;
     }
@@ -257,6 +274,9 @@ function Content(props: WebviewUserOptions & PreviewResponse) {
     <div className="main" id="content">
       <div className="hidden" id="copy-content" data-value={toCopy} />
       {result}
+      {tokens && (
+        <div className="token-total">Total tokens: {tokens.total}</div>
+      )}
     </div>
   );
 }
