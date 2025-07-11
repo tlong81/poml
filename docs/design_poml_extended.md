@@ -6,18 +6,18 @@ This document describes the design for an extended POML file format that support
 
 ## Current Limitations
 
-The current POML implementation requires files to be fully enclosed within `<poml>...</poml>` tags. This creates friction when users want to:
+The current POML implementation requires files to be fully enclosed within `<poml>...</poml>` tags. Even though the outer level `<poml>...</poml>` can be optional, the markup file is always parsed with one single pass of XML parser. This creates friction when users want to:
 
-1. Write primarily text-based documents (like Markdown) with occasional POML components
-2. Gradually migrate existing text files to use POML features
-3. Mix different content types within a single file
+1. Write primarily text-based documents (like Markdown or Jinja) with occasional POML components
+2. Usually need to escape characters like `<` and `>` in text content
+3. Gradually migrate existing text files to use POML features
 
 ## Design Goals
 
-1. **Backward Compatibility**: Existing POML files should continue to work without changes
+1. **Backward Compatibility**: Most of existing POML files should continue to work without changes
 2. **Flexibility**: Support pure text files with embedded POML elements
 3. **Seamless Integration**: Allow switching between text and POML modes within a single file
-4. **Component Discovery**: Automatically detect POML elements from `componentDocs.json`
+<!-- 4. **Component Discovery**: Automatically detect POML elements from `componentDocs.json` -->
 
 ## File Format Specification
 
@@ -31,16 +31,44 @@ Extended POML files can contain:
 
 ### Element Detection
 
-The system will automatically detect valid POML elements by:
+The system will assume the whole file is a pure text file and detects certain parts as POML elements based on the following:
 
-1. Loading component definitions from `componentDocs.json`
-2. Extracting all component names and their aliases
-3. Scanning for opening tags that match these components
-4. Processing content between matching opening and closing tags as POML
+1. Loading component definitions from `componentDocs.json` and extracting valid POML component names and their aliases.
+2. Scanning for opening tags that match these components, and scanning until the corresponding closing tag is found.
+3. If a special tag `<text>...</text>` is found within a POML segment, it will be treated as pure text content and processed following the rules above (step 1 and 2).
 
-### Text Embedding in POML
+An example is shown below:
 
-Within POML segments, users can embed pure text using the `<text>` tag:
+#### Example 1
+
+```markdown
+# My Analysis Document
+
+This is a regular markdown document that explains the task.
+
+<task>
+  Analyze the following data and provide insights.
+</task>
+
+Here are some key points to consider:
+
+- Data quality
+- Statistical significance  
+- Business impact
+
+<examples>
+  <example>
+    <input>Sample data point 1</input>
+    <output>Analysis result 1</output>
+  </example>
+</examples>
+
+## Conclusion
+
+The analysis shows...
+```
+
+#### Example 2
 
 ```xml
 <poml>
@@ -50,14 +78,34 @@ Within POML segments, users can embed pure text using the `<text>` tag:
     
     - Item 1
     - Item 2
-    
+
+    {{ VARIABLES_WILL_ALSO_SHOWN_AS_IS }}
+    <cp caption="Nested POML">This is a nested POML component that will be processed as POML.</cp>
+
     No POML processing happens here.
   </text>
   <hint>Remember to check the format</hint>
 </poml>
+
+There can be some intervening text here as well.
+
+<poml>
+  <p>You can add another POML segment here: {{variable_will_be_substituted}}</p>
+</poml>
+
+<p>POML elements do not necessarily reside in a <text><poml> (the <poml> here is processed as is.)</text> element.</p>
 ```
 
+**Escaping Note**: To directly show a POML tag in the text, users can use a `<text>` tag to wrap the content, as shown in the example above. If they want to escape a pair such as `<poml>...</poml>`, they can escape the opening tag and closing tag respectively, such as `<text><poml></text>...<text></poml></text>`.
+
+### File-level Metadata
+
+Metadatas are information that is useful when parsing and rendering the file, such as context variables, stylesheets, version information, file paths, etc.
+File-level metadata can be included at any place of the file in a special `<meta>` tag. This metadata will be processed before any content parsing.
+
 ## Architecture Design
+
+
 
 ### Reader Classes
 
@@ -180,69 +228,3 @@ The system will determine how to process files based on:
 2. **Unmatched Tags**: Treat as plain text if closing tag not found
 3. **Unknown Components**: Report warnings but continue processing
 4. **Context Preservation**: Maintain parsing context across segments
-
-## Examples
-
-### Example 1: Markdown with POML Elements
-
-```markdown
-# My Analysis Document
-
-This is a regular markdown document that explains the task.
-
-<task>
-  Analyze the following data and provide insights.
-</task>
-
-Here are some key points to consider:
-
-- Data quality
-- Statistical significance  
-- Business impact
-
-<examples>
-  <example>
-    <input>Sample data point 1</input>
-    <output>Analysis result 1</output>
-  </example>
-</examples>
-
-## Conclusion
-
-The analysis shows...
-```
-
-### Example 2: POML with Embedded Text
-
-```xml
-<poml>
-  <role>You are a helpful assistant</role>
-  
-  <text>
-    ## Background
-    
-    This is some **markdown** content that needs to be preserved exactly.
-    
-    ```python
-    def hello():
-        print("Hello world")
-    ```
-  </text>
-  
-  <task>Answer the user's question based on the background above</task>
-</poml>
-```
-
-## Migration Path
-
-1. **Existing Files**: No changes required - full backward compatibility
-2. **New Mixed Files**: Can be created using the extended format immediately  
-3. **Gradual Migration**: Users can add POML elements to existing text files incrementally
-
-## Benefits
-
-1. **Lower Barrier to Entry**: Users can start with familiar text formats
-2. **Incremental Adoption**: Add POML features as needed
-3. **Content Flexibility**: Mix structured and unstructured content
-4. **Preserved Formatting**: Text content maintains original formatting
-5. **Tool Compatibility**: Works with existing text editing tools
