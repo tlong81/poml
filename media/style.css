@@ -9,6 +9,7 @@ body {
   --poml-font-family: var(--vscode-font-family);
   --poml-font-size: var(--vscode-editor-font-size);
   --poml-font-size-08: calc(var(--vscode-editor-font-size) * 0.8);
+  --poml-font-size-09: calc(var(--vscode-editor-font-size) * 0.9);
   --poml-font-size-12: calc(var(--vscode-editor-font-size) * 1.2);
   --poml-font-size-15: calc(var(--vscode-editor-font-size) * 1.5);
   --poml-font-size-20: calc(var(--vscode-editor-font-size) * 2);
@@ -301,6 +302,13 @@ pre code {
   margin: 0;
 }
 
+.chat-message-header .token-count {
+  margin-left: var(--poml-padding);
+  font-weight: normal;
+  font-size: var(--poml-font-size-09);
+  color: var(--vscode-descriptionForeground);
+}
+
 .chat-message-toolbar {
   position: absolute;
   right: 0;
@@ -367,4 +375,10 @@ pre code {
 
 .chat-message-content {
   padding: 0 var(--poml-padding-02);
+}
+
+.token-total {
+  text-align: right;
+  font-size: var(--poml-font-size-09);
+  color: var(--vscode-descriptionForeground);
 }
