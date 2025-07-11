@@ -164,7 +164,7 @@ function ChatMessages(props: {
   rawText?: string;
 }) {
   const { messages, toRender, tokens, mappings, rawText } = props;
-  return messages.map((message, idx) => {
+  const chatMessages = messages.map((message, idx) => {
     const map = mappings ? mappings[idx] : undefined;
     const line = map && rawText !== undefined ? lineFromIndex(rawText, map.startIndex) : undefined;
     let role: string = message.speaker;
@@ -189,7 +189,7 @@ function ChatMessages(props: {
             <h3 className="name">
               {role}
               {tokens && tokens[idx] !== undefined && (
-                <span className="token-count">{tokens[idx]}</span>
+                <span className="token-count">{tokens[idx]} tokens</span>
               )}
             </h3>
           </div>
@@ -228,6 +228,7 @@ function ChatMessages(props: {
       </div>
     );
   });
+  return <div className="chat-messages">{chatMessages}</div>;
 }
 
 function Content(props: WebviewUserOptions & PreviewResponse) {
