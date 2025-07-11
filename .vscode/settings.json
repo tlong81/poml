@@ -13,6 +13,9 @@
   "[typescript]": {
     "editor.tabSize": 2
   },
+  "[typescriptreact]": {
+    "editor.tabSize": 2
+  },
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter"
   },
