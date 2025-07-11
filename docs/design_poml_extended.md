@@ -105,126 +105,61 @@ File-level metadata can be included at any place of the file in a special `<meta
 
 ## Architecture Design
 
+### High-level Processing Pipeline
 
+1. **Segmentation Pass**:
+  - One linear scan that classifies the content into meta / text / POML segments. Use component names and aliases from `componentDocs.json` to identify the POML segments.
+  - The result is a tree of segments, where two segments can either have a non-overlapping range or be nested within each other.
+  - Within the range of a POML segment, there could be multiple `<text>` segments that should be treated as pure text.
+  - The bottom of the tree is always a `<text>` segment, which means the outermost content is always treated as pure text, unless the file starts with a `<poml>` tag and ends with a `</poml>` tag.
 
-### Reader Classes
+  ```typescript
+  interface Segment {
+    id: string;              // UUID for React key + caches
+    kind: 'META' | 'TEXT' | 'POML';
+    start: number; end: number;  // Original file offsets
+    content: string;
+    children?: Segment[];    // Nested segments
+  }
+  ```
 
-#### 1. PureTextReader
+2. **Metadata Processing**:
+  - Extract metadata from `<meta>` tags and store in a context object.
+  - This context will be passed to POML readers for variable substitution and other processing.
 
-**Purpose**: Reads and processes pure text content without any POML parsing.
+  ```typescript
+  interface PomlContext {
+    variables: { [key: string]: any }; // Key-value pairs for variables (RW)
+    stylesheet: { [key: string]: string }; // Stylesheets to apply
+    minimalPomlVersion: string; // Minimum POML version required
+    sourcePath: string; // Original file path
+  }
+  ```
 
-**Responsibilities**:
-- Read text content as-is
-- Preserve formatting and whitespace
-- Handle different text formats (Markdown, plain text, etc.)
-- Return content wrapped in appropriate React elements
+3. **Text/POML Dispatching**:
+  - For the rest of the segments, start with the outermost `<text>` segment and process it with `PureTextReader`.
+  - For its children segments, if they are POML segments, process them with `PomlReader`.
+  - Always remove the `<meta>` segments before processing, as they have already been processed.
 
-**Interface**:
-```typescript
-interface PureTextReader {
-  read(content: string, startIndex: number, endIndex: number): React.ReactElement;
-  canHandle(content: string, index: number): boolean;
-}
-```
+  ```typescript
+  interface Reader {
+    read(segment: Segment, context: PomlContext?): React.ReactElement;
+    getHoverToken(segment: Segment, offset: number): PomlToken | undefined;
+    getCompletions(offset: number): PomlToken[];
+  }
+  ```
 
-#### 2. PomlReader
+4. **IntelliSense Layer**:
+  - Routes hover / completion queries to the correct underlying parser (`PomlReader` for POML, `PureTextReader` for text).
 
-**Purpose**: Handles original POML parsing logic for XML-structured content.
+### PomlReader vs. Original PomlFile
 
-**Responsibilities**:
-- Parse XML/POML syntax
-- Handle POML components and attributes
-- Process templates and expressions
-- Maintain existing POML functionality
+To ensure the smooth migration, we will maintain the original `PomlFile` structure but extend it with new functionality, with minimal changes to the existing codebase. The new `PomlReader` will handle the parsing of POML segments, while the `PureTextReader` will handle pure text segments. The `PomlReader` will delegate the core logic of processing POML elements to the existing `PomlFile`.
 
-**Interface**:
-```typescript
-interface PomlReader {
-  read(content: string, startIndex: number, endIndex: number, context?: any): React.ReactElement;
-  canHandle(content: string, index: number): boolean;
-}
-```
+When processing a POML segment in the original `PomlFile`, before parsing the XML, remember to replace any `<text>` segments with `<text ref="TEXT_ID" />`, as the `<text>` could contain unparsable content that should be part of the pure text. The source map offset will be adjusted accordingly. The real text content will be parsed from the `PomlReader` as a map from TEXT_ID to contents, who will call `PureTextReader` to handle the pure text segments.
 
-#### 3. ExtendedPomlReader
+`PomlFile` will also be instructed to ignore `<meta>` tags, as they have already been processed in the segmentation pass.
 
-**Purpose**: Orchestrates between PureTextReader and PomlReader for mixed content files.
+`PomlFile` will be stateful across the file level. When setting a varaible via `<let>` in a previous POML segment, it will be stored in the context object and can be accessible in subsequent segments.
 
-**Responsibilities**:
-- Scan content for POML element pairs
-- Delegate text sections to PureTextReader
-- Delegate POML sections to PomlReader
-- Combine results into cohesive output
-- Handle transitions between different content types
-
-**Interface**:
-```typescript
-interface ExtendedPomlReader {
-  read(content: string, context?: any): React.ReactElement;
-  detectPomlElements(content: string): Array<{element: string, start: number, end: number}>;
-}
-```
-
-### Component Detection Strategy
-
-1. **Load Component Registry**: Parse `componentDocs.json` to build a registry of valid components
-2. **Tag Scanning**: Use regex patterns to find opening tags that match registered components
-3. **Bracket Matching**: Find corresponding closing tags using proper XML parsing
-4. **Boundary Detection**: Identify start/end positions for each content segment
-
-### Processing Flow
-
-```
-Input File
-    ↓
-ExtendedPomlReader.read()
-    ↓
-Scan for POML elements
-    ↓
-Split content into segments:
-├── Pure text segments → PureTextReader
-├── POML segments → PomlReader  
-└── <text> segments within POML → PureTextReader
-    ↓
-Combine results
-    ↓
-Return React.ReactElement
-```
-
-## Implementation Plan
-
-### Phase 1: Core Readers
-1. Extract existing POML parsing logic into `PomlReader` class
-2. Implement `PureTextReader` for text content processing
-3. Create basic `ExtendedPomlReader` structure
-
-### Phase 2: Component Detection
-1. Build component registry from `componentDocs.json`
-2. Implement tag detection and matching algorithms
-3. Create content segmentation logic
-
-### Phase 3: Integration
-1. Update main parsing entry point to use `ExtendedPomlReader`
-2. Implement `<text>` tag support within POML sections
-3. Add proper error handling and validation
-
-### Phase 4: Testing & Documentation
-1. Create comprehensive test suite
-2. Update user documentation
-3. Add examples and migration guides
-
-## File Type Detection
-
-The system will determine how to process files based on:
-
-1. **File Extension**: `.poml` files get extended processing
-2. **Content Analysis**: 
-   - If file starts with `<poml>`, use original PomlReader
-   - If file contains recognized POML elements, use ExtendedPomlReader
-   - If file is pure text, use PureTextReader wrapped in default container
-
-## Error Handling
-
-1. **Malformed XML**: Isolate errors to specific POML segments
-2. **Unmatched Tags**: Treat as plain text if closing tag not found
-3. **Unknown Components**: Report warnings but continue processing
-4. **Context Preservation**: Maintain parsing context across segments
+Another change is for `<include>`, which will now be processed by the new processing pipeline, instead of the original `PomlFile` class.
