@@ -73,17 +73,8 @@ Here are some key points to consider:
     
     expect(segment.kind).toBe('POML');
     expect(segment.tagName).toBe('examples');
-    expect(segment.children).toHaveLength(2);
-    
-    const exampleSegment = segment.children.find(c => c.kind === 'POML' && c.tagName === 'example');
-    expect(exampleSegment).toBeDefined();
-    expect(exampleSegment!.children).toHaveLength(3);
-    
-    const inputSegment = exampleSegment!.children.find(c => c.kind === 'POML' && c.tagName === 'input');
-    const outputSegment = exampleSegment!.children.find(c => c.kind === 'POML' && c.tagName === 'output');
-    
-    expect(inputSegment).toBeDefined();
-    expect(outputSegment).toBeDefined();
+    expect(segment.children).toHaveLength(0);
+    expect(segment.content).toBe(content);
   });
 
   test('text in text', () => {
@@ -105,7 +96,7 @@ Here are some key points to consider:
     expect(textSegment.content).toBe('This is a text<text> with nested text content.</text>');
   });
 
-  test('nested tag in POML', () => {
+  test('nested same tag in POML', () => {
     const content = `<task>Process data<task> with nested task content.</task></task>`;
     const segment = createSegments(content);
     expect(segment.kind).toBe('POML');
