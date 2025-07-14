@@ -86,6 +86,34 @@ Here are some key points to consider:
     expect(outputSegment).toBeDefined();
   });
 
+  test('text in text', () => {
+    const content = `<text>This is a text<text> with nested text content.</text></text>`;
+    const segment = createSegments(content);
+    expect(segment.kind).toBe('TEXT');
+    expect(segment.content).toBe(content);
+    expect(segment.children).toHaveLength(0);
+  });
+
+  test('text in text in POML', () => {
+    const content = `<poml><text>This is a text<text> with nested text content.</text></text></poml>`;
+    const segment = createSegments(content);
+    expect(segment.kind).toBe('POML');  
+    expect(segment.tagName).toBe('poml');
+    expect(segment.children).toHaveLength(1);
+    const textSegment = segment.children[0];
+    expect(textSegment.kind).toBe('TEXT');
+    expect(textSegment.content).toBe('This is a text<text> with nested text content.</text>');
+  });
+
+  test('nested tag in POML', () => {
+    const content = `<task>Process data<task> with nested task content.</task></task>`;
+    const segment = createSegments(content);
+    expect(segment.kind).toBe('POML');
+    expect(segment.tagName).toBe('poml');
+    expect(segment.children).toHaveLength(0);
+    expect(segment.content).toBe('<task>Process data<task> with nested task content.</task></task>');
+  });
+
   test('text tag with nested content', () => {
     const content = `<poml>
   <task>Process the following data</task>
