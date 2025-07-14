@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { getClient } from 'poml-vscode/extension';
 import { PreviewMethodName, PreviewParams, PreviewResponse } from 'poml-vscode/panel/types';
 import { Message } from 'poml';
-import { PromptGalleryProvider } from '../gallery/promptGallery';
+import { PromptGalleryProvider } from '../chat/gallery';
 
 export function registerPomlChatParticipant(context: vscode.ExtensionContext, gallery: PromptGalleryProvider) {
   const handler: vscode.ChatRequestHandler = async (
