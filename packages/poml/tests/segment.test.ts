@@ -62,7 +62,7 @@ Here are some key points to consider:
   });
 
   test('nested POML segments', () => {
-    const content = `<examples>
+    const content = `<examples syntax="json">
   <example>
     <input>Sample data point 1</input>
     <output>Analysis result 1</output>
