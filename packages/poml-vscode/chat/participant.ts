@@ -16,12 +16,22 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext, ga
       .map(v => (v instanceof vscode.Location ? v.uri : v))
       .filter((v): v is vscode.Uri => v instanceof vscode.Uri);
 
-    const prompt = gallery.prompts.find(p => p.name === request.command);
-    const filePath = prompt
-      ? vscode.Uri.file(prompt.file)
-      : vscode.Uri.joinPath(context.extensionUri, 'gallery', 'chat.poml');
+    // Default to the gallery chat prompt file if no specific file is provided
+    let filePath = vscode.Uri.joinPath(context.extensionUri, 'gallery', 'chat.poml');
+
+    let promptText = request.prompt.trimStart();
+    // if prompt starts with /<file> then use that file as the prompt
+    const matchedPrompt = gallery.prompts.find(p => promptText.match(new RegExp(`^/${p.name}\\b`)));
+    if (matchedPrompt) {
+      promptText = promptText.replace(new RegExp(`^/${matchedPrompt.name}\\b`), '').trimStart();
+      filePath = vscode.Uri.file(matchedPrompt.file);
+    } else {
+      // do not trim start then.
+      promptText = request.prompt;
+    }
+
     const pomlContext = {
-      prompt: request.prompt,
+      prompt: promptText,
       files: files.map(f => f.fsPath),
     };
 
@@ -64,10 +74,5 @@ export function registerPomlChatParticipant(context: vscode.ExtensionContext, ga
 
   const participant = vscode.chat.createChatParticipant('poml.runner', handler);
   participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media/icon/poml-icon-16.svg');
-  (participant as any).slashCommandProvider = {
-    provideSlashCommands() {
-      return gallery.prompts.map(p => ({ name: p.name, description: `Use ${p.name} prompt` }));
-    }
-  };
   context.subscriptions.push(participant);
 }
