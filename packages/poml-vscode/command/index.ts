@@ -12,3 +12,8 @@ export {
   RemoveContextFileCommand,
   RemoveStylesheetFileCommand,
 } from './addResources';
+export {
+  AddPromptCommand,
+  DeletePromptCommand,
+  EditPromptCommand,
+} from './promptGallery';

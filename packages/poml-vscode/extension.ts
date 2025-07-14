@@ -47,6 +47,9 @@ export function activate(context: vscode.ExtensionContext) {
   commandManager.register(new command.AddStylesheetFileCommand(webviewManager));
   commandManager.register(new command.RemoveContextFileCommand(webviewManager));
   commandManager.register(new command.RemoveStylesheetFileCommand(webviewManager));
+  commandManager.register(new command.AddPromptCommand(galleryProvider));
+  commandManager.register(new command.DeletePromptCommand(galleryProvider));
+  commandManager.register(new command.EditPromptCommand(galleryProvider));
 
   registerPomlChatParticipant(context, galleryProvider);
 

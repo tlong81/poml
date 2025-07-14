@@ -24,14 +24,14 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "pomlGallery",
+          "id": "poml",
           "title": "POML",
           "icon": "./media/icon/poml-icon-16.svg"
         }
       ]
     },
     "views": {
-      "pomlGallery": [
+      "poml": [
         {
           "id": "pomlPromptGallery",
           "name": "Prompt Gallery"
@@ -158,17 +158,20 @@
       {
         "command": "poml.gallery.addPrompt",
         "title": "Add Prompt",
-        "category": "POML"
+        "category": "POML",
+        "icon": "$(plus)"
       },
       {
         "command": "poml.gallery.deletePrompt",
         "title": "Delete Prompt",
-        "category": "POML"
+        "category": "POML",
+        "icon": "$(trashcan)"
       },
       {
         "command": "poml.gallery.editPrompt",
         "title": "Edit Prompt",
-        "category": "POML"
+        "category": "POML",
+        "icon": "$(pencil)"
       }
     ],
     "chatParticipants": [
