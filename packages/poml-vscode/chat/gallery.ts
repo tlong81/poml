@@ -48,6 +48,10 @@ export class PromptGalleryProvider implements vscode.TreeDataProvider<PromptEntr
     this.update(list);
   }
 
+  hasPrompt(name: string): boolean {
+    return this.entries.some(e => e.name === name);
+  }
+
   get prompts(): PromptEntry[] {
     return this.entries;
   }

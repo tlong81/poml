@@ -1,7 +1,13 @@
 import * as vscode from 'vscode';
 import { Command } from '../util/commandManager';
-import { PromptGalleryProvider, PromptEntry } from '../gallery/promptGallery';
+import { PromptGalleryProvider, PromptEntry } from '../chat/gallery';
 import * as path from 'path';
+
+function isValidPromptName(name: string): boolean {
+  // Check if the name contains only alphanumeric characters, underscores, and hyphens
+  const regex = /^[a-zA-Z0-9_-]+$/;
+  return regex.test(name);
+}
 
 export class AddPromptCommand implements Command {
   public readonly id = 'poml.gallery.addPrompt';
@@ -15,14 +21,27 @@ export class AddPromptCommand implements Command {
     if (!uri || !uri[0]) {
       return;
     }
-    const name = await vscode.window.showInputBox({
-      prompt: 'Name for the prompt',
-      value: path.basename(uri[0].fsPath, '.poml')
-    });
-    if (!name) {
-      return;
+    while (true) {
+      const name = await vscode.window.showInputBox({
+        prompt: 'Name for the prompt (use /<name> in chat panel)',
+        value: path.basename(uri[0].fsPath, '.poml')
+      });
+      if (!name) {
+        break;
+      }
+      if (!isValidPromptName(name)) {
+        vscode.window.showErrorMessage('Invalid prompt name. Only alphanumeric characters, underscores, and hyphens are allowed.');
+        continue;
+      }
+      if (this.provider.hasPrompt(name)) {
+        vscode.window.showErrorMessage(
+          `A prompt with the name "${name}" already exists.`
+        );
+        continue;
+      }
+      this.provider.addPrompt({ name, file: uri[0].fsPath });
+      break;
     }
-    this.provider.addPrompt({ name, file: uri[0].fsPath });
   }
 }
 
@@ -45,9 +64,26 @@ export class EditPromptCommand implements Command {
     if (!item) {
       return;
     }
-    const name = await vscode.window.showInputBox({ prompt: 'Prompt name', value: item.name });
-    if (!name) {
-      return;
+    let name: string | undefined;
+    while (true) {
+      name = await vscode.window.showInputBox({
+        prompt: 'Name for the prompt (use /<name> in chat panel)',
+        value: item.name
+      });
+      if (!name) {
+        return;
+      }
+      if (!isValidPromptName(name)) {
+        vscode.window.showErrorMessage('Invalid prompt name. Only alphanumeric characters, underscores, and hyphens are allowed.');
+        continue;
+      }
+      if (this.provider.hasPrompt(name)) {
+        vscode.window.showErrorMessage(
+          `A prompt with the name "${name}" already exists.`
+        );
+        continue;
+      }
+      break;
     }
     const uri = await vscode.window.showOpenDialog({
       openLabel: 'Select POML',

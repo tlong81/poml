@@ -15,7 +15,7 @@ import {
 import { initializeReporter, getTelemetryReporter, TelemetryClient } from './util/telemetryClient';
 import { TelemetryEvent } from './util/telemetryServer';
 import { registerPomlChatParticipant } from './chat/participant';
-import { registerPromptGallery, PromptGalleryProvider } from './gallery/promptGallery';
+import { registerPromptGallery, PromptGalleryProvider } from './chat/gallery';
 
 let extensionPath = "";
 
