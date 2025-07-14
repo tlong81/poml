@@ -77,7 +77,7 @@ export class EditPromptCommand implements Command {
         vscode.window.showErrorMessage('Invalid prompt name. Only alphanumeric characters, underscores, and hyphens are allowed.');
         continue;
       }
-      if (this.provider.hasPrompt(name)) {
+      if (name !== item.name && this.provider.hasPrompt(name)) {
         vscode.window.showErrorMessage(
           `A prompt with the name "${name}" already exists.`
         );
