@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { parseAST, ASTNode } from '../reader/ast';
+import { parseAST, ASTNode } from 'poml/reader/ast';
 
 describe('parseAST', () => {
   test('pure text content', () => {
