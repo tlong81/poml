@@ -107,53 +107,89 @@ File-level metadata can be included at any place of the file in a special `<meta
 
 ### High-level Processing Pipeline
 
-The core of the new architecture is a three-pass process: Segmentation, Metadata Extraction, and Recursive Rendering.
+The core of the new architecture is a three-pass process: Tokenization and AST Parsing, Metadata Extraction, and Recursive Rendering.
 
-#### I. Segmentation Pass
+#### I. Tokenization and AST Parsing
 
-This initial pass is a crucial preprocessing step that scans the raw file content and partitions it into a hierarchical tree of segments. It does **not** parse the full XML structure of POML blocks; it only identifies their boundaries.
+This phase processes the raw file content through a standard compiling workflow: tokenization followed by parsing to an Abstract Syntax Tree (AST).
 
-* **Objective**: To classify every part of the file as `META`, `POML`, or `TEXT` and build a nested structure.
-* **Algorithm**:
-  1. Load all valid POML component tag names (including aliases) from `componentDocs.json`. This set of tags will be used for detection.
-  2. Initialize the root of the segment tree as a single, top-level `TEXT` segment spanning the entire file, unless the root segment is a single `<poml>...</poml>` block spanning the whole file (in which case it will be treated as a `POML` segment).
-  3. Use a stack-based algorithm to scan the text.
-    * When an opening tag (e.g., `<task>`) that matches a known POML component is found, push its name and start position onto the stack. This marks the beginning of a potential `POML` segment.
-    * When a closing tag (e.g., `</task>`) is found that matches the tag at the top of the stack, pop the stack. This marks a complete `POML` segment. This new segment is added as a child to the current parent segment in the tree.
-    * The special `<text>` tag is handled recursively. If a `<text>` tag is found *inside* a `POML` segment, the scanner will treat its content as a nested `TEXT` segment. This `TEXT` segment can, in turn, contain more `POML` children.
-    * Any content not enclosed within identified `POML` tags remains part of its parent `TEXT` segment.
-  4. `<meta>` tags are treated specially. They are identified and parsed into `META` segments at any level but are logically hoisted and processed first. They should not have children.
-* **Output**: A `Segment` tree. For backward compatibility, if the root segment is a single `<poml>...</poml>` block spanning the whole file, the system can revert to the original, simpler parsing model.
+* **Tokenization**: Standard XML tokenization logic is used to break the input into tokens (tags, text content, attributes, etc.).
 
-**`Segment` Interface**: The `children` property is key to representing the nested structure of mixed-content files.
+* **AST Parsing Algorithm**:
+  1. Scan until `<` and tag name is found.
+  2. If the tag name is `text`, create a text node and scan until the corresponding `</text>` is found (handling nested POML if present).
+  3. If the tag name matches any POML tag from `componentDocs.json`, create a node with the tag name and attributes.
+  4. Within POML tags, if another `text` tag is found, follow the same logic as step 2.
+  5. Close the node when the corresponding closing tag `</tagname>` is found.
+
+* **Error Tolerance**: The parser is designed to be error-tolerant, gracefully handling malformed markup while preserving as much structure as possible.
+
+* **Source Mapping**: The parser retains source mapping information for each AST node, enabling code intelligence features like hover, go to definition, find references, and auto completion.
+
+* **Output**: An AST representing the hierarchical structure of the document, where each node contains source position information and type metadata.
+
+**`ASTNode` Interface**: The AST nodes represent the parsed structure with source mapping.
 
 ```typescript
-interface Segment {
-  id: string;                      // Unique ID for caching and React keys
-  kind: 'META' | 'TEXT' | 'POML';
+interface SourceRange {
   start: number;
   end: number;
-  content: string;                 // The raw string content of the segment
-  parent?: Segment;                 // Reference to the parent segment
-  children: Segment[];             // Nested segments (e.g., a POML block within text)
-  tagName?: string;                 // For POML segments, the name of the root tag (e.g., 'task')
+}
+
+interface AttributeInfo {
+  key: string;
+  value: string;
+  keyRange: SourceRange;      // Position of attribute name
+  valueRange: SourceRange;    // Position of attribute value (excluding quotes)
+  fullRange: SourceRange;     // Full attribute including key="value"
+}
+
+interface ASTNode {
+  id: string;                      // Unique ID for caching and React keys
+  kind: 'META' | 'TEXT' | 'POML';
+  start: number;                   // Source position start of entire node
+  end: number;                     // Source position end of entire node
+  content: string;                 // The raw string content
+  parent?: ASTNode;                // Reference to the parent node
+  children: ASTNode[];             // Child nodes
+  
+  // For POML and META nodes
+  tagName?: string;                // Tag name (e.g., 'task', 'meta')
+  attributes?: AttributeInfo[];    // Detailed attribute information
+  
+  // Detailed source positions
+  openingTag?: {
+    start: number;                 // Position of '<'
+    end: number;                   // Position after '>'
+    nameRange: SourceRange;        // Position of tag name
+  };
+  
+  closingTag?: {
+    start: number;                 // Position of '</'
+    end: number;                   // Position after '>'
+    nameRange: SourceRange;        // Position of tag name in closing tag
+  };
+  
+  contentRange?: SourceRange;      // Position of content between tags (excluding nested tags)
+  
+  // For TEXT nodes
+  textSegments?: SourceRange[];    // Multiple ranges for text content (excluding nested POML)
 }
 ```
 
 #### II. Metadata Processing
 
-Once the segment tree is built, all `META` segments are processed.
+Once the AST is built, all `META` nodes are processed.
 
-  * **Extraction**: Traverse the tree to find all `META` segments.
+  * **Extraction**: Traverse the AST to find all `META` nodes.
   * **Population**: Parse the content of each `<meta>` tag and populate the global `PomlContext` object.
-  * **Removal**: After processing, `META` segments are removed from the tree to prevent them from being rendered.
+  * **Removal**: After processing, `META` nodes are removed from the AST to prevent them from being rendered.
 
 **`PomlContext` Interface**: This context object is the single source of truth for the entire file, passed through all readers. It's mutable, allowing stateful operations like `<let>` to have a file-wide effect.
 
 ```typescript
 interface PomlContext {
   variables: { [key: string]: any }; // For {{ substitutions }} and <let> (Read/Write)
-  texts: { [key: string]: React.ReactElement }; // Maps TEXT_ID to content for <text> replacement (Read/Write)
   stylesheet: { [key: string]: string }; // Merged styles from all <meta> tags (Read-Only during render)
   minimalPomlVersion?: string;      // From <meta> (Read-Only)
   sourcePath: string;                // File path for resolving includes (Read-Only)
@@ -162,22 +198,21 @@ interface PomlContext {
 
 #### III. Text/POML Dispatching (Recursive Rendering)
 
-Rendering starts at the root of the segment tree and proceeds recursively. A controller dispatches segments to the appropriate reader.
+Rendering starts at the root of the AST and proceeds recursively. A controller dispatches AST nodes to the appropriate reader.
 
-* **`PureTextReader`**: Handles `TEXT` segments.
+* **`PureTextReader`**: Handles `TEXT` nodes.
 
   * Currently we directly render the pure-text contents as a single React element. In future, we can:
     * Renders the text content, potentially using a Markdown processor.
     * Performs variable substitutions (`{{...}}`) using the `variables` from `PomlContext`. The logic from `handleText` in the original `PomlFile` should be extracted into a shared utility for this.
-  * Iterates through its `children` segments. For each child `POML` segment, it calls the `PomlReader`.
+  * Iterates through its `children` nodes. For each child `POML` node, it calls the `PomlReader`.
 
-* **`PomlReader`**: Handles `POML` segments.
+* **`PomlReader`**: Handles `POML` nodes.
 
-  * **Pre-processing**: Before parsing, it replaces any direct child `<text>` regions with a self-closing placeholder tag containing a unique ID: `<text ref="TEXT_ID_123" />`. The original content of the `<text>` segment is stored in `context.texts`. This ensures the XML parser inside `PomlFile` doesn't fail on non-XML content (like Markdown).
-  * **Delegation**: Instantiates a modified `PomlFile` class with the processed segment content and the shared `PomlContext`.
-  * **Rendering**: Calls the `pomlFile.react(context)` method to render the segment.
+  * **Delegation**: Instantiates a modified `PomlFile` class with the processed node content and the shared `PomlContext`.
+  * **Rendering**: Calls the `pomlFile.react(context)` method to render the node.
 
-* **`IntelliSense Layer`**: The segment tree makes it easy to provide context-aware IntelliSense. By checking the `kind` of the segment at the cursor's offset, the request can be routed to the correct provider—either the `PomlReader`'s XML-aware completion logic or a simpler text/variable completion provider for `TEXT` segments.
+* **`IntelliSense Layer`**: The AST makes it easy to provide context-aware IntelliSense. By checking the `kind` of the node at the cursor's offset, the request can be routed to the correct provider—either the `PomlReader`'s XML-aware completion logic or a simpler text/variable completion provider for `TEXT` nodes.
 
 **`Reader` Interface**: This interface defines the contract for both `PureTextReader` and `PomlReader`.
 
