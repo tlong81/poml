@@ -17,7 +17,7 @@ The current POML implementation requires files to be fully enclosed within `<pom
 1. **Backward Compatibility**: Most of existing POML files should continue to work without changes
 2. **Flexibility**: Support pure text files with embedded POML elements
 3. **Seamless Integration**: Allow switching between text and POML modes within a single file
-<!-- 4. **Component Discovery**: Automatically detect POML elements from `componentDocs.json` -->
+4. **Controlled Evolution of Tags**: behaviour of new/experimental tags is opt‑in via `<meta enable="...">`, preventing accidental breakage when upgrading the tool‑chain.
 
 ## File Format Specification
 
@@ -36,6 +36,7 @@ The system will assume the whole file is a pure text file and detects certain pa
 1. Loading component definitions from `componentDocs.json` and extracting valid POML component names and their aliases.
 2. Scanning for opening tags that match these components, and scanning until the corresponding closing tag is found.
 3. If a special tag `<text>...</text>` is found within a POML segment, it will be treated as pure text content and processed following the rules above (step 1 and 2).
+4. Unknown or disabled tags are treated as literal text and, by default, raise a diagnostic warning.
 
 An example is shown below:
 
@@ -102,6 +103,14 @@ There can be some intervening text here as well.
 
 Metadatas are information that is useful when parsing and rendering the file, such as context variables, stylesheets, version information, file paths, etc.
 File-level metadata can be included at any place of the file in a special `<meta>` tag. This metadata will be processed before any content parsing.
+
+**Example:**
+
+```xml
+<meta minimalPomlVersion="0.3" />
+<meta stylesheet="/path/to/stylesheet.json />
+<meta enableTags="reference,table" unknownTags="warning" />
+```
 
 ## Architecture Design
 
