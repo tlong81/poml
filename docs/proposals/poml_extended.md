@@ -113,14 +113,15 @@ The core of the new architecture is a three-pass process: Tokenization and AST P
 
 This phase processes the raw file content through a standard compiling workflow: tokenization followed by parsing to an Abstract Syntax Tree (AST).
 
-* **Tokenization**: Standard XML tokenization logic is used to break the input into tokens (tags, text content, attributes, etc.).
+* **Tokenization**: Standard XML tokenization logic is used to break the input into tokens (tags, text content, attributes, etc.). Additionally, template variables in `{{}}` format are identified and tokenized as special tokens to enable proper parsing and variable substitution.
 
 * **AST Parsing Algorithm**:
   1. Scan until `<` and tag name is found.
-  2. If the tag name is `text`, create a text node and scan until the corresponding `</text>` is found (handling nested POML if present).
-  3. If the tag name matches any POML tag from `componentDocs.json`, create a node with the tag name and attributes.
+  2. If the tag name is `text`, create a text node and scan until the corresponding `</text>` is found (handling nested POML if present; template variables are not considered here).
+  3. If the tag name matches any POML tag from `componentDocs.json`, create a node with the tag name and attributes (template variables `{{}}` in attribute values are parsed as child template nodes).
   4. Within POML tags, if another `text` tag is found, follow the same logic as step 2.
-  5. Close the node when the corresponding closing tag `</tagname>` is found.
+  5. Template variables `{{}}` found within text content or attribute values create TEMPLATE nodes as children.
+  6. Close the node when the corresponding closing tag `</tagname>` is found.
 
 * **Error Tolerance**: The parser is designed to be error-tolerant, gracefully handling malformed markup while preserving as much structure as possible.
 
@@ -138,7 +139,7 @@ interface SourceRange {
 
 interface AttributeInfo {
   key: string;
-  value: string;
+  value: (ASTNode & { kind: 'TEXT' | 'TEMPLATE' })[];  // Mixed content: array of text/template nodes
   keyRange: SourceRange;      // Position of attribute name
   valueRange: SourceRange;    // Position of attribute value (excluding quotes)
   fullRange: SourceRange;     // Full attribute including key="value"
@@ -146,7 +147,7 @@ interface AttributeInfo {
 
 interface ASTNode {
   id: string;                      // Unique ID for caching and React keys
-  kind: 'META' | 'TEXT' | 'POML';
+  kind: 'META' | 'TEXT' | 'POML' | 'TEMPLATE';
   start: number;                   // Source position start of entire node
   end: number;                     // Source position end of entire node
   content: string;                 // The raw string content
@@ -174,6 +175,9 @@ interface ASTNode {
   
   // For TEXT nodes
   textSegments?: SourceRange[];    // Multiple ranges for text content (excluding nested POML)
+  
+  // For TEMPLATE nodes
+  expression?: string;             // The full expression content between {{}}
 }
 ```
 
