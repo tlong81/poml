@@ -1,27 +1,27 @@
 import { describe, expect, test } from '@jest/globals';
-import { createSegments, Segment } from '../reader/segment';
+import { parseAST, ASTNode } from '../reader/ast';
 
-describe('createSegments', () => {
+describe('parseAST', () => {
   test('pure text content', () => {
     const content = 'This is pure text content with no POML tags.';
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.content).toBe(content);
-    expect(segment.start).toBe(0);
-    expect(segment.end).toBe(content.length);
-    expect(segment.children).toHaveLength(0);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.content).toBe(content);
+    expect(ast.start).toBe(0);
+    expect(ast.end).toBe(content.length);
+    expect(ast.children).toHaveLength(0);
   });
 
   test('single POML tag', () => {
     const content = '<task>Analyze the data</task>';
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('POML');
-    expect(segment.tagName).toBe('task');
-    expect(segment.content).toBe(content);
-    expect(segment.start).toBe(0);
-    expect(segment.end).toBe(content.length);
+    expect(ast.kind).toBe('POML');
+    expect(ast.tagName).toBe('task');
+    expect(ast.content).toBe(content);
+    expect(ast.start).toBe(0);
+    expect(ast.end).toBe(content.length);
   });
 
   test('mixed content with text and POML', () => {
@@ -39,12 +39,12 @@ Here are some key points to consider:
 - Statistical significance  
 - Business impact`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(4);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(4);
     
-    const children = segment.children;
+    const children = ast.children;
     expect(children[0].kind).toBe('TEXT');
     expect(children[0].content).toContain('# My Analysis Document');
     
@@ -69,40 +69,40 @@ Here are some key points to consider:
   </example>
 </examples>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('POML');
-    expect(segment.tagName).toBe('examples');
-    expect(segment.children).toHaveLength(0);
-    expect(segment.content).toBe(content);
+    expect(ast.kind).toBe('POML');
+    expect(ast.tagName).toBe('examples');
+    expect(ast.children).toHaveLength(0);
+    expect(ast.content).toBe(content);
   });
 
   test('text in text', () => {
     const content = `<text>This is a text<text> with nested text content.</text></text>`;
-    const segment = createSegments(content);
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.content).toBe(content);
-    expect(segment.children).toHaveLength(0);
+    const ast = parseAST(content);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.content).toBe(content);
+    expect(ast.children).toHaveLength(0);
   });
 
   test('text in text in POML', () => {
     const content = `<poml><text>This is a text<text> with nested text content.</text></text></poml>`;
-    const segment = createSegments(content);
-    expect(segment.kind).toBe('POML');  
-    expect(segment.tagName).toBe('poml');
-    expect(segment.children).toHaveLength(1);
-    const textSegment = segment.children[0];
-    expect(textSegment.kind).toBe('TEXT');
-    expect(textSegment.content).toBe('This is a text<text> with nested text content.</text>');
+    const ast = parseAST(content);
+    expect(ast.kind).toBe('POML');  
+    expect(ast.tagName).toBe('poml');
+    expect(ast.children).toHaveLength(1);
+    const textNode = ast.children[0];
+    expect(textNode.kind).toBe('TEXT');
+    expect(textNode.content).toBe('This is a text<text> with nested text content.</text>');
   });
 
   test('nested same tag in POML', () => {
     const content = `<task>Process data<task> with nested task content.</task></task>`;
-    const segment = createSegments(content);
-    expect(segment.kind).toBe('POML');
-    expect(segment.tagName).toBe('poml');
-    expect(segment.children).toHaveLength(0);
-    expect(segment.content).toBe('<task>Process data<task> with nested task content.</task></task>');
+    const ast = parseAST(content);
+    expect(ast.kind).toBe('POML');
+    expect(ast.tagName).toBe('task');
+    expect(ast.children).toHaveLength(0);
+    expect(ast.content).toBe('<task>Process data<task> with nested task content.</task></task>');
   });
 
   test('text tag with nested content', () => {
@@ -121,19 +121,19 @@ Here are some key points to consider:
   <hint>Remember to check the format</hint>
 </poml>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('POML');
-    expect(segment.tagName).toBe('poml');
-    expect(segment.children).toHaveLength(4);
+    expect(ast.kind).toBe('POML');
+    expect(ast.tagName).toBe('poml');
+    expect(ast.children).toHaveLength(4);
     
-    const textSegment = segment.children.find(c => c.kind === 'POML' && c.tagName === 'text');
-    expect(textSegment).toBeDefined();
-    expect(textSegment!.children).toHaveLength(3);
+    const textNode = ast.children.find(c => c.kind === 'POML' && c.tagName === 'text');
+    expect(textNode).toBeDefined();
+    expect(textNode!.children).toHaveLength(3);
     
-    const nestedCpSegment = textSegment!.children.find(c => c.kind === 'POML' && c.tagName === 'cp');
-    expect(nestedCpSegment).toBeDefined();
-    expect(nestedCpSegment!.content).toBe('<cp caption="Nested POML">This is a nested POML component that will be processed as POML.</cp>');
+    const nestedCpNode = textNode!.children.find(c => c.kind === 'POML' && c.tagName === 'cp');
+    expect(nestedCpNode).toBeDefined();
+    expect(nestedCpNode!.content).toBe('<cp caption="Nested POML">This is a nested POML component that will be processed as POML.</cp>');
   });
 
   test('meta tags', () => {
@@ -145,18 +145,18 @@ Here are some key points to consider:
 
 <task>Complete the analysis</task>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(3);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(3);
     
-    const metaSegment = segment.children.find(c => c.kind === 'META');
-    expect(metaSegment).toBeDefined();
-    expect(metaSegment!.tagName).toBe('meta');
-    expect(metaSegment!.children).toHaveLength(0);
+    const metaNode = ast.children.find(c => c.kind === 'META');
+    expect(metaNode).toBeDefined();
+    expect(metaNode!.tagName).toBe('meta');
+    expect(metaNode!.children).toHaveLength(0);
     
-    const taskSegment = segment.children.find(c => c.kind === 'POML' && c.tagName === 'task');
-    expect(taskSegment).toBeDefined();
+    const taskNode = ast.children.find(c => c.kind === 'POML' && c.tagName === 'task');
+    expect(taskNode).toBeDefined();
   });
 
   test('invalid tags are ignored', () => {
@@ -164,19 +164,19 @@ Here are some key points to consider:
 <task>This should be processed</task>
 <random>This should also be ignored</random>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(3);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(3);
     
-    const taskSegment = segment.children.find(c => c.kind === 'POML');
-    expect(taskSegment).toBeDefined();
-    expect(taskSegment!.tagName).toBe('task');
+    const taskNode = ast.children.find(c => c.kind === 'POML');
+    expect(taskNode).toBeDefined();
+    expect(taskNode!.tagName).toBe('task');
     
-    const textSegments = segment.children.filter(c => c.kind === 'TEXT');
-    expect(textSegments).toHaveLength(2);
-    expect(textSegments[0].content).toContain('<invalid-tag>This should be ignored</invalid-tag>');
-    expect(textSegments[1].content).toContain('<random>This should also be ignored</random>');
+    const textNodes = ast.children.filter(c => c.kind === 'TEXT');
+    expect(textNodes).toHaveLength(2);
+    expect(textNodes[0].content).toContain('<invalid-tag>This should be ignored</invalid-tag>');
+    expect(textNodes[1].content).toContain('<random>This should also be ignored</random>');
   });
 
   test('self-closing tags are ignored', () => {
@@ -185,15 +185,15 @@ Here are some key points to consider:
 <img src="test.jpg" />
 <hint>Valid hint</hint>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(4);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(4);
     
-    const pomlSegments = segment.children.filter(c => c.kind === 'POML');
-    expect(pomlSegments).toHaveLength(3);
-    expect(pomlSegments[0].tagName).toBe('task');
-    expect(pomlSegments[2].tagName).toBe('hint');
+    const pomlNodes = ast.children.filter(c => c.kind === 'POML');
+    expect(pomlNodes).toHaveLength(3);
+    expect(pomlNodes[0].tagName).toBe('task');
+    expect(pomlNodes[2].tagName).toBe('hint');
   });
 
   test('malformed tags are handled gracefully', () => {
@@ -201,42 +201,45 @@ Here are some key points to consider:
 <hint>Complete hint</hint>
 <unclosed>This has no closing tag`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(3);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(3);
     
-    const hintSegment = segment.children.find(c => c.kind === 'POML' && c.tagName === 'hint');
-    expect(hintSegment).toBeDefined();
-    expect(hintSegment!.content).toBe('<hint>Complete hint</hint>');
+    const hintNode = ast.children.find(c => c.kind === 'POML' && c.tagName === 'hint');
+    expect(hintNode).toBeDefined();
+    expect(hintNode!.content).toBe('<hint>Complete hint</hint>');
     
-    const textSegments = segment.children.filter(c => c.kind === 'TEXT');
-    expect(textSegments).toHaveLength(2);
-    expect(textSegments[0].content).toBe('<task>Incomplete tag\n');
-    expect(textSegments[1].content).toBe('\n<unclosed>This has no closing tag');
+    const textNodes = ast.children.filter(c => c.kind === 'TEXT');
+    expect(textNodes).toHaveLength(2);
+    expect(textNodes[0].content).toBe('<task>Incomplete tag\n');
+    expect(textNodes[1].content).toBe('\n<unclosed>This has no closing tag');
   });
 
   test('malformed POML tags are ignored', () => {
     const content = `<task>Valid task`;
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(0);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(0);
   });
 
   test('empty content', () => {
     const content = '';
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.content).toBe('');
+    expect(ast.children).toHaveLength(0);
   });
 
   test('whitespace-only content', () => {
     const content = '   \n\n\t  \n  ';
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.content).toBe(content);
-    expect(segment.children).toHaveLength(0);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.content).toBe(content);
+    expect(ast.children).toHaveLength(0);
   });
 
   test('hyphenated tag names', () => {
@@ -244,16 +247,16 @@ Here are some key points to consider:
 <system-msg>System message</system-msg>
 <user-msg>User message</user-msg>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(4);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(4);
     
-    const pomlSegments = segment.children.filter(c => c.kind === 'POML');
-    expect(pomlSegments).toHaveLength(3);
-    expect(pomlSegments[0].tagName).toBe('output-format');
-    expect(pomlSegments[1].tagName).toBe('system-msg');
-    expect(pomlSegments[2].tagName).toBe('user-msg');
+    const pomlNodes = ast.children.filter(c => c.kind === 'POML');
+    expect(pomlNodes).toHaveLength(3);
+    expect(pomlNodes[0].tagName).toBe('output-format');
+    expect(pomlNodes[1].tagName).toBe('system-msg');
+    expect(pomlNodes[2].tagName).toBe('user-msg');
   });
 
   test('parent-child relationships', () => {
@@ -265,57 +268,48 @@ Here are some key points to consider:
   </examples>
 </task>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    const taskSegment = segment;
-    expect(taskSegment.kind).toBe('POML');
-    expect(taskSegment.tagName).toBe('task');
-    expect(taskSegment.parent).toBeUndefined();
+    const taskNode = ast;
+    expect(taskNode.kind).toBe('POML');
+    expect(taskNode.tagName).toBe('task');
+    expect(taskNode.parent).toBeUndefined();
     
-    const hintSegment = taskSegment.children.find(c => c.kind === 'POML' && c.tagName === 'hint');
-    expect(hintSegment).toBeDefined();
-    expect(hintSegment!.parent).toBe(taskSegment);
+    const hintNode = taskNode.children.find(c => c.kind === 'POML' && c.tagName === 'hint');
+    expect(hintNode).toBeDefined();
+    expect(hintNode!.parent).toBe(taskNode);
     
-    const examplesSegment = taskSegment.children.find(c => c.kind === 'POML' && c.tagName === 'examples');
-    expect(examplesSegment).toBeDefined();
-    expect(examplesSegment!.parent).toBe(taskSegment);
+    const examplesNode = taskNode.children.find(c => c.kind === 'POML' && c.tagName === 'examples');
+    expect(examplesNode).toBeDefined();
+    expect(examplesNode!.parent).toBe(taskNode);
     
-    const exampleSegment = examplesSegment!.children.find(c => c.kind === 'POML' && c.tagName === 'example');
-    expect(exampleSegment).toBeDefined();
-    expect(exampleSegment!.parent).toBe(examplesSegment);
+    const exampleNode = examplesNode!.children.find(c => c.kind === 'POML' && c.tagName === 'example');
+    expect(exampleNode).toBeDefined();
+    expect(exampleNode!.parent).toBe(examplesNode);
   });
 
-  test('segment IDs are unique', () => {
+  test('node IDs are unique', () => {
     const content = `<task>First task</task>
 <task>Second task</task>
 <hint>A hint</hint>`;
 
-    const segment = createSegments(content);
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(5);
+    const ast = parseAST(content);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(5);
     
-    function collectAllSegments(segment: Segment): Segment[] {
-      const all = [segment];
-      segment.children.forEach(child => {
-        all.push(...collectAllSegments(child));
+    function collectAllNodes(node: ASTNode): ASTNode[] {
+      const all = [node];
+      node.children.forEach(child => {
+        all.push(...collectAllNodes(child));
       });
       return all;
     }
     
-    const allSegments = collectAllSegments(segment);
-    const ids = allSegments.map(s => s.id);
+    const allNodes = collectAllNodes(ast);
+    const ids = allNodes.map(s => s.id);
     const uniqueIds = new Set(ids);
     
     expect(uniqueIds.size).toBe(ids.length);
-  });
-
-  test('path parameter is preserved', () => {
-    const content = '<task>Test task</task>';
-    const path = '/test/path/file.poml';
-    const segment = createSegments(content, path);
-    
-    expect(segment.path).toBe(path);
-    expect(segment.children[0].path).toBe(path);
   });
 
   test('complex example from specification', () => {
@@ -343,30 +337,85 @@ There can be some intervening text here as well.
 
 <p>POML elements do not necessarily reside in a poml element.</p>`;
 
-    const segment = createSegments(content);
+    const ast = parseAST(content);
     
-    expect(segment.kind).toBe('TEXT');
-    expect(segment.children).toHaveLength(5);
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.children).toHaveLength(5);
     
-    const firstPomlSegment = segment.children.find(c => c.kind === 'POML' && c.tagName === 'poml');
-    expect(firstPomlSegment).toBeDefined();
-    expect(firstPomlSegment!.children).toHaveLength(4);
+    const firstPomlNode = ast.children.find(c => c.kind === 'POML' && c.tagName === 'poml');
+    expect(firstPomlNode).toBeDefined();
+    expect(firstPomlNode!.children).toHaveLength(4);
     
-    const textSegment = firstPomlSegment!.children.find(c => c.kind === 'POML' && c.tagName === 'text');
-    expect(textSegment).toBeDefined();
-    expect(textSegment!.children).toHaveLength(3);
+    const textNode = firstPomlNode!.children.find(c => c.kind === 'POML' && c.tagName === 'text');
+    expect(textNode).toBeDefined();
+    expect(textNode!.children).toHaveLength(3);
     
-    const cpSegment = textSegment!.children.find(c => c.kind === 'POML' && c.tagName === 'cp');
-    expect(cpSegment).toBeDefined();
+    const cpNode = textNode!.children.find(c => c.kind === 'POML' && c.tagName === 'cp');
+    expect(cpNode).toBeDefined();
     
-    const secondPomlSegment = segment.children.filter(c => c.kind === 'POML' && c.tagName === 'poml')[1];
-    expect(secondPomlSegment).toBeDefined();
+    const secondPomlNode = ast.children.filter(c => c.kind === 'POML' && c.tagName === 'poml')[1];
+    expect(secondPomlNode).toBeDefined();
 
-    const lineBreakSegment = segment.children[3];
-    expect(lineBreakSegment.kind).toBe('TEXT');
-    expect(lineBreakSegment.content).toBe('\n\n');
+    const lineBreakNode = ast.children[3];
+    expect(lineBreakNode.kind).toBe('TEXT');
+    expect(lineBreakNode.content).toBe('\n\n');
 
-    const pSegment = segment.children.find(c => c.kind === 'POML' && c.tagName === 'p');
-    expect(pSegment).toBeDefined();
+    const pNode = ast.children.find(c => c.kind === 'POML' && c.tagName === 'p');
+    expect(pNode).toBeDefined();
+  });
+
+  test('template variables in content', () => {
+    const content = `<task>Process {{variable}} with {{another_variable}}</task>`;
+    const ast = parseAST(content);
+    
+    expect(ast.kind).toBe('POML');
+    expect(ast.tagName).toBe('task');
+    expect(ast.children).toHaveLength(4); // text, template, text, template
+    
+    const templateNodes = ast.children.filter(c => c.kind === 'TEMPLATE');
+    expect(templateNodes).toHaveLength(2);
+    expect(templateNodes[0].expression).toBe('variable');
+    expect(templateNodes[1].expression).toBe('another_variable');
+  });
+
+  test('template variables in text nodes are treated as literal', () => {
+    const content = `<text>Variables like {{this}} are shown as-is</text>`;
+    const ast = parseAST(content);
+    
+    expect(ast.kind).toBe('TEXT');
+    expect(ast.content).toBe(content);
+    expect(ast.children).toHaveLength(0);
+  });
+
+  test('template variables in attribute values', () => {
+    const content = `<task caption="Process {{variable}}">Content</task>`;
+    const ast = parseAST(content);
+    
+    expect(ast.kind).toBe('POML');
+    expect(ast.tagName).toBe('task');
+    expect(ast.attributes).toHaveLength(1);
+    
+    const attr = ast.attributes![0];
+    expect(attr.key).toBe('caption');
+    expect(attr.value).toHaveLength(2); // text + template
+    expect(attr.value[0].kind).toBe('TEXT');
+    expect(attr.value[0].content).toBe('Process ');
+    expect(attr.value[1].kind).toBe('TEMPLATE');
+    expect(attr.value[1].expression).toBe('variable');
+  });
+
+  test('mixed template variables and text in attributes', () => {
+    const content = `<task title="Hello {{name}}, process {{data}} please">Content</task>`;
+    const ast = parseAST(content);
+    
+    expect(ast.kind).toBe('POML');
+    expect(ast.attributes).toHaveLength(1);
+    
+    const attr = ast.attributes![0];
+    expect(attr.value).toHaveLength(4); // text, template, text, template
+    expect(attr.value[0].content).toBe('Hello ');
+    expect(attr.value[1].expression).toBe('name');
+    expect(attr.value[2].content).toBe(', process ');
+    expect(attr.value[3].expression).toBe('data');
   });
 });
