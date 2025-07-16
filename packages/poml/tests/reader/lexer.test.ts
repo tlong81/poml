@@ -1,21 +1,20 @@
 import { describe, expect, test } from '@jest/globals';
-import { 
-  extendedPomlLexer, 
-  Comment, 
-  TemplateOpen, 
-  TemplateClose, 
-  TagOpen, 
-  TagClose, 
-  TagClosingOpen, 
-  TagSelfClose, 
-  Equals, 
-  DoubleQuote, 
-  SingleQuote, 
-  Backslash, 
-  Identifier, 
-  Whitespace, 
-  TemplateContent, 
-  TextContent 
+import {
+  extendedPomlLexer,
+  Comment,
+  TemplateOpen,
+  TemplateClose,
+  TagOpen,
+  TagClose,
+  TagClosingOpen,
+  TagSelfClose,
+  Equals,
+  DoubleQuote,
+  SingleQuote,
+  Backslash,
+  Identifier,
+  Whitespace,
+  TextContent
 } from '../../reader/lexer';
 
 // Helper function to extract token images
@@ -36,7 +35,6 @@ function tokenize(input: string) {
 }
 
 describe('ExtendedPomlLexer', () => {
-  
   describe('Basic Token Images', () => {
     test('should tokenize HTML comments', () => {
       expect(tokenImages('<!-- comment -->')).toEqual(['<!-- comment -->']);
@@ -71,38 +69,108 @@ describe('ExtendedPomlLexer', () => {
     });
 
     test('should tokenize text content', () => {
-      expect(tokenImages('plain text here')).toEqual(['plain text here']);
+      expect(tokenImages('plain text here')).toEqual(['plain', ' ', 'text', ' ', 'here']);
     });
   });
 
   describe('Specific Cases from Requirements', () => {
     test('should handle "abc<poml>def</poml>ghi"', () => {
       expect(tokenImages('"abc<poml>def</poml>ghi"')).toEqual([
-        '"', 'abc', '<', 'poml', '>', 'def', '</', 'poml', '>', 'ghi', '"'
+        '"',
+        'abc',
+        '<',
+        'poml',
+        '>',
+        'def',
+        '</',
+        'poml',
+        '>',
+        'ghi',
+        '"'
       ]);
     });
 
     test('should handle <poml abc="def">ghi</poml>', () => {
       expect(tokenImages('<poml abc="def">ghi</poml>')).toEqual([
-        '<', 'poml', ' ', 'abc', '=', '"', 'def', '"', '>', 'ghi', '</', 'poml', '>'
+        '<',
+        'poml',
+        ' ',
+        'abc',
+        '=',
+        '"',
+        'def',
+        '"',
+        '>',
+        'ghi',
+        '</',
+        'poml',
+        '>'
       ]);
     });
 
     test('should handle mixed content', () => {
       expect(tokenImages('text {{var}} more')).toEqual([
-        'text ', '{{', 'var', '}}', ' more'
+        'text',
+        ' ',
+        '{{',
+        'var',
+        '}}',
+        ' ',
+        'more'
+      ]);
+    });
+
+    test('chinese characters', () => {
+      expect(tokenImages('中文 {{ 文本 }}内容< 标签>')).toEqual([
+        '中文 ',
+        '{{',
+        ' ',
+        '文本 ',
+        '}}',
+        '内容',
+        '<',
+        ' ',
+        '标签>'
       ]);
     });
 
     test('should handle complex attributes', () => {
       expect(tokenImages('<task id="{{value}}" class="test">')).toEqual([
-        '<', 'task', ' ', 'id', '=', '"', '{{', 'value', '}}', '"', ' ', 'class', '=', '"', 'test', '"', '>'
+        '<',
+        'task',
+        ' ',
+        'id',
+        '=',
+        '"',
+        '{{',
+        'value',
+        '}}',
+        '"',
+        ' ',
+        'class',
+        '=',
+        '"',
+        'test',
+        '"',
+        '>'
       ]);
     });
 
     test('should handle escaped quotes', () => {
       expect(tokenImages('text "with \\"escaped\\" quotes"')).toEqual([
-        'text ', '"', 'with ', '\\', '"', 'escaped', '\\', '"', ' quotes', '"'
+        'text',
+        ' ',
+        '"',
+        'with',
+        ' ',
+        '\\',
+        '"',
+        'escaped',
+        '\\',
+        '"',
+        ' ',
+        'quotes',
+        '"'
       ]);
     });
   });
@@ -115,13 +183,13 @@ describe('ExtendedPomlLexer', () => {
     });
 
     test('should identify quotes and backslashes', () => {
-      expect(tokenTypes('"text"')).toEqual([DoubleQuote, TextContent, DoubleQuote]);
-      expect(tokenTypes("'text'")).toEqual([SingleQuote, TextContent, SingleQuote]);
-      expect(tokenTypes('text\\escape')).toEqual([TextContent, Backslash, TextContent]);
+      expect(tokenTypes('"text"')).toEqual([DoubleQuote, Identifier, DoubleQuote]);
+      expect(tokenTypes("'text'")).toEqual([SingleQuote, Identifier, SingleQuote]);
+      expect(tokenTypes('text\\escape')).toEqual([Identifier, Backslash, Identifier]);
     });
 
     test('should identify template variables', () => {
-      expect(tokenTypes('{{variable}}')).toEqual([TemplateOpen, TemplateContent, TemplateClose]);
+      expect(tokenTypes('{{variable}}')).toEqual([TemplateOpen, Identifier, TemplateClose]);
     });
 
     test('should identify comments', () => {
@@ -137,18 +205,18 @@ describe('ExtendedPomlLexer', () => {
     test('should provide correct source positions', () => {
       const result = tokenize('<task>content</task>');
       expect(result.errors).toHaveLength(0);
-      
+
       const tokens = result.tokens;
       expect(tokens[0].startOffset).toBe(0);
-      expect(tokens[0].endOffset).toBe(1);
+      expect(tokens[0].endOffset).toBe(0);
       expect(tokens[0].image).toBe('<');
-      
+
       expect(tokens[1].startOffset).toBe(1);
-      expect(tokens[1].endOffset).toBe(5);
+      expect(tokens[1].endOffset).toBe(4);
       expect(tokens[1].image).toBe('task');
-      
+
       expect(tokens[2].startOffset).toBe(5);
-      expect(tokens[2].endOffset).toBe(6);
+      expect(tokens[2].endOffset).toBe(5);
       expect(tokens[2].image).toBe('>');
     });
 
@@ -157,7 +225,7 @@ describe('ExtendedPomlLexer', () => {
 line2 <tag>
 line3`;
       const result = tokenize(input);
-      
+
       const tagToken = result.tokens.find(t => t.tokenType === TagOpen);
       expect(tagToken).toBeDefined();
       expect(tagToken!.startLine).toBe(2);
@@ -168,31 +236,19 @@ line3`;
       const result = tokenize('<task id="unclosed');
       expect(result.errors).toHaveLength(0); // Should not error, just tokenize what it can
       expect(result.tokens.length).toBeGreaterThan(0);
-      
+
       // Verify token positions are valid
       for (const token of result.tokens) {
-        expect(token.startOffset).toBeLessThanOrEqual(token.endOffset);
+        expect(token.startOffset).toBeLessThanOrEqual(token.endOffset!);
         expect(token.startOffset).toBeGreaterThanOrEqual(0);
         expect(token.endOffset).toBeLessThanOrEqual(18);
-      }
-    });
-
-    test('should handle special characters with errors', () => {
-      const result = tokenize('text with @#$%^&*()[]{}|;:,.<>?/~`');
-      // Some special characters might cause lexing errors
-      expect(result.tokens.length).toBeGreaterThan(0);
-      
-      // All tokens should have valid positions
-      for (const token of result.tokens) {
-        expect(token.startOffset).toBeLessThan(token.endOffset);
-        expect(token.image).toBeTruthy();
       }
     });
 
     test('should verify token boundaries do not overlap', () => {
       const result = tokenize('<task id="value">content</task>');
       const sortedTokens = [...result.tokens].sort((a, b) => a.startOffset - b.startOffset);
-      
+
       for (let i = 0; i < sortedTokens.length - 1; i++) {
         const current = sortedTokens[i];
         const next = sortedTokens[i + 1];
@@ -223,7 +279,7 @@ line3`;
 </task>
 
 {{variable}}`;
-      
+
       const images = tokenImages(input);
       expect(images).toContain('# My Analysis\n\n');
       expect(images).toContain('<');
@@ -236,13 +292,31 @@ line3`;
 
     test('should handle comments with mixed content', () => {
       expect(tokenImages('<!-- comment --><task>content</task>')).toEqual([
-        '<!-- comment -->', '<', 'task', '>', 'content', '</', 'task', '>'
+        '<!-- comment -->',
+        '<',
+        'task',
+        '>',
+        'content',
+        '</',
+        'task',
+        '>'
       ]);
     });
 
     test('should handle nested quotes and templates', () => {
       expect(tokenImages('<meta value="{{path}}/file.txt">')).toEqual([
-        '<', 'meta', ' ', 'value', '=', '"', '{{', 'path', '}}', '/file.txt', '"', '>'
+        '<',
+        'meta',
+        ' ',
+        'value',
+        '=',
+        '"',
+        '{{',
+        'path',
+        '}}',
+        '/file.txt',
+        '"',
+        '>'
       ]);
     });
   });
@@ -252,11 +326,10 @@ line3`;
       const result = tokenize('text {{incomplete');
       expect(result.errors).toHaveLength(0);
       expect(result.tokens.length).toBeGreaterThan(0);
-      
+
       const types = result.tokens.map(t => t.tokenType);
-      expect(types).toContain(TextContent);
+      expect(types).toContain(Identifier);
       expect(types).toContain(TemplateOpen);
-      expect(types).toContain(TemplateContent);
     });
 
     test('should handle unclosed comments', () => {
@@ -268,7 +341,7 @@ line3`;
     test('should handle mixed valid and invalid content', () => {
       const result = tokenize('<valid>content</valid>@#$invalid');
       expect(result.tokens.length).toBeGreaterThan(0);
-      
+
       // Should tokenize the valid parts
       const images = result.tokens.map(t => t.image);
       expect(images).toContain('<');
@@ -279,8 +352,10 @@ line3`;
 
     test('should handle special characters in text content', () => {
       const input = 'text with @#$%^&*()[]{}|;:,.<>?/~`';
-      const images = tokenImages(input);
-      expect(images).toEqual(['text with @#$%^&*()[]{}|;:,.<>?/~`']);
+      const result = tokenize(input);
+      expect(result.errors).toHaveLength(0);
+      const images = result.tokens.map(t => t.image);
+      expect(images).toEqual(['text', ' ', 'with', ' ', '@#$%^&*()[]{}|;:,.', '<', '>', '?/~`']);
     });
   });
 });
