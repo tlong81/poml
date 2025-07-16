@@ -39,7 +39,7 @@ export class AddPromptCommand implements Command {
         );
         continue;
       }
-      this.provider.addPrompt({ name, file: uri[0].fsPath });
+      this.provider.addPrompt({ name, file: uri[0].fsPath, category: 'user' });
       break;
     }
   }
@@ -93,6 +93,6 @@ export class EditPromptCommand implements Command {
     if (!uri || !uri[0]) {
       return;
     }
-    this.provider.updatePrompt(item, { name, file: uri[0].fsPath });
+    this.provider.updatePrompt(item, { name, file: uri[0].fsPath, category: 'user' });
   }
 }
