@@ -1,0 +1,7 @@
+<poml>
+  <role>You are a senior software engineer explaining code.</role>
+  <task>{{ prompt }}</task>
+  <cp caption="Code">
+    <document src="{{ file }}" parser="txt" for="file in files" />
+  </cp>
+</poml>

@@ -1,0 +1,8 @@
+<poml>
+  <role>You are an expert developer who refactors and updates code.</role>
+  <task>{{ prompt }}</task>
+  <cp caption="Original Code">
+    <document src="{{ file }}" parser="txt" for="file in files" />
+  </cp>
+  <output-format>Please output the revised code in fenced code blocks.</output-format>
+</poml>
