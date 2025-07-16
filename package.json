@@ -206,12 +206,12 @@
       "view/item/context": [
         {
           "command": "poml.gallery.deletePrompt",
-          "when": "view == pomlPromptGallery",
+          "when": "view == pomlPromptGallery && viewItem == pomlPrompt.custom",
           "group": "inline"
         },
         {
           "command": "poml.gallery.editPrompt",
-          "when": "view == pomlPromptGallery",
+          "when": "view == pomlPromptGallery && viewItem == pomlPrompt.custom",
           "group": "inline"
         }
       ],
