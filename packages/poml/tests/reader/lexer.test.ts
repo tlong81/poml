@@ -15,7 +15,7 @@ import {
   Identifier,
   Whitespace,
   TextContent
-} from '../../reader/lexer';
+} from 'poml/reader/lexer';
 
 // Helper function to extract token images
 function tokenImages(input: string): string[] {
