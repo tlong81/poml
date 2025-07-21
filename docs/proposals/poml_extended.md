@@ -103,38 +103,44 @@ There can be some intervening text here as well.
 
 Metadatas are information that is useful when parsing and rendering the file, such as context variables, stylesheets, version information, file paths, etc.
 File-level metadata can be included at any place of the file in a special `<meta>` tag. This metadata will be processed before any content parsing.
+By default, metadata has no child contents. When child contents exist, `<meta>` tag must have type to specify what kind of content is provided.
 
 **Example:**
 
 ```xml
 <meta minimalPomlVersion="0.3" />
-<meta stylesheet="/path/to/stylesheet.json />
-<meta enableTags="reference,table" unknownTags="warning" />
+<meta stylesheet="/path/to/stylesheet.json" />
+<meta components="+reference,-table" unknownComponents="warning" />
+<meta context="/path/to/contextFile.json" />
+<meta type="context"></meta>
+{ "foo": "bar" }
+</meta>
 ```
 
 ## Architecture Design
 
 ### High-level Processing Pipeline
 
-The core of the new architecture is a three-pass process: Tokenization and AST Parsing, Metadata Extraction, and Recursive Rendering.
+The core of the new architecture is a three-pass process: Tokenization and AST Parsing, and Recursive Rendering.
 
 #### I. Tokenization and AST Parsing
 
-This phase processes the raw file content through a standard compiling workflow: tokenization followed by parsing to an Abstract Syntax Tree (AST).
+This phase processes the raw file content into an Abstract Syntax Tree (AST). It leverages the provided ExtendedPomlLexer.
 
-* **Tokenization**: Standard XML tokenization logic is used to break the input into tokens (tags, text content, attributes, etc.). Additionally, template variables in `{{}}` format are identified and tokenized as special tokens to enable proper parsing and variable substitution.
+* **Tokenization**: The ExtendedPomlLexer (using chevrotain) scans the entire input string and breaks it into a flat stream of tokens (TagOpen, Identifier, TextContent, TemplateOpen, etc.). This single lexing pass is sufficient for the entire mixed-content file. The distinction between "text" and "POML" is not made at this stage; it's simply a stream of tokens.
+* **AST Parsing Algorithm**: A CST (Concrete Syntax Tree) or AST parser will consume the token stream from the lexer. The parser is stateful, using a `PomlContext` object to track parsing configurations.
 
-* **AST Parsing Algorithm**:
-  1. Scan until `<` and tag name is found.
-  2. If the tag name is `text`, create a text node and scan until the corresponding `</text>` is found (handling nested POML if present; template variables are not considered here).
-  3. If the tag name matches any POML tag from `componentDocs.json`, create a node with the tag name and attributes (template variables `{{}}` in attribute values are parsed as child template nodes).
-  4. Within POML tags, if another `text` tag is found, follow the same logic as step 2.
-  5. Template variables `{{}}` found within text content or attribute values create TEMPLATE nodes as children.
-  6. Close the node when the corresponding closing tag `</tagname>` is found.
+  1. The parser starts in "text mode". It consumes TextContent, TemplateOpen/TemplateClose, and other non-tag tokens, bundling them into TEXT or TEMPLATE nodes.
+  2. When a TagOpen (`<`) token is followed by the Identifier "meta", a META node is created. Its attributes are immediately parsed to populate the `PomlContext`. This allows metadata to control the parsing of the remainder of the file (e.g., by enabling new tags). The META node is added to the AST but will be ignored during rendering.
+  3. When a TagOpen (`<`) token is followed by an Identifier that matches a known POML component (from componentDocs.json and enabled via PomlContext), the parser switches to "POML mode" and creates a POML node.
+  4. In "POML mode," it parses attributes (Identifier, Equals, DoubleQuote/SingleQuote), nested tags, and content until it finds a matching TagClosingOpen (`<`) token. Template variables `{{}}` within attribute values or content are parsed into child TEMPLATE nodes.
+  5. If the tag is `<text>`, it creates a POML node for `<text>` itself, but its *children* are parsed by recursively applying the "text mode" logic (step 1), allowing for nested POML within `<text>`.
+  6. If a TagOpen is followed by an Identifier that is *not* a known POML component, the parser treats these tokens (`<`, tagname, `>`) as literal text and reverts to "text mode".
+  7. The parser closes the current POML node when the corresponding TagClosingOpen (`<`) and Identifier are found. After closing the top-level POML tag, it reverts to "text mode".
 
-* **Error Tolerance**: The parser is designed to be error-tolerant, gracefully handling malformed markup while preserving as much structure as possible.
+* **Error Tolerance**: The parser will be designed to be error-tolerant. If a closing tag is missing, it can infer closure at the end of the file or when a new top-level tag begins, logging a diagnostic warning.
 
-* **Source Mapping**: The parser retains source mapping information for each AST node, enabling code intelligence features like hover, go to definition, find references, and auto completion.
+* **Source Mapping**: The chevrotain tokens inherently contain offset, line, and column information. This data is directly transferred to the ASTNode during parsing, enabling robust code intelligence features.
 
 * **Output**: An AST representing the hierarchical structure of the document, where each node contains source position information and type metadata.
 
@@ -190,14 +196,6 @@ interface ASTNode {
 }
 ```
 
-#### II. Metadata Processing
-
-Once the AST is built, all `META` nodes are processed.
-
-  * **Extraction**: Traverse the AST to find all `META` nodes.
-  * **Population**: Parse the content of each `<meta>` tag and populate the global `PomlContext` object.
-  * **Removal**: After processing, `META` nodes are removed from the AST to prevent them from being rendered.
-
 **`PomlContext` Interface**: This context object is the single source of truth for the entire file, passed through all readers. It's mutable, allowing stateful operations like `<let>` to have a file-wide effect.
 
 ```typescript
@@ -209,7 +207,7 @@ interface PomlContext {
 }
 ```
 
-#### III. Text/POML Dispatching (Recursive Rendering)
+#### II. Text/POML Dispatching (Recursive Rendering)
 
 Rendering starts at the root of the AST and proceeds recursively. A controller dispatches AST nodes to the appropriate reader.
 
@@ -255,11 +253,3 @@ To achieve this design, the existing `PomlFile` class needs significant refactor
 3. **Handling `<include>`**:
 
   * The `handleInclude` method should be **removed** from `PomlFile`. Inclusion is now handled at a higher level by the main processing pipeline. When the `PomlReader` encounters an `<include>` tag, it will invoke the entire pipeline (Segmentation, Metadata, Rendering) on the included file and insert the resulting React elements.
-
-4. **Parsing `TEXT` Placeholders**:
-
-  * The core `parseXmlElement` method needs a new branch to handle the `<text ref="..." />` placeholder.
-  * When it encounters this element:
-    1. It extracts the `ref` attribute (e.g., `"TEXT_ID_123"`).
-    2. It looks up the corresponding raw text from `context.texts`.
-    3. It fetches from the `context.texts` map and returns a React element containing the pure text content.
