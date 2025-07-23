@@ -20,7 +20,7 @@
   <item>
     <b>Make minimal, contained changes</b>
     <list listStyle="dash">
-      <item>Produce editted output.</item>
+      <item>Produce edited output.</item>
       <item>Do not add, rename, or delete any files.</item>
       <item>No logging, TODOs, tests, or refactors unless explicitly requested.</item>
     </list>
