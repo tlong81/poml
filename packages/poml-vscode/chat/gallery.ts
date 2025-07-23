@@ -96,8 +96,8 @@ export class PromptGalleryProvider implements vscode.TreeDataProvider<TreeNode> 
 export function registerPromptGallery(context: vscode.ExtensionContext): PromptGalleryProvider {
   const galleryDir = vscode.Uri.joinPath(context.extensionUri, 'gallery');
   const defaultEntries: PromptEntry[] = [
-    { name: 'code-ask', file: vscode.Uri.joinPath(galleryDir, 'code_ask.poml').fsPath, category: 'default' },
-    { name: 'code-edit', file: vscode.Uri.joinPath(galleryDir, 'code_edit.poml').fsPath, category: 'default' },
+    { name: 'ask', file: vscode.Uri.joinPath(galleryDir, 'ask.poml').fsPath, category: 'default' },
+    { name: 'edit', file: vscode.Uri.joinPath(galleryDir, 'edit.poml').fsPath, category: 'default' },
     { name: 'latex-edit', file: vscode.Uri.joinPath(galleryDir, 'latex_edit.poml').fsPath, category: 'default' },
     { name: 'latex-write', file: vscode.Uri.joinPath(galleryDir, 'latex_write.poml').fsPath, category: 'default' },
     { name: 'pdf-understanding', file: vscode.Uri.joinPath(galleryDir, 'pdf_understanding.poml').fsPath, category: 'default' },
