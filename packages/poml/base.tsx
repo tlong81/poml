@@ -873,3 +873,7 @@ export function findComponentByAliasOrUndefined(alias: string): PomlComponent | 
 export function listComponents() {
   return ComponentRegistry.instance.listComponents();
 }
+
+export function listComponentAliases() {
+  return listComponents().map(c => c.getAliases()).flat();
+}
