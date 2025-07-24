@@ -125,7 +125,7 @@ jobs:
     - name: Pack NPM package
       if: matrix.os == 'ubuntu-latest'
       run: |
-        cd packages/poml
+        cd packages/poml-build
         npm pack
 
     - name: Upload NPM package
@@ -133,5 +133,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: poml-npm-universal
-        path: packages/poml/poml-*.tgz
+        path: packages/poml-build/poml-*.tgz
         compression-level: 0
