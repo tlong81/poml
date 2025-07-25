@@ -6,7 +6,7 @@ import { ErrorCollection, ReadError, component, unregisterComponent } from 'poml
 
 describe('meta tag', () => {
   test('version check pass', async () => {
-    const result = await poml('<meta minVersion="0.0.1" maxVersion="0.0.6"/><p>hi</p>');
+    const result = await poml('<meta minVersion="0.0.1" maxVersion="999.0.0"/><p>hi</p>');
     expect(result).toBe('hi');
   });
 
