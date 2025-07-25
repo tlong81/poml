@@ -173,3 +173,33 @@ stages:
       env:
         PYPI_USERNAME: __token__
         PYPI_PASSWORD: $(PYPI_TOKEN)
+
+    - script: |
+        set -e
+
+        # Count .tgz packages
+        tgz_count=$(find artifacts -type f -name "*.tgz" | wc -l)
+        if [ "$tgz_count" -eq 0 ]; then
+          echo "No .tgz packages found to publish."
+          exit 0
+        fi
+
+        # Configure npm auth (writes ~/.npmrc)
+        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+
+        # Publish each package
+        for tgz in artifacts/*.tgz; do
+          if [ -f "$tgz" ]; then
+            echo "Publishing package: $tgz"
+            npm publish "$tgz" --access public
+            if [ $? -eq 0 ]; then
+              echo "Successfully published: $tgz"
+            else
+              echo "Failed to publish: $tgz"
+              exit 1
+            fi
+          fi
+        done
+      displayName: 'Publish .tgz packages to npm'
+      env:
+        NPM_TOKEN: $(NPM_TOKEN)
