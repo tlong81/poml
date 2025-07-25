@@ -133,5 +133,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: poml-npm-universal.tgz
-        path: packages/poml-build/poml-*.tgz
+        path: packages/poml-build/pomljs-*.tgz
         compression-level: 0
