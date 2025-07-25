@@ -597,14 +597,23 @@ export class PomlFile {
     if (comps) {
       comps.split(/[,\s]+/).forEach(token => {
         token = token.trim();
-        if (!token) return;
+        if (!token) {
+          return;
+        }
         const op = token[0];
         const name = token.slice(1).toLowerCase();
-        if (!name) return;
+        if (!name) {
+          return;
+        }
         if (op === '+') {
           this.disabledComponents.delete(name);
         } else if (op === '-') {
           this.disabledComponents.add(name);
+        } else {
+          this.reportError(
+            `Invalid component operation: ${op}. Use + to enable or - to disable.`,
+            this.xmlAttributeValueRange(xmlAttribute(element, 'components')!)
+          );
         }
       });
     }
@@ -636,9 +645,9 @@ export class PomlFile {
         context,
         position
           ? {
-              start: position.start + curlyMatch.index,
-              end: position.start + curlyMatch.index + curlyMatch[0].length - 1
-            }
+            start: position.start + curlyMatch.index,
+            end: position.start + curlyMatch.index + curlyMatch[0].length - 1
+          }
           : undefined
       );
       if (this.config.trim && curlyMatch[0] === text.trim()) {
@@ -1148,8 +1157,12 @@ const compareVersions = (a: string, b: string): number => {
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const na = pa[i] || 0;
     const nb = pb[i] || 0;
-    if (na > nb) return 1;
-    if (na < nb) return -1;
+    if (na > nb) {
+      return 1;
+    }
+    if (na < nb) {
+      return -1;
+    }
   }
   return 0;
 };
