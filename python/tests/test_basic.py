@@ -99,8 +99,8 @@ def test_trace_directory(tmp_path: Path):
     result = poml("<p>Dir</p>")
     set_trace(False)
     assert result == [{"speaker": "human", "content": "Dir"}]
-    files = list(run_dir.glob("*_markup.poml"))
-    assert len(files) == 1
+    files = list(run_dir.glob("*.poml"))
+    assert len(files) == 2
 
 
 def test_trace_directory_name_format(tmp_path: Path):
@@ -126,7 +126,7 @@ def test_multiprocessing_trace(tmp_path: Path):
         p.join()
     set_trace(False)
     os.environ.pop("POML_TRACE", None)
-    assert len(list(run_dir.glob("*_markup.poml"))) == 3
+    assert len(list(run_dir.glob("*.poml"))) == 6
 
 
 def test_envvar_autotrace(tmp_path: Path):
@@ -135,4 +135,4 @@ def test_envvar_autotrace(tmp_path: Path):
     env["POML_TRACE"] = str(trace_dir)
     script = "from poml import poml; poml('<p>E</p>')"
     subprocess.check_call([sys.executable, "-c", script], env=env)
-    assert any(f.name.endswith("_markup.poml") for f in trace_dir.iterdir())
+    assert any(f.name.endswith(".poml") for f in trace_dir.iterdir())
