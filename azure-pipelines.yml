@@ -71,108 +71,108 @@ stages:
       env:
         GITHUB_PAT: $(GITHUB_PAT)
 
-    # - script: |
-    #     set -e
+    - script: |
+        set -e
 
-    #     # Function to parse target from filename
-    #     parse_target() {
-    #       local filename="$1"
-    #       local basename=$(basename "$filename" .vsix)
+        # Function to parse target from filename
+        parse_target() {
+          local filename="$1"
+          local basename=$(basename "$filename" .vsix)
           
-    #       # Extract platform part from filename like: poml-darwin-arm64-0.0.5.vsix
-    #       if [[ $basename =~ ^[^-]+-([^-]+)-([^-]+)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    #         local os="${BASH_REMATCH[1]}"
-    #         local arch="${BASH_REMATCH[2]}"
+          # Extract platform part from filename like: poml-darwin-arm64-0.0.5.vsix
+          if [[ $basename =~ ^[^-]+-([^-]+)-([^-]+)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            local os="${BASH_REMATCH[1]}"
+            local arch="${BASH_REMATCH[2]}"
             
-    #         # Map to VS Code marketplace target identifiers
-    #         case "$os-$arch" in
-    #           "darwin-arm64") echo "darwin-arm64" ;;
-    #           "darwin-x64") echo "darwin-x64" ;;
-    #           "linux-arm64") echo "linux-arm64" ;;
-    #           "linux-x64") echo "linux-x64" ;;
-    #           "win32-x64") echo "win32-x64" ;;
-    #           *) echo "universal" ;;
-    #         esac
-    #       else
-    #         echo "universal"
-    #       fi
-    #     }
+            # Map to VS Code marketplace target identifiers
+            case "$os-$arch" in
+              "darwin-arm64") echo "darwin-arm64" ;;
+              "darwin-x64") echo "darwin-x64" ;;
+              "linux-arm64") echo "linux-arm64" ;;
+              "linux-x64") echo "linux-x64" ;;
+              "win32-x64") echo "win32-x64" ;;
+              *) echo "universal" ;;
+            esac
+          else
+            echo "universal"
+          fi
+        }
         
-    #     # Find all VSIX files and publish them
-    #     find artifacts -type f -name "*.vsix" | while read -r vsix_file; do
-    #       echo "Publishing VSIX file: $vsix_file"
+        # Find all VSIX files and publish them
+        find artifacts -type f -name "*.vsix" | while read -r vsix_file; do
+          echo "Publishing VSIX file: $vsix_file"
           
-    #       # Extract version and name from filename for logging
-    #       filename=$(basename "$vsix_file")
-    #       echo "Processing file: $filename"
+          # Extract version and name from filename for logging
+          filename=$(basename "$vsix_file")
+          echo "Processing file: $filename"
           
-    #       # Parse target platform
-    #       target=$(parse_target "$vsix_file")
-    #       echo "Detected target platform: $target"
+          # Parse target platform
+          target=$(parse_target "$vsix_file")
+          echo "Detected target platform: $target"
           
-    #       # Publish to VS Code Marketplace with target
-    #       # Target already set at packaging so it's not needed here
-    #       if [ "$target" = "universal" ]; then
-    #         echo "Publishing as universal package..."
-    #         # echo "vsce publish --packagePath \"$vsix_file\" --pat $(VSCE_PAT)"
-    #         vsce publish --packagePath "$vsix_file" --pat $(VSCE_PAT)
-    #       else
-    #         echo "Publishing with target: $target"
-    #         # echo "vsce publish --packagePath \"$vsix_file\" --target \"$target\" --pat $(VSCE_PAT)"
-    #         # vsce publish --packagePath "$vsix_file" --target "$target" --pat $(VSCE_PAT)
-    #         vsce publish --packagePath "$vsix_file" --pat $(VSCE_PAT)
-    #       fi
+          # Publish to VS Code Marketplace with target
+          # Target already set at packaging so it's not needed here
+          if [ "$target" = "universal" ]; then
+            echo "Publishing as universal package..."
+            # echo "vsce publish --packagePath \"$vsix_file\" --pat $(VSCE_PAT)"
+            vsce publish --packagePath "$vsix_file" --pat $(VSCE_PAT)
+          else
+            echo "Publishing with target: $target"
+            # echo "vsce publish --packagePath \"$vsix_file\" --target \"$target\" --pat $(VSCE_PAT)"
+            # vsce publish --packagePath "$vsix_file" --target "$target" --pat $(VSCE_PAT)
+            vsce publish --packagePath "$vsix_file" --pat $(VSCE_PAT)
+          fi
           
-    #       if [ $? -eq 0 ]; then
-    #         echo "Successfully published: $filename (target: $target)"
-    #       else
-    #         echo "Failed to publish: $filename (target: $target)"
-    #         exit 1
-    #       fi
-    #     done
+          if [ $? -eq 0 ]; then
+            echo "Successfully published: $filename (target: $target)"
+          else
+            echo "Failed to publish: $filename (target: $target)"
+            exit 1
+          fi
+        done
         
-    #     # Check if any VSIX files were found
-    #     vsix_count=$(find artifacts -type f -name "*.vsix" | wc -l)
-    #     if [ $vsix_count -eq 0 ]; then
-    #       echo "No VSIX files found in artifacts!"
-    #       exit 1
-    #     else
-    #       echo "Successfully processed $vsix_count VSIX files"
-    #     fi
-    #   displayName: 'Publish VSIX Files to Marketplace'
-    #   env:
-    #     VSCE_PAT: $(VSCE_PAT)
+        # Check if any VSIX files were found
+        vsix_count=$(find artifacts -type f -name "*.vsix" | wc -l)
+        if [ $vsix_count -eq 0 ]; then
+          echo "No VSIX files found in artifacts!"
+          exit 1
+        else
+          echo "Successfully processed $vsix_count VSIX files"
+        fi
+      displayName: 'Publish VSIX Files to Marketplace'
+      env:
+        VSCE_PAT: $(VSCE_PAT)
 
-    # - script: |
-    #     python -m pip install --upgrade pip
-    #     pip install twine
-    #   displayName: 'Install Twine'
+    - script: |
+        python -m pip install --upgrade pip
+        pip install twine
+      displayName: 'Install Twine'
 
-    # - script: |
-    #     set -e
+    - script: |
+        set -e
 
-    #     wheel_count=$(find artifacts -type f -name "*.whl" | wc -l)
-    #     if [ "$wheel_count" -eq 0 ]; then
-    #       echo "No wheel files found to publish."
-    #       exit 0
-    #     fi
+        wheel_count=$(find artifacts -type f -name "*.whl" | wc -l)
+        if [ "$wheel_count" -eq 0 ]; then
+          echo "No wheel files found to publish."
+          exit 0
+        fi
 
-    #     for wheel in artifacts/*.whl; do
-    #       if [ -f "$wheel" ]; then
-    #         echo "Publishing wheel: $wheel"
-    #         twine upload --non-interactive --repository pypi --username "$PYPI_USERNAME" --password "$PYPI_PASSWORD" "$wheel"
-    #         if [ $? -eq 0 ]; then
-    #           echo "Successfully published: $wheel"
-    #         else
-    #           echo "Failed to publish: $wheel"
-    #           exit 1
-    #         fi
-    #       fi
-    #     done
-    #   displayName: 'Publish Wheels to PyPI'
-    #   env:
-    #     PYPI_USERNAME: __token__
-    #     PYPI_PASSWORD: $(PYPI_TOKEN)
+        for wheel in artifacts/*.whl; do
+          if [ -f "$wheel" ]; then
+            echo "Publishing wheel: $wheel"
+            twine upload --non-interactive --repository pypi --username "$PYPI_USERNAME" --password "$PYPI_PASSWORD" "$wheel"
+            if [ $? -eq 0 ]; then
+              echo "Successfully published: $wheel"
+            else
+              echo "Failed to publish: $wheel"
+              exit 1
+            fi
+          fi
+        done
+      displayName: 'Publish Wheels to PyPI'
+      env:
+        PYPI_USERNAME: __token__
+        PYPI_PASSWORD: $(PYPI_TOKEN)
 
     - script: |
         set -e
