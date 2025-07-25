@@ -268,7 +268,7 @@ export class POMLWebviewPanel {
         this._userOptions.stylesheets = [];
       }
     }
-    
+
     this._pomlUri = resource;
     this.autoAddAssociatedFiles(resource.fsPath);
 
