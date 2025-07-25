@@ -93,7 +93,6 @@ export function dumpTrace(markup: string, context?: any, stylesheet?: any, resul
   }
   if (sourcePath) {
     const envFile = `${prefix}.env`;
-    console.log(envFile);
     writeFileSync(envFile, `SOURCE_PATH=${sourcePath}\n`);
     const linkPath = `${prefix}.source.poml`;
     try {
