@@ -601,7 +601,7 @@ export class PomlFile {
           return;
         }
         const op = token[0];
-        const name = token.slice(1).toLowerCase();
+        const name = token.slice(1).toLowerCase().trim();
         if (!name) {
           return;
         }
@@ -1151,9 +1151,16 @@ const camelToHyphenCase = (text: string): string => {
   return text.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
 };
 
+/**
+ * Compares two semantic version strings (e.g., "1.2.3").
+ * 
+ * @param a - The first version string in the format "x.y.z".
+ * @param b - The second version string in the format "x.y.z".
+ * @returns -1 if `a` is less than `b`, 1 if `a` is greater than `b`, and 0 if they are equal.
+ */
 const compareVersions = (a: string, b: string): number => {
-  const pa = a.split('.').map(n => parseInt(n));
-  const pb = b.split('.').map(n => parseInt(n));
+  const pa = a.split('.').map(n => parseInt(n, 10));
+  const pb = b.split('.').map(n => parseInt(n, 10));
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const na = pa[i] || 0;
     const nb = pb[i] || 0;
