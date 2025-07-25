@@ -190,8 +190,9 @@ stages:
         # Publish each package
         for tgz in artifacts/*.tgz; do
           if [ -f "$tgz" ]; then
-            echo "Publishing package: $tgz"
-            npm publish "$tgz" --access public
+            pkg_path="$(realpath "$tgz")"
+            echo "Publishing package: $pkg_path"
+            npm publish "$pkg_path" --access public
             if [ $? -eq 0 ]; then
               echo "Successfully published: $tgz"
             else
