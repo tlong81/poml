@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, openSync, closeSync, writeSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, openSync, closeSync, writeSync, symlinkSync } from 'fs';
 import path from 'path';
 
 interface Base64Wrapper { __base64__: string }
@@ -60,14 +60,15 @@ export function isTracing(): boolean {
   return traceEnabled && !!traceDir;
 }
 
-function nextIndex(): [number, string, number] {
+function nextIndex(sourcePath?: string): [number, string, number] {
   if (!traceDir) {
     return [0, '', -1];
   }
+  const fileName = sourcePath ? path.basename(sourcePath, '.poml') : '';
   for (let i = 1; ; i++) {
     const idxStr = i.toString().padStart(4, '0');
-    const prefix = path.join(traceDir, idxStr);
-    const filePath = `${prefix}_markup.poml`;
+    const prefix = path.join(traceDir, idxStr) + (fileName ? `.${fileName}` : '');
+    const filePath = `${prefix}.poml`;
     try {
       const fd = openSync(filePath, 'wx');
       return [i, prefix, fd];
@@ -80,24 +81,35 @@ function nextIndex(): [number, string, number] {
   }
 }
 
-export function dumpTrace(markup: string, context?: any, stylesheet?: any, result?: any) {
+export function dumpTrace(markup: string, context?: any, stylesheet?: any, result?: any, sourcePath?: string) {
   if (!isTracing()) {
     return;
   }
-  const [_idx, prefix, fd] = nextIndex();
+  const [_idx, prefix, fd] = nextIndex(sourcePath);
   try {
     writeSync(fd, markup);
   } finally {
     closeSync(fd);
   }
+  if (sourcePath) {
+    const envFile = `${prefix}.env`;
+    console.log(envFile);
+    writeFileSync(envFile, `SOURCE_PATH=${sourcePath}\n`);
+    const linkPath = `${prefix}.source.poml`;
+    try {
+      symlinkSync(sourcePath, linkPath);
+    } catch {
+      console.warn(`Failed to create symlink for source path: ${sourcePath}`);
+    }
+  }
   if (context && Object.keys(context).length > 0) {
-    writeFileSync(`${prefix}_context.json`, JSON.stringify(replaceBuffers(context), null, 2));
+    writeFileSync(`${prefix}.context.json`, JSON.stringify(replaceBuffers(context), null, 2));
   }
   if (stylesheet && Object.keys(stylesheet).length > 0) {
-    writeFileSync(`${prefix}_stylesheet.json`, JSON.stringify(replaceBuffers(stylesheet), null, 2));
+    writeFileSync(`${prefix}.stylesheet.json`, JSON.stringify(replaceBuffers(stylesheet), null, 2));
   }
   if (result !== undefined) {
-    writeFileSync(`${prefix}_result.json`, JSON.stringify(replaceBuffers(result), null, 2));
+    writeFileSync(`${prefix}.result.json`, JSON.stringify(replaceBuffers(result), null, 2));
   }
 }
 

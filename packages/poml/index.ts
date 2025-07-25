@@ -187,7 +187,7 @@ export async function commandLine(args: CliArgs) {
 
   if (isTracing()) {
     try {
-      dumpTrace(input, context, stylesheet, result);
+      dumpTrace(input, context, stylesheet, result, sourcePath);
     } catch (err: any) {
       ErrorCollection.add(new SystemError('Failed to dump trace', { cause: err }));
     }

@@ -18,6 +18,7 @@ import {
 import { AnyValue, deepMerge, parseText, readSource } from './util';
 import { StyleSheetProvider, ErrorCollection } from './base';
 import { getSuggestions } from './util/xmlContentAssist';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 
 export interface PomlReaderOptions {
@@ -65,6 +66,21 @@ export class PomlFile {
     };
     this.text = this.config.crlfToLf ? text.replace(/\r\n/g, '\n') : text;
     this.sourcePath = sourcePath;
+    if (this.sourcePath) {
+      const envFile = this.sourcePath.replace(/(source\.)?\.poml$/i, '.env');
+      if (existsSync(envFile)) {
+        try {
+          const envText = readFileSync(envFile, 'utf8');
+          const match = envText.match(/^SOURCE_PATH=(.*)$/m);
+          if (match) {
+            // The real source path is specified in the .env file.
+            this.sourcePath = match[1];
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
 
     this.documentRange = { start: 0, end: text.length - 1 };
     let { ast, cst, tokenVector, errors } = this.readXml(text);
