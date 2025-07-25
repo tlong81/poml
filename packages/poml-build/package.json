@@ -1,5 +1,5 @@
 {
-  "name": "poml",
+  "name": "pomljs",
   "version": "0.0.7",
   "description": "Prompt Orchestration Markup Language",
   "type": "module",
