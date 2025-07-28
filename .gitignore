@@ -2,3 +2,4 @@ repos
 .env
 __pycache__
 *.pyc
+logs

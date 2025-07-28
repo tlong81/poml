@@ -67,6 +67,58 @@
     </list>
   </cp>
 
+  <human-msg>
+    <cp caption="Task">{{ task }}</cp>
+    <cp caption="Root Directory">
+      <folder src="{{ repo_path }}" maxDepth="2" />
+    </cp>
+    <!-- <cp caption="GitHub Issue" if="github_issue"><webpage url="{{ github_issue }}" /></cp> -->
+    <cp caption="Memories">
+      <list listStyle="dash">
+        <item>Files read: {{ memory.read_files.length }} files
+          <list listStyle="star" if="memory.read_files.length">
+            <item for="file in memory.read_files">{{ file }}</item>
+          </list>
+        </item>
+        <item>Files edited: {{ memory.edited_files.length }} files
+          <list listStyle="star" if="memory.edited_files.length">
+            <item for="file in memory.edited_files">{{ file }}</item>
+          </list>
+        </item>
+        <item>Directories explored: {{ memory.walked_directories.length }} directories
+          <list listStyle="star" if="memory.walked_directories.length">
+            <item for="dir in memory.walked_directories">{{ dir }}</item>
+          </list>
+        </item>
+        <item if="memory.important_findings.length">Important findings:
+          <list listStyle="star">
+            <item for="finding in memory.important_findings">{{ finding }}</item>
+          </list>
+        </item>
+      </list>
+    </cp>
+
+    <cp caption="Read Files and Folders">
+      <div if="requested_files.length">
+        <cp caption="Files">
+          <cp caption="{{ file.relative_path }}" for="file in requested_files">
+            <document src="{{ file.absolute_path }}" parser="txt"/>
+          </cp>
+        </cp>
+      </div>
+      <div if="requested_dirs.length">
+        <cp caption="Directories">
+          <cp caption="{{ dir.relative_path }}" for="dir in requested_dirs">
+            <folder src="{{ dir.absolute_path }}" maxDepth="2" />
+          </cp>
+        </cp>
+      </div>
+      <div if="requested_dirs.length + requested_files.length == 0">
+        <p>No directories and files requested.</p>
+      </div>
+    </cp>
+  </human-msg>
+
   <stylesheet>
   {
     ".inline": { "captionStyle": "bold" }

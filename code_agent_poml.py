@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 
 from openai import AzureOpenAI
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Literal, TypedDict
+
+import poml
 
 
 class ThoughtProcess(BaseModel):
@@ -30,13 +32,12 @@ class ExploreAction(BaseModel):
     """Parameters for exploring directories and reading files"""
 
     directories: List[str] = Field(
-        default_factory=list, description="Directories to walk and explore for relevant files"
+        default_factory=list, description="Directories to walk and explore for relevant files, relative to repository root"
     )
     files: List[str] = Field(
         default_factory=list,
-        description="Specific files to read (can be discovered from directory walking or known paths)",
+        description="Specific files to read (can be discovered from directory walking or known paths), relative to repository root",
     )
-    max_files: int = Field(default=20, description="Maximum number of files to read to avoid overwhelming context")
 
 
 class FileEditAction(BaseModel):
@@ -88,9 +89,21 @@ class AgentAction(BaseModel):
     add_file: Optional[FileAddAction] = Field(default=None, description="Parameters for adding a new file")
     remove_file: Optional[FileRemoveAction] = Field(default=None, description="Parameters for removing a file")
 
+    findings: List[str] = Field(
+        default_factory=list, description="List of important findings or observations made during this action. "
+                                          "Make it empty if there are no findings."
+    )
+
     complete: bool = Field(
         default=False, description="Set to true if the task is complete and no more actions are needed"
     )
+
+
+class FileRequest(TypedDict):
+    """Request for a file from the agent"""
+
+    relative_path: str
+    absolute_path: str
 
 
 class CodeAgent:
@@ -104,7 +117,7 @@ class CodeAgent:
         api_key: Optional[str] = None,
         azure_endpoint: Optional[str] = None,
         api_version: str = "2025-04-01-preview",
-        model: str = "o4-mini",
+        model: str = "gpt-4o",
         debug: bool = False,
     ):
         """
@@ -125,6 +138,8 @@ class CodeAgent:
         self.model = model
         self.debug = debug
         self.memory = AgentMemory()
+        self.requested_files: List[dict] = []
+        self.requested_dirs: List[dict] = []
 
         # Initialize Azure OpenAI client
         endpoint = azure_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -151,6 +166,8 @@ class CodeAgent:
             logging.getLogger("urllib3").setLevel(logging.WARNING)
             logging.getLogger("httpcore").setLevel(logging.WARNING)
             logging.getLogger("httpx").setLevel(logging.WARNING)
+
+            poml.set_trace(tempdir="logs")
 
         # Validate repository path
         if not self.repo_path.exists():
@@ -180,138 +197,6 @@ class CodeAgent:
             return str(resolved_path).startswith(str(repo_resolved))
         except Exception:
             return False
-
-    def walk_directory(self, subdirectory: str = "", max_depth: int = 3) -> List[str]:
-        """
-        Walk through a subdirectory and return list of files
-
-        Args:
-            subdirectory: Subdirectory path relative to repo root
-            max_depth: Maximum depth to walk
-
-        Returns:
-            List of file paths relative to repo root
-        """
-        target_path = self.repo_path / subdirectory if subdirectory else self.repo_path
-
-        if not target_path.exists():
-            self.logger.warning(f"Directory does not exist: {target_path}")
-            return []
-
-        # Check if we've already walked this directory
-        if str(target_path) in self.memory.walked_directories:
-            self.logger.info(f"Directory already walked: {target_path}")
-            return []
-
-        files = []
-        try:
-            for root, dirs, filenames in os.walk(target_path):
-                # Limit depth of directory walking
-                if root.count(os.sep) - str(target_path).count(os.sep) >= max_depth:
-                    continue
-                # Skip common ignored directories
-                dirs[:] = [
-                    d
-                    for d in dirs
-                    if not d.startswith(".") and d not in ["__pycache__", "node_modules", "venv", "env", ".git"]
-                ]
-
-                for filename in filenames:
-                    if not filename.startswith("."):
-                        full_path = Path(root) / filename
-                        rel_path = full_path.relative_to(self.repo_path)
-                        files.append(str(rel_path))
-
-            self.memory.walked_directories.add(str(target_path))
-            self.logger.info(f"Walked directory {target_path}, found {len(files)} files")
-
-        except Exception as e:
-            self.logger.error(f"Error walking directory {target_path}: {e}")
-
-        return files
-
-    def read_files(self, file_paths: List[str]) -> Dict[str, str]:
-        """
-        Read multiple files and return their contents
-
-        Args:
-            file_paths: List of file paths relative to repo root
-
-        Returns:
-            Dictionary mapping file paths to their contents
-        """
-        contents = {}
-
-        for file_path in file_paths:
-            # Skip if already read and cached
-            if file_path in self.memory.read_files and file_path in self.memory.file_contents_cache:
-                contents[file_path] = self.memory.file_contents_cache[file_path]
-                continue
-
-            full_path = self.repo_path / file_path
-
-            if not full_path.exists():
-                self.logger.warning(f"File does not exist: {full_path}")
-                continue
-
-            if not full_path.is_file():
-                self.logger.warning(f"Path is not a file: {full_path}")
-                continue
-
-            try:
-                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-                    contents[file_path] = content
-                    self.memory.file_contents_cache[file_path] = content
-                    self.memory.read_files.add(file_path)
-
-            except Exception as e:
-                self.logger.error(f"Error reading file {full_path}: {e}")
-
-        self.logger.info(f"Read {len(contents)} files")
-        return contents
-
-    def explore_repository(self, directories: List[str], files: List[str], max_files: int = 20) -> Dict[str, Any]:
-        """
-        Combined action to walk directories and read files
-
-        Args:
-            directories: List of directories to explore
-            files: List of specific files to read
-            max_files: Maximum number of files to read
-
-        Returns:
-            Dictionary with discovered files and their contents
-        """
-        result = {"discovered_files": [], "file_contents": {}, "directories_explored": [], "files_read": 0}
-
-        # First, walk through directories to discover files
-        all_discovered_files = []
-        for directory in directories:
-            if directory and directory not in self.memory.walked_directories:
-                discovered = self.walk_directory(directory)
-                all_discovered_files.extend(discovered)
-                result["directories_explored"].append(directory)
-                self.logger.info(f"Explored directory: {directory}, found {len(discovered)} files")
-
-        # Combine specific files with discovered files
-        files_to_read = list(set(files + all_discovered_files))
-        result["discovered_files"] = files_to_read[:max_files]  # Limit to max_files
-
-        # Read the files
-        if files_to_read:
-            contents = self.read_files(result["discovered_files"])
-            result["file_contents"] = contents
-            result["files_read"] = len(contents)
-
-            # Update memory with important findings
-            self.memory.important_findings.append(
-                f"Explored {len(result['directories_explored'])} directories, "
-                f"discovered {len(all_discovered_files)} files, "
-                f"read {result['files_read']} files"
-            )
-
-        return result
 
     def edit_file(self, file_path: str, new_content: str) -> bool:
         """
@@ -460,76 +345,6 @@ class CodeAgent:
             self.logger.error(f"Error calling Azure OpenAI API: {e}")
             return "" if not response_format else None
 
-    def _fetch_github_issue(self, issue_ref: str) -> str:
-        """
-        Fetch GitHub issue details from issue reference
-
-        Args:
-            issue_ref: GitHub issue reference (URL or owner/repo#number format)
-
-        Returns:
-            Formatted issue details or error message
-        """
-        try:
-            # Fetch issue details from GitHub API
-            response = requests.get(issue_ref, timeout=10)
-            if response.status_code == 200:
-                issue_data = response.text
-                if len(issue_data) > 1000:
-                    issue_data = issue_data[:1000] + "... (truncated)"
-
-                return f"GitHub Issue #{issue_ref}:\n{issue_data}"
-            else:
-                return f"GitHub Issue: {issue_ref}\n(Error fetching: HTTP {response.status_code})"
-
-        except requests.RequestException as e:
-            return f"GitHub Issue: {issue_ref}\n(Network error: {e})"
-        except Exception as e:
-            return f"GitHub Issue: {issue_ref}\n(Error fetching details: {e})"
-
-    def _format_context(self) -> str:
-        """
-        Format context as structured text instead of JSON dump
-
-        Returns:
-            Formatted context string
-        """
-        context_parts = []
-
-        # Task information
-        context_parts.append(f"TASK: {self.query}")
-        context_parts.append(f"REPOSITORY: {self.repo_path}")
-
-        # GitHub issue if provided
-        if self.github_issue:
-            issue_details = self._fetch_github_issue(self.github_issue)
-            context_parts.append(f"\n{issue_details}")
-
-        # Memory state
-        context_parts.append(f"\nCURRENT STATE:")
-        context_parts.append(f"- Files read: {len(self.memory.read_files)} files")
-        if self.memory.read_files:
-            for file in sorted(self.memory.read_files):
-                context_parts.append(f"  • {file}")
-
-        context_parts.append(f"- Files edited: {len(self.memory.edited_files)} files")
-        if self.memory.edited_files:
-            for file in sorted(self.memory.edited_files):
-                context_parts.append(f"  • {file}")
-
-        context_parts.append(f"- Directories explored: {len(self.memory.walked_directories)} directories")
-        if self.memory.walked_directories:
-            for dir_path in sorted(self.memory.walked_directories):
-                context_parts.append(f"  • {dir_path}")
-
-        # Important findings
-        if self.memory.important_findings:
-            context_parts.append(f"\nKEY FINDINGS:")
-            for finding in self.memory.important_findings:
-                context_parts.append(f"- {finding}")
-
-        return "\n".join(context_parts)
-
     def decide_next_action(self) -> Optional[AgentAction]:
         """
         Use Azure OpenAI to decide the next action based on current state
@@ -538,59 +353,26 @@ class CodeAgent:
             Next action to take, or None if task is complete
         """
 
-        system_prompt = """
-You are a senior software engineer with expertise in production-grade code analysis and modification. Your approach must be methodical, precise, and focused on production safety.
+        context = {
+            "task": self.query,
+            "repo_path": str(self.repo_path),
+            "github_issue": self.github_issue or "",
+            "memory": {
+                "read_files": list(self.memory.read_files),
+                "edited_files": list(self.memory.edited_files),
+                "walked_directories": list(self.memory.walked_directories),
+                "important_findings": list(self.memory.important_findings),
+            },
+            "requested_files": self.requested_files,
+            "requested_dirs": self.requested_dirs,
+        }
+        messages = poml.poml("prompts/code_agent.poml", context=context)
+        self.logger.debug("=== Deciding next action with messages: ===\n" + messages[-1]["content"])
 
-## Engineering Principles
-
-**SCOPE CLARITY**: Understand exactly what needs to be accomplished before taking action.
-**PRECISION**: Target only specific files and locations that require attention.
-**MINIMALISM**: Make only changes directly required to satisfy the objective.
-**SAFETY**: Preserve existing functionality and avoid regressions.
-
-## Decision Process
-
-Structure your reasoning using these guidelines:
-
-**observation**:
-- Clearly state your interpretation of the current task requirement
-- Identify what specific information or modifications are needed
-- Explain why this particular action advances the objective
-
-**analysis**:
-- Specify exactly which files, directories, or components need attention
-- Justify why each target is relevant and necessary
-- Avoid broad, unfocused exploration when targeted investigation suffices
-
-**plan**:
-- Define the specific, contained action you will execute
-- Ensure the approach is surgical and won't impact unrelated functionality
-- Focus strictly on what is directly required
-
-## Available Actions
-
-- **explore**: Investigate specific files or directories to understand code structure, locate implementations, or gather targeted information
-- **edit_file**: Make precise modifications to existing files that directly address task requirements
-- **add_file**: Create new files only when explicitly required by the task objective
-- **remove_file**: Delete files only when explicitly required by the task objective
-
-## Execution Standards
-
-- Make targeted changes rather than broad modifications
-- Understand the codebase context before implementing changes
-- Maintain existing code patterns and conventions
-- Use the minimum number of actions necessary to complete the objective
-- Set "complete" to true only when the stated goal is fully achieved
-
-Respond with valid JSON that matches the AgentAction schema.
-"""
-
-        user_message = self._format_context()
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ]
-        self.logger.debug("=== Deciding next action with messages: ===\n" + user_message)
+        messages = [{
+            "role": "user" if msg["speaker"] == "human" else "system",
+            "content": msg["content"]
+        } for msg in messages]
 
         # Use structured output with Pydantic model
         response = self._call_azure_openai(messages, response_format=AgentAction)
@@ -621,6 +403,10 @@ Respond with valid JSON that matches the AgentAction schema.
         self.logger.info(f"Observation: {action.thought_process.observation}")
         self.logger.info(f"Analysis: {action.thought_process.analysis}")
         self.logger.info(f"Plan: {action.thought_process.plan}")
+        self.logger.info(f"Findings: {action.findings}")
+        self.memory.important_findings.extend(action.findings)
+        self.requested_dirs = []
+        self.requested_files = []
 
         try:
             if action.action_type == "explore":
@@ -628,15 +414,36 @@ Respond with valid JSON that matches the AgentAction schema.
                     self.logger.error("Explore action missing parameters")
                     return False
 
-                result = self.explore_repository(
-                    directories=action.explore.directories,
-                    files=action.explore.files,
-                    max_files=action.explore.max_files,
-                )
+                for dir_path in action.explore.directories:
+                    if not self._validate_path_in_repo(dir_path):
+                        self.logger.error(f"Directory outside repository boundaries: {dir_path}")
+                        continue
+                    full_dir_path = self.repo_path / dir_path
+                    if full_dir_path.exists() and full_dir_path.is_dir():
+                        self.memory.walked_directories.add(dir_path)
+                        self.requested_dirs.append({
+                            "relative_path": dir_path,
+                            "absolute_path": str(full_dir_path.resolve())
+                        })
+                        self.logger.info(f"Exploring directory: {dir_path}")
+                    else:
+                        self.logger.warning(f"Directory not found or inaccessible: {dir_path}")
 
-                self.logger.info(
-                    f"Exploration completed: {result['files_read']} files read from {len(result['directories_explored'])} directories"
-                )
+                for file_path in action.explore.files:
+                    if not self._validate_path_in_repo(file_path):
+                        self.logger.error(f"File outside repository boundaries: {file_path}")
+                        continue
+                    full_file_path = self.repo_path / file_path
+                    if full_file_path.exists() and full_file_path.is_file():
+                        self.memory.read_files.add(file_path)
+                        self.requested_files.append({
+                            "relative_path": file_path,
+                            "absolute_path": str(full_file_path.resolve())
+                        })
+                        self.logger.info(f"Reading file: {file_path}")
+                    else:
+                        self.logger.warning(f"File not found or inaccessible: {file_path}")
+
                 return True
 
             elif action.action_type == "edit_file":
@@ -750,7 +557,7 @@ def main():
     parser.add_argument("--azure-endpoint", help="Azure OpenAI endpoint")
     parser.add_argument("--api-version", default="2024-08-01-preview", help="Azure OpenAI API version")
     parser.add_argument("--model", default="gpt-4o", help="Azure OpenAI model deployment name")
-    parser.add_argument("--max-iterations", type=int, default=20, help="Maximum iterations")
+    parser.add_argument("--max-iterations", type=int, default=10, help="Maximum iterations")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()
