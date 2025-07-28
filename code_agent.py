@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Code Agent with OpenAI Python SDK
 
@@ -10,7 +9,6 @@ import os
 import json
 import logging
 import requests
-import re
 from typing import Dict, List, Optional, Set, Any
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -105,8 +103,9 @@ class CodeAgent:
         github_issue: Optional[str] = None,
         api_key: Optional[str] = None,
         azure_endpoint: Optional[str] = None,
-        api_version: str = "2024-08-01-preview",
-        model: str = "o3",
+        api_version: str = "2025-04-01-preview",
+        model: str = "o4-mini",
+        debug: bool = False,
     ):
         """
         Initialize the code agent
@@ -124,6 +123,7 @@ class CodeAgent:
         self.query = query
         self.github_issue = github_issue
         self.model = model
+        self.debug = debug
         self.memory = AgentMemory()
 
         # Initialize Azure OpenAI client
@@ -138,8 +138,19 @@ class CodeAgent:
         )
 
         # Setup logging
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.DEBUG if debug else logging.INFO,
+                            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
         self.logger = logging.getLogger(__name__)
+
+        # Enable debug logging for this module only when debug=True
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+            # Suppress debug logging from third-party packages
+            logging.getLogger("openai").setLevel(logging.WARNING)
+            logging.getLogger("requests").setLevel(logging.WARNING)
+            logging.getLogger("urllib3").setLevel(logging.WARNING)
+            logging.getLogger("httpcore").setLevel(logging.WARNING)
+            logging.getLogger("httpx").setLevel(logging.WARNING)
 
         # Validate repository path
         if not self.repo_path.exists():
@@ -170,12 +181,13 @@ class CodeAgent:
         except Exception:
             return False
 
-    def walk_directory(self, subdirectory: str = "") -> List[str]:
+    def walk_directory(self, subdirectory: str = "", max_depth: int = 3) -> List[str]:
         """
         Walk through a subdirectory and return list of files
 
         Args:
             subdirectory: Subdirectory path relative to repo root
+            max_depth: Maximum depth to walk
 
         Returns:
             List of file paths relative to repo root
@@ -194,6 +206,9 @@ class CodeAgent:
         files = []
         try:
             for root, dirs, filenames in os.walk(target_path):
+                # Limit depth of directory walking
+                if root.count(os.sep) - str(target_path).count(os.sep) >= max_depth:
+                    continue
                 # Skip common ignored directories
                 dirs[:] = [
                     d
@@ -460,6 +475,8 @@ class CodeAgent:
             response = requests.get(issue_ref, timeout=10)
             if response.status_code == 200:
                 issue_data = response.text
+                if len(issue_data) > 1000:
+                    issue_data = issue_data[:1000] + "... (truncated)"
 
                 return f"GitHub Issue #{issue_ref}:\n{issue_data}"
             else:
@@ -568,13 +585,17 @@ Structure your reasoning using these guidelines:
 Respond with valid JSON that matches the AgentAction schema.
 """
 
+        user_message = self._format_context()
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": self._format_context()},
+            {"role": "user", "content": user_message},
         ]
+        self.logger.debug("=== Deciding next action with messages: ===\n" + user_message)
 
         # Use structured output with Pydantic model
         response = self._call_azure_openai(messages, response_format=AgentAction)
+
+        self.logger.debug(f"=== Received response: ===\n{response}")
 
         if not response:
             return None
@@ -730,6 +751,7 @@ def main():
     parser.add_argument("--api-version", default="2024-08-01-preview", help="Azure OpenAI API version")
     parser.add_argument("--model", default="gpt-4o", help="Azure OpenAI model deployment name")
     parser.add_argument("--max-iterations", type=int, default=20, help="Maximum iterations")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()
 
@@ -741,6 +763,7 @@ def main():
         azure_endpoint=args.azure_endpoint,
         api_version=args.api_version,
         model=args.model,
+        debug=args.debug,
     )
 
     summary = agent.run(max_iterations=args.max_iterations)
