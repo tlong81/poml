@@ -65,11 +65,11 @@ describe('document', () => {
     BufferCollection.clear();
     await readTxtFromPath(filePath);
     const key = `content://${path.resolve(filePath)}`;
-    const first = BufferCollection.get<Buffer>(key);
+    const first = BufferCollection.get<{ value: Buffer; mtime: number }>(key);
     expect(first?.value).toBeInstanceOf(Buffer);
 
     await readTxtFromPath(filePath);
-    const second = BufferCollection.get<Buffer>(key);
+    const second = BufferCollection.get<{ value: Buffer; mtime: number }>(key);
     expect(second?.mtime).toBe(first?.mtime);
     expect(second?.value).toBe(first?.value);
   });

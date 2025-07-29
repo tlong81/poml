@@ -14,12 +14,12 @@ function readBufferCached(filePath: string): Buffer {
   const abs = expandRelative(filePath);
   const key = `content://${abs}`;
   const stat = fs.statSync(abs);
-  const cached = BufferCollection.get<Buffer>(key);
+  const cached = BufferCollection.get<{ value: Buffer; mtime: number }>(key);
   if (cached && cached.mtime === stat.mtimeMs) {
     return cached.value;
   }
   const buf = fs.readFileSync(abs);
-  BufferCollection.set(key, buf, buf.length, stat.mtimeMs);
+  BufferCollection.set(key, { value: buf, mtime: stat.mtimeMs });
   return buf;
 }
 

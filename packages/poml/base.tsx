@@ -331,6 +331,19 @@ function calculateSize(value: any, visited = new Set<any>()): number {
   if (t === 'number' || t === 'boolean' || t === 'bigint') {
     return 8;
   }
+  if (Array.isArray(value)) {
+    visited.add(value);
+    let size = 0;
+    for (const item of value) {
+      try {
+        size += calculateSize(item, visited);
+      } catch {
+        // ignore
+      }
+    }
+    visited.delete(value);
+    return size;
+  }
   if (t === 'object') {
     visited.add(value);
     let size = 0;
@@ -348,7 +361,7 @@ function calculateSize(value: any, visited = new Set<any>()): number {
 }
 
 export class BufferCollection {
-  private buffers: Map<string, { value: any; size: number; mtime?: number }> = new Map();
+  private buffers: Map<string, { value: any; size: number }> = new Map();
   private totalSize = 0;
   private limit = 10 * 1024 * 1024; // 10MB default
 
@@ -374,22 +387,22 @@ export class BufferCollection {
     }
   }
 
-  public static get<T>(key: string): { value: T; mtime?: number } | undefined {
+  public static get<T>(key: string): T | undefined {
     const entry = this.instance.buffers.get(key);
-    return entry as any;
+    return entry ? (entry.value as T) : undefined;
   }
 
-  public static set(key: string, value: any, size?: number, mtime?: number) {
+  public static set(key: string, value: any) {
     const inst = this.instance;
     const prev = inst.buffers.get(key);
     if (prev) {
       inst.totalSize -= prev.size;
     }
-    const entrySize = size ?? calculateSize(value);
+    const entrySize = calculateSize(value);
     if (entrySize > inst.limit) {
       return;
     }
-    inst.buffers.set(key, { value, size: entrySize, mtime });
+    inst.buffers.set(key, { value, size: entrySize });
     inst.totalSize += entrySize;
     inst.evict();
   }
