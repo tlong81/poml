@@ -65,7 +65,9 @@ export function estimateImageTokens(
   height: number,
   { model, detail = 'high', billable = false }: Options,
 ): number {
-  if (width <= 0 || height <= 0) throw new Error('width/height must be > 0');
+  if (width <= 0 || height <= 0) {
+    throw new Error('width/height must be > 0');
+  }
 
   if (!PATCH_MODELS[model] && !DETAIL_MODEL_TABLE[model]) {
     console.warn(`Unknown model "${model}"; using gpt-4o as default.`);
@@ -98,7 +100,9 @@ function patchModelTokens(w: number, h: number): number {
   // quick path
   let pw = Math.ceil(w / PATCH_SIZE);
   let ph = Math.ceil(h / PATCH_SIZE);
-  if (pw * ph <= PATCH_CAP) return pw * ph;
+  if (pw * ph <= PATCH_CAP) {
+    return pw * ph;
+  }
 
   /* Step-1: first isotropic shrink */
   const shrink = Math.sqrt(
@@ -114,7 +118,9 @@ function patchModelTokens(w: number, h: number): number {
     const newH   = sh * scale2;
     const phInt  = Math.ceil(newH / PATCH_SIZE);
     const tokens = pwInt * phInt;
-    if (tokens <= PATCH_CAP) return tokens;        // first one ≤ cap wins
+    if (tokens <= PATCH_CAP) {
+      return tokens;        // first one ≤ cap wins
+    }
   }
   return PATCH_CAP;                                // fallback – should never hit
 }
@@ -132,7 +138,9 @@ function detailModelTokens(
   const { base, tile, shortest } = DETAIL_MODEL_TABLE[model];
 
   // GPT-Image-1 ignores detail flag; others honour 'low'
-  if (model !== 'gpt-image-1' && detail === 'low') return base;
+  if (model !== 'gpt-image-1' && detail === 'low') {
+    return base;
+  }
 
   // (1) Fit inside 2048^2 square
   if (w > MAX_DIM || h > MAX_DIM) {
