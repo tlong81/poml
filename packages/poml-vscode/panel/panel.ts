@@ -251,10 +251,12 @@ export class POMLWebviewPanel {
 
     // If we have changed resources, cancel any pending updates
     const isResourceChange = resource.fsPath !== this._pomlUri.fsPath;
-    if (isResourceChange || this.firstUpdate) {
+    if (isResourceChange) {
       clearTimeout(this.throttleTimer);
       this.throttleTimer = undefined;
+    }
 
+    if (isResourceChange || this.firstUpdate) {
       const saved = this._previewConfigurations.getResourceOptions(resource);
       this._userOptions.contexts = [...saved.contexts];
       this._userOptions.stylesheets = [...saved.stylesheets];
