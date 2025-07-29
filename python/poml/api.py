@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +12,9 @@ _trace_log: List[Dict[str, Any]] = []
 _trace_dir: Optional[Path] = None
 
 
-def set_trace(enabled: bool = True, tempdir: Optional[str | Path] = None) -> Optional[Path]:
+def set_trace(
+    enabled: bool = True, tempdir: Optional[str | Path] = None
+) -> Optional[Path]:
     """Enable or disable tracing of ``poml`` calls.
 
     If ``tempdir`` is provided when enabling tracing, a subdirectory named by
@@ -54,6 +57,46 @@ def get_trace() -> List[Dict[str, Any]]:
     return list(_trace_log)
 
 
+def _latest_trace_prefix() -> Optional[Path]:
+    if not (_trace_enabled and _trace_dir):
+        return None
+
+    pattern = re.compile(r"^(\d{4}.*?)(?:\.source)?\.poml$")
+    latest_idx = -1
+    latest_prefix: Optional[Path] = None
+
+    for f in _trace_dir.iterdir():
+        match = pattern.match(f.name)
+        if not match:
+            continue
+        prefix_part = match.group(1)
+        # skip any source link files
+        if prefix_part.endswith(".source"):
+            continue
+        try:
+            idx = int(prefix_part.split(".")[0])
+        except ValueError:
+            continue
+        if idx > latest_idx:
+            latest_idx = idx
+            latest_prefix = _trace_dir / prefix_part
+
+    return latest_prefix
+
+
+def trace_artifact(file_suffix: str, contents: str | bytes) -> Optional[Path]:
+    """Write an additional artifact file for the most recent ``poml`` call."""
+    prefix = _latest_trace_prefix()
+    if prefix is None:
+        return None
+    suffix = file_suffix if file_suffix.startswith(".") else f".{file_suffix}"
+    path = Path(str(prefix) + suffix)
+    mode = "wb" if isinstance(contents, (bytes, bytearray)) else "w"
+    with open(path, mode) as f:
+        f.write(contents)
+    return path
+
+
 def write_file(content: str):
     temp_file = tempfile.NamedTemporaryFile("w")
     temp_file.write(content)
@@ -62,9 +105,13 @@ def write_file(content: str):
 
 
 def poml(
-    markup: str | Path, context: dict | str | Path | None = None, stylesheet: dict | str | Path | None = None,
-    chat: bool = True, output_file: str | Path | None = None, parse_output: bool = True,
-    extra_args: Optional[List[str]] = None
+    markup: str | Path,
+    context: dict | str | Path | None = None,
+    stylesheet: dict | str | Path | None = None,
+    chat: bool = True,
+    output_file: str | Path | None = None,
+    parse_output: bool = True,
+    extra_args: Optional[List[str]] = None,
 ) -> list | dict | str:
     temp_input_file = temp_context_file = temp_stylesheet_file = None
     trace_record: Dict[str, Any] | None = None
@@ -129,7 +176,7 @@ def poml(
                     args.extend(["--stylesheet-file", str(stylesheet)])
                 else:
                     raise FileNotFoundError(f"File not found: {stylesheet}")
-            
+
             if chat:
                 args.extend(["--chat", "true"])
             else:

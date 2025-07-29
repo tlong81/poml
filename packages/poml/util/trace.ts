@@ -81,7 +81,7 @@ function nextIndex(sourcePath?: string): [number, string, number] {
   }
 }
 
-export function dumpTrace(markup: string, context?: any, stylesheet?: any, result?: any, sourcePath?: string) {
+export function dumpTrace(markup: string, context?: any, stylesheet?: any, result?: any, sourcePath?: string, prettyResult?: string) {
   if (!isTracing()) {
     return;
   }
@@ -109,6 +109,9 @@ export function dumpTrace(markup: string, context?: any, stylesheet?: any, resul
   }
   if (result !== undefined) {
     writeFileSync(`${prefix}.result.json`, JSON.stringify(replaceBuffers(result), null, 2));
+    if (prettyResult !== undefined) {
+      writeFileSync(`${prefix}.result.txt`, prettyResult);
+    }
   }
 }
 

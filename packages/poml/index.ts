@@ -167,27 +167,15 @@ export async function commandLine(args: CliArgs) {
 
   const speakerMode = args.speakerMode === true || args.speakerMode === undefined;
   const prettyPrint = args.prettyPrint === true;
-  let output: string = '';
-  let result: any;
-  if (prettyPrint) {
-    if (speakerMode) {
-      result = write(ir, { speaker: true });
-      const outputs = (result as Message[]).map((message) => {
-        return `===== ${message.speaker} =====\n\n${renderContent(message.content)}`;
-      });
-      output = outputs.join('\n\n');
-    } else {
-      result = write(ir);
-      output = renderContent(result);
-    }
-  } else {
-    result = write(ir, { speaker: speakerMode });
-    output = JSON.stringify(result);
-  }
+  let result = write(ir, { speaker: speakerMode });
+  const prettyOutput = speakerMode
+    ? (result as Message[]).map((message) => `===== ${message.speaker} =====\n\n${renderContent(message.content)}`).join('\n\n')
+    : renderContent(result as RichContent);
+  const output = prettyPrint ? prettyOutput : JSON.stringify(result);
 
   if (isTracing()) {
     try {
-      dumpTrace(input, context, stylesheet, result, sourcePath);
+      dumpTrace(input, context, stylesheet, result, sourcePath, prettyOutput);
     } catch (err: any) {
       ErrorCollection.add(new SystemError('Failed to dump trace', { cause: err }));
     }

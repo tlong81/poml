@@ -39,6 +39,12 @@ describe('trace dumps', () => {
     expect(images).toBe(true);
   });
 
+  test('pretty printed result text is dumped', async () => {
+    await commandLine({ input: '<p>Hello</p>', speakerMode: false });
+    const text = fs.readFileSync(path.join(traceDir, '0001.result.txt'), 'utf8').trim();
+    expect(text).toBe('Hello');
+  });
+
   test('env file records source path and enables include', async () => {
     const origDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orig-'));
     const mainPath = path.join(origDir, 'main.poml');

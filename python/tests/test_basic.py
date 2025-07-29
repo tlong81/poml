@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 import multiprocessing
 
-from poml import poml, Prompt, set_trace, clear_trace, get_trace
+from poml import poml, Prompt, set_trace, clear_trace, get_trace, trace_artifact
 
 
 def test_basic():
@@ -101,6 +101,29 @@ def test_trace_directory(tmp_path: Path):
     assert result == [{"speaker": "human", "content": "Dir"}]
     files = list(run_dir.glob("*.poml"))
     assert len(files) == 2
+
+
+def test_trace_artifact(tmp_path: Path):
+    clear_trace()
+    run_dir = set_trace(True, tmp_path)
+    poml("<p>A</p>")
+    trace_artifact("reply.txt", "hello")
+    set_trace(False)
+    artifacts = list(run_dir.glob("*.reply.txt"))
+    assert len(artifacts) == 1
+    assert artifacts[0].read_text().strip() == "hello"
+
+
+def test_trace_prefix_regex(tmp_path: Path):
+    clear_trace()
+    run_dir = set_trace(True, tmp_path)
+    src = tmp_path / "my.file.poml"
+    src.write_text("<p>B</p>")
+    poml(src)
+    trace_artifact("custom.txt", "bye")
+    set_trace(False)
+    artifact = run_dir / "0001.my.file.custom.txt"
+    assert artifact.exists()
 
 
 def test_trace_directory_name_format(tmp_path: Path):
