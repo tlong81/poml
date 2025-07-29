@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 
 export type LanguageModelProvider = 'openai' | 'microsoft' | 'anthropic' | 'google';
 
@@ -10,6 +11,11 @@ export interface LanguageModelSetting {
   apiUrl?: string;
   apiVersion?: string;
   maxTokens?: number;
+}
+
+export interface ResourceOptions {
+  contexts: string[];
+  stylesheets: string[];
 }
 
 /**
@@ -101,6 +107,7 @@ export class Settings {
 
 export class SettingsManager {
   private readonly previewSettingsForWorkspaces = new Map<string, Settings>();
+  private readonly resourceOptions = new Map<string, ResourceOptions>();
 
   public loadAndCacheSettings(
     resource: vscode.Uri
@@ -117,6 +124,54 @@ export class SettingsManager {
     const currentSettings = this.previewSettingsForWorkspaces.get(key);
     const newSettings = Settings.getForResource(resource);
     return (!currentSettings || !currentSettings.isEqualTo(newSettings));
+  }
+
+  public getResourceOptions(resource: vscode.Uri): ResourceOptions {
+    let saved = this.resourceOptions.get(resource.fsPath);
+    if (!saved) {
+      saved = this.tryLoadAssociatedFiles(resource);
+    }
+    if (saved) {
+      return { contexts: [...saved.contexts], stylesheets: [...saved.stylesheets] };
+    }
+    return { contexts: [], stylesheets: [] };
+  }
+
+  public setResourceOptions(resource: vscode.Uri, options: ResourceOptions) {
+    this.resourceOptions.set(resource.fsPath, { contexts: [...options.contexts], stylesheets: [...options.stylesheets] });
+  }
+
+  public hasResourceOptions(resource: vscode.Uri): boolean {
+    return this.resourceOptions.has(resource.fsPath);
+  }
+
+  private tryLoadAssociatedFiles(resource: vscode.Uri): ResourceOptions | undefined {
+    const resourcePath = resource.fsPath;
+    if (!resourcePath.endsWith('.poml')) {
+      return undefined;
+    }
+
+    const base = resourcePath.replace(/(\.source)?\.poml$/i, '');
+    const contexts: string[] = [];
+    const stylesheets: string[] = [];
+    const addIfExists = (arr: string[], file: string) => {
+      if (fs.existsSync(file)) {
+        arr.push(file);
+        return true;
+      }
+      return false;
+    };
+
+    let changed = false;
+    changed = addIfExists(contexts, `${base}.context.json`) || changed;
+    changed = addIfExists(stylesheets, `${base}.stylesheet.json`) || changed;
+
+    if (changed) {
+      const opts = { contexts, stylesheets };
+      this.resourceOptions.set(resource.fsPath, opts);
+      return opts;
+    }
+    return undefined;
   }
 
   private getKey(

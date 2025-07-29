@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
 
 import { WebviewConfig, WebviewState, WebviewUserOptions, WebviewMessage, PreviewMethodName, PreviewParams, PreviewResponse } from './types';
 import { headlessPomlVscodePanelContent, pomlVscodePanelContent } from './content';
@@ -35,7 +34,6 @@ export class POMLWebviewPanel {
   private isScrolling = false;
   private _disposed: boolean = false;
   private _userOptions: WebviewUserOptions;
-  private readonly resourceOptions = new Map<string, { contexts: string[]; stylesheets: string[] }>();
 
   public static async revive(
     webview: vscode.WebviewPanel,
@@ -253,24 +251,16 @@ export class POMLWebviewPanel {
 
     // If we have changed resources, cancel any pending updates
     const isResourceChange = resource.fsPath !== this._pomlUri.fsPath;
-    if (isResourceChange) {
+    if (isResourceChange || this.firstUpdate) {
       clearTimeout(this.throttleTimer);
       this.throttleTimer = undefined;
 
-      // Do not save resourceOptions for this._pomlUri
-      // because it may have never changed.
-      const saved = this.resourceOptions.get(resource.fsPath);
-      if (saved) {
-        this._userOptions.contexts = [...saved.contexts];
-        this._userOptions.stylesheets = [...saved.stylesheets];
-      } else {
-        this._userOptions.contexts = [];
-        this._userOptions.stylesheets = [];
-      }
+      const saved = this._previewConfigurations.getResourceOptions(resource);
+      this._userOptions.contexts = [...saved.contexts];
+      this._userOptions.stylesheets = [...saved.stylesheets];
     }
 
     this._pomlUri = resource;
-    this.autoAddAssociatedFiles(resource.fsPath);
 
     // Schedule update if none is pending
     if (!this.throttleTimer) {
@@ -334,7 +324,7 @@ export class POMLWebviewPanel {
     }
     if (!this._userOptions.contexts.includes(file)) {
       this._userOptions.contexts.push(file);
-      this.resourceOptions.set(this._pomlUri.fsPath, {
+      this._previewConfigurations.setResourceOptions(this._pomlUri, {
         contexts: [...this._userOptions.contexts],
         stylesheets: [...(this._userOptions.stylesheets ?? [])],
       });
@@ -348,7 +338,7 @@ export class POMLWebviewPanel {
     }
     if (!this._userOptions.stylesheets.includes(file)) {
       this._userOptions.stylesheets.push(file);
-      this.resourceOptions.set(this._pomlUri.fsPath, {
+      this._previewConfigurations.setResourceOptions(this._pomlUri, {
         contexts: [...(this._userOptions.contexts ?? [])],
         stylesheets: [...this._userOptions.stylesheets],
       });
@@ -359,7 +349,7 @@ export class POMLWebviewPanel {
   public removeContext(file: string) {
     if (this._userOptions.contexts) {
       this._userOptions.contexts = this._userOptions.contexts.filter(f => f !== file);
-      this.resourceOptions.set(this._pomlUri.fsPath, {
+      this._previewConfigurations.setResourceOptions(this._pomlUri, {
         contexts: [...this._userOptions.contexts],
         stylesheets: [...(this._userOptions.stylesheets ?? [])],
       });
@@ -370,7 +360,7 @@ export class POMLWebviewPanel {
   public removeStylesheet(file: string) {
     if (this._userOptions.stylesheets) {
       this._userOptions.stylesheets = this._userOptions.stylesheets.filter(f => f !== file);
-      this.resourceOptions.set(this._pomlUri.fsPath, {
+      this._previewConfigurations.setResourceOptions(this._pomlUri, {
         contexts: [...(this._userOptions.contexts ?? [])],
         stylesheets: [...this._userOptions.stylesheets],
       });
@@ -584,35 +574,6 @@ export class POMLWebviewPanel {
     this.editor.webview.postMessage({ type: WebviewMessage.UpdateUserOptions, options: this._userOptions, source: resource.toString() });
   }
 
-  private autoAddAssociatedFiles(resourcePath: string) {
-    if (this.resourceOptions.has(resourcePath)) {
-      // If we already have options for this resource, no need to add again.
-      return false;
-    }
 
-    const add = (arr: string[], file: string) => {
-      if (fs.existsSync(file) && !arr.includes(file)) {
-        arr.push(file);
-        return true;
-      }
-      return false;
-    };
-
-    let changed = false;
-
-    if (resourcePath.endsWith('.poml')) {
-      const base = resourcePath.replace(/(\.source)?\.poml$/i, '');
-      changed = add(this._userOptions.contexts, `${base}.context.json`) || changed;
-      changed = add(this._userOptions.stylesheets, `${base}.stylesheet.json`) || changed;
-    }
-
-    if (changed) {
-      this.resourceOptions.set(resourcePath, {
-        contexts: [...(this._userOptions.contexts ?? [])],
-        stylesheets: [...(this._userOptions.stylesheets ?? [])],
-      });
-    }
-    return changed;
-  }
 
 }

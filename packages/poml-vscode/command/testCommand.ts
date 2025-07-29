@@ -175,13 +175,13 @@ export class TestCommand implements Command {
   }
 
   private async renderPrompt(uri: vscode.Uri) {
+    const options = this.previewManager.previewConfigurations.getResourceOptions(uri);
     const requestParams: PreviewParams = {
       uri: uri.toString(),
       speakerMode: this.isChatting,
       displayFormat: 'rendered',
-      // FIXME: Use contexts and stylesheets configured
-      contexts: [],
-      stylesheets: [],
+      contexts: options.contexts,
+      stylesheets: options.stylesheets,
     };
 
     const response: PreviewResponse = await getClient().sendRequest<PreviewResponse>(
