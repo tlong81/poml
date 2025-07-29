@@ -3,11 +3,11 @@ import * as React from 'react';
 import { describe, expect, test, beforeAll } from '@jest/globals';
 
 import { poml, read, write } from 'poml';
-import { readDocx, readDocxFromPath, readPdfFromPath, Document } from 'poml/components/document';
+import { readDocx, readDocxFromPath, readPdfFromPath, readTxtFromPath, Document } from 'poml/components/document';
 import { Tree, TreeItemData, Folder } from 'poml/components/tree';
 import { Webpage } from 'poml/components/webpage';
 import { readFileSync } from 'fs';
-import { ErrorCollection } from 'poml/base';
+import { ErrorCollection, BufferCollection } from 'poml/base';
 import { mkdirSync, existsSync } from 'fs';
 import * as path from 'path';
 
@@ -58,6 +58,30 @@ describe('document', () => {
     expect(result[4]).toMatch(
       /without any merged cells:\n\n\| Screen Reader \| Responses \| Share \|\n/g
     );
+  });
+
+  test('buffer caching', async () => {
+    const filePath = path.join(__dirname, 'assets', 'peopleList.json');
+    BufferCollection.clear();
+    await readTxtFromPath(filePath);
+    const key = `content://${path.resolve(filePath)}`;
+    const first = BufferCollection.get<Buffer>(key);
+    expect(first?.value).toBeInstanceOf(Buffer);
+
+    await readTxtFromPath(filePath);
+    const second = BufferCollection.get<Buffer>(key);
+    expect(second?.mtime).toBe(first?.mtime);
+    expect(second?.value).toBe(first?.value);
+  });
+
+  test('skip cache when over limit', () => {
+    BufferCollection.clear();
+    const inst = (BufferCollection as any).instance as any;
+    const originalLimit = inst.limit;
+    inst.limit = 10;
+    BufferCollection.set('big', { data: 'a'.repeat(50) });
+    expect(BufferCollection.get('big')).toBeUndefined();
+    inst.limit = originalLimit;
   });
 });
 

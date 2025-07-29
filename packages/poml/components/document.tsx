@@ -6,9 +6,22 @@ import * as cheerio from 'cheerio';
 import { Header, Newline, Text, Image, Paragraph, PropsSyntaxBase, List, ListItem, Bold, Italic } from 'poml/essentials';
 // import pdf from 'pdf-parse';
 import { pdfParse, getNumPages } from 'poml/util/pdf';
-import { component, expandRelative, useWithCatch } from 'poml/base';
+import { component, expandRelative, useWithCatch, BufferCollection } from 'poml/base';
 import { Table } from './table';
 import { parsePythonStyleSlice } from './utils';
+
+function readBufferCached(filePath: string): Buffer {
+  const abs = expandRelative(filePath);
+  const key = `content://${abs}`;
+  const stat = fs.statSync(abs);
+  const cached = BufferCollection.get<Buffer>(key);
+  if (cached && cached.mtime === stat.mtimeMs) {
+    return cached.value;
+  }
+  const buf = fs.readFileSync(abs);
+  BufferCollection.set(key, buf, buf.length, stat.mtimeMs);
+  return buf;
+}
 
 async function parsePdfWithPageLimit(dataBuffer: Buffer, startPage: number, endPage: number) {
   // This is a workaround for pdf-parse not supporting a range.
@@ -39,7 +52,7 @@ export async function readPdfFromPath(
   filePath: string,
   options?: DocumentProps
 ): Promise<React.ReactElement> {
-  const dataBuffer = fs.readFileSync(filePath);
+  const dataBuffer = readBufferCached(filePath);
   return readPdf(dataBuffer, options);
 }
 
@@ -163,7 +176,7 @@ export async function readDocxFromPath(
   filePath: string,
   options?: DocumentProps
 ): Promise<React.ReactElement> {
-  const dataBuffer = fs.readFileSync(filePath);
+  const dataBuffer = readBufferCached(filePath);
   return readDocx(dataBuffer, options);
 }
 
@@ -179,7 +192,7 @@ export async function readTxtFromPath(
   filePath: string,
   options?: DocumentProps
 ): Promise<React.ReactElement> {
-  const dataBuffer = fs.readFileSync(filePath);
+  const dataBuffer = readBufferCached(filePath);
   return readTxt(dataBuffer, options);
 }
 
@@ -218,7 +231,7 @@ async function autoParseDocument(
     parser = determineParser(src);
   }
   if (src) {
-    buffer = fs.readFileSync(expandRelative(src));
+    buffer = readBufferCached(src);
   } else if (!buffer) {
     throw new Error('Either buffer or src must be provided');
   }

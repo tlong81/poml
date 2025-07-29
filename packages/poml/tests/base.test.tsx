@@ -6,7 +6,8 @@ import {
   unregisterComponent,
   listComponents,
   findComponentByAlias,
-  findComponentByAliasOrUndefined
+  findComponentByAliasOrUndefined,
+  BufferCollection
 } from 'poml/base';
 import { read } from 'poml';
 import { describe, expect, test } from '@jest/globals';
@@ -189,4 +190,13 @@ test('computeStylesNew', () => {
     margin: 20,
     color: 'red'
   });
+});
+
+test('calculateSize recursive', () => {
+  BufferCollection.clear();
+  const obj = { data: { arr: [1, 2, 'abc'] }, extra: Buffer.alloc(4) };
+  BufferCollection.set('obj', obj);
+  const inst = (BufferCollection as any).instance as any;
+  const size = inst.buffers.get('obj').size;
+  expect(size).toBe(23);
 });

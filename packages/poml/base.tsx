@@ -314,6 +314,92 @@ export class ErrorCollection {
   }
 }
 
+function calculateSize(value: any, visited = new Set<any>()): number {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (visited.has(value)) {
+    return 0;
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.length;
+  }
+  const t = typeof value;
+  if (t === 'string') {
+    return Buffer.byteLength(value);
+  }
+  if (t === 'number' || t === 'boolean' || t === 'bigint') {
+    return 8;
+  }
+  if (t === 'object') {
+    visited.add(value);
+    let size = 0;
+    for (const key in value) {
+      try {
+        size += calculateSize((value as any)[key], visited);
+      } catch {
+        // ignore
+      }
+    }
+    visited.delete(value);
+    return size;
+  }
+  return 0;
+}
+
+export class BufferCollection {
+  private buffers: Map<string, { value: any; size: number; mtime?: number }> = new Map();
+  private totalSize = 0;
+  private limit = 10 * 1024 * 1024; // 10MB default
+
+  private static _instance: BufferCollection;
+
+  private constructor() {}
+
+  public static get instance() {
+    if (!this._instance) {
+      this._instance = new BufferCollection();
+    }
+    return this._instance;
+  }
+
+  private evict() {
+    while (this.totalSize > this.limit && this.buffers.size > 0) {
+      const oldestKey = this.buffers.keys().next().value as string;
+      const entry = this.buffers.get(oldestKey);
+      if (entry) {
+        this.totalSize -= entry.size;
+      }
+      this.buffers.delete(oldestKey);
+    }
+  }
+
+  public static get<T>(key: string): { value: T; mtime?: number } | undefined {
+    const entry = this.instance.buffers.get(key);
+    return entry as any;
+  }
+
+  public static set(key: string, value: any, size?: number, mtime?: number) {
+    const inst = this.instance;
+    const prev = inst.buffers.get(key);
+    if (prev) {
+      inst.totalSize -= prev.size;
+    }
+    const entrySize = size ?? calculateSize(value);
+    if (entrySize > inst.limit) {
+      return;
+    }
+    inst.buffers.set(key, { value, size: entrySize, mtime });
+    inst.totalSize += entrySize;
+    inst.evict();
+  }
+
+  public static clear() {
+    this.instance.buffers.clear();
+    this.instance.totalSize = 0;
+  }
+}
+
 export const useWithCatch = <T,>(promise: Promise<T>, props: PropsBase) => {
   const catchedPromise = promise.catch((err: any) => {
     if (err instanceof PomlError) {

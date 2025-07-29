@@ -27,6 +27,7 @@ import * as crypto from 'crypto';
 import { Message, poml, read, writeWithSourceMap, SourceMapMessage, SourceMapRichContent, richContentFromSourceMap } from 'poml';
 import {
   ErrorCollection,
+  BufferCollection,
   findComponentByAlias,
   listComponents,
   Parameter,
@@ -142,6 +143,7 @@ class PomlLspServer {
       // Invalidate the diagnostic cache
       const uri = change.document.uri.toString();
       this.diagnosticCache.delete(uri);
+      BufferCollection.clear();
       // Ask the client to pull fresh diagnostics
       this.connection.languages.diagnostics.refresh();
     });
