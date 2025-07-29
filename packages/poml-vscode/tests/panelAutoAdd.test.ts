@@ -13,6 +13,10 @@ class DummyTopmostLineMonitor {
   dispose() {}
 }
 
+function canonical(p: string): string {
+  return vscode.Uri.file(p).fsPath;
+}
+
 function createPanel(uri: vscode.Uri, context: vscode.ExtensionContext): POMLWebviewPanel {
   const webviewPanel = {
     viewColumn: vscode.ViewColumn.One,
@@ -51,8 +55,8 @@ suite('autoAddAssociatedFiles', () => {
   test('associated files are auto added', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'poml-'));
     const pomlPath = path.join(dir, 'sample.poml');
-    const ctxPath = path.join(dir, 'sample.context.json');
-    const stylePath = path.join(dir, 'sample.stylesheet.json');
+    const ctxPath = canonical(path.join(dir, 'sample.context.json'));
+    const stylePath = canonical(path.join(dir, 'sample.stylesheet.json'));
     fs.writeFileSync(pomlPath, '<poml></poml>');
     fs.writeFileSync(ctxPath, '{}');
     fs.writeFileSync(stylePath, '{}');
@@ -73,9 +77,9 @@ suite('autoAddAssociatedFiles', () => {
   test('manual changes prevent re-adding associated files', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'poml-'));
     const pomlPath = path.join(dir, 'sample.poml');
-    const ctxPath = path.join(dir, 'sample.context.json');
-    const stylePath = path.join(dir, 'sample.stylesheet.json');
-    const customCtx = path.join(dir, 'custom.context.json');
+    const ctxPath = canonical(path.join(dir, 'sample.context.json'));
+    const stylePath = canonical(path.join(dir, 'sample.stylesheet.json'));
+    const customCtx = canonical(path.join(dir, 'custom.context.json'));
     fs.writeFileSync(pomlPath, '<poml></poml>');
     fs.writeFileSync(ctxPath, '{}');
     fs.writeFileSync(stylePath, '{}');
