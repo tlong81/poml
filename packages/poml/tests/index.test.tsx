@@ -6,6 +6,7 @@ import { beforeAll, afterAll, describe, expect, test, jest } from '@jest/globals
 import { spyOn } from 'jest-mock';
 
 import { read, write, writeWithSourceMap, poml, commandLine } from 'poml';
+import { Markup } from 'poml/presentation';
 import { ErrorCollection, ReadError, WriteError } from 'poml/base';
 
 // Add a finalizer to allow any lingering async operations (like from pdf-parse) to complete.
@@ -18,6 +19,39 @@ describe('endToEnd', () => {
     const text = '<Markup.Paragraph>Hello, world!</Markup.Paragraph>';
     const element = await poml(text);
     expect(element).toBe('Hello, world!');
+  });
+
+  test('charLimitEndToEnd', async () => {
+    const text = '<p charLimit="4">abcdefg</p>';
+    const element = await poml(text);
+    expect(element).toBe('abcd (...truncated)');
+  });
+
+  test('tokenLimitEndToEnd', async () => {
+    const text = '<p tokenLimit="1">hello world</p>';
+    const element = await poml(text);
+    expect(element).toBe('hello (...truncated)');
+  });
+
+  test('customTruncationOptions', async () => {
+    const element = await poml(
+      <Markup.Paragraph charLimit={3} writerOptions={{ truncateDirection: 'start', truncateMarker: '[cut]' }}>
+        abcdef
+      </Markup.Paragraph>
+    );
+    expect(element).toBe('[cut]def');
+  });
+
+  test('priorityEndToEnd', async () => {
+    const text = '<p charLimit="5"><span priority="1">hello</span><span priority="2">world</span></p>';
+    const element = await poml(text);
+    expect(element).toBe('world');
+  });
+
+  test('priorityTokenEndToEnd', async () => {
+    const text = '<p tokenLimit="1"><span priority="1">hello</span><span priority="2">world</span></p>';
+    const element = await poml(text);
+    expect(element).toBe('world');
   });
 
   test('speakerWithStylesheet', async () => {

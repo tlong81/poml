@@ -16,6 +16,7 @@ import {
 } from './base';
 import { Position } from './presentation';
 import yaml from 'js-yaml';
+import { encodingForModel, Tiktoken } from 'js-tiktoken';
 
 // Use the special character to indicate a placeholder for multimedia.
 const SPECIAL_CHARACTER = 'À';
@@ -66,6 +67,7 @@ interface SourceSegment {
 class Writer<WriterOptions> {
   protected ir: string = '';
   protected options: WriterOptions;
+  protected tokenizerCache: { [model: string]: Tiktoken } = {};
 
   constructor(ir?: string, options?: WriterOptions) {
     if (ir) {
@@ -80,6 +82,67 @@ class Writer<WriterOptions> {
 
   protected reset(ir: string): void {
     this.ir = ir;
+  }
+
+  protected truncateText(
+    text: string,
+    charLimit?: number,
+    tokenLimit?: number,
+    options?: TruncateOptions
+  ): string {
+    const {
+      truncateMarker = ' (...truncated)',
+      truncateDirection = 'end',
+      tokenEncodingModel = 'gpt-3.5-turbo'
+    } = options || (this.options as any);
+    let truncated = text;
+    let changed = false;
+
+    if (charLimit !== undefined && truncated.length > charLimit) {
+      changed = true;
+      if (truncateDirection === 'start') {
+        truncated = truncated.slice(truncated.length - charLimit);
+      } else if (truncateDirection === 'middle') {
+        const head = Math.ceil(charLimit / 2);
+        const tail = charLimit - head;
+        truncated = truncated.slice(0, head) + truncated.slice(truncated.length - tail);
+      } else {
+        truncated = truncated.slice(0, charLimit);
+      }
+    }
+
+    if (tokenLimit !== undefined) {
+      let enc = this.tokenizerCache[tokenEncodingModel];
+      if (!enc) {
+        enc = encodingForModel(tokenEncodingModel as any);
+        this.tokenizerCache[tokenEncodingModel] = enc;
+      }
+      const tokens = enc.encode(truncated);
+      if (tokens.length > tokenLimit) {
+        changed = true;
+        if (truncateDirection === 'start') {
+          truncated = enc.decode(tokens.slice(tokens.length - tokenLimit));
+        } else if (truncateDirection === 'middle') {
+          const head = Math.ceil(tokenLimit / 2);
+          const tail = tokenLimit - head;
+          truncated = enc.decode(tokens.slice(0, head).concat(tokens.slice(tokens.length - tail)));
+        } else {
+          truncated = enc.decode(tokens.slice(0, tokenLimit));
+        }
+      }
+    }
+
+    if (!changed) {
+      return text;
+    }
+    if (truncateDirection === 'start') {
+      return truncateMarker + truncated;
+    } else if (truncateDirection === 'middle') {
+      const mid = Math.ceil(truncated.length / 2);
+      return truncated.slice(0, mid) + truncateMarker + truncated.slice(mid);
+    } else {
+      return truncated + truncateMarker;
+    }
   }
 
   protected createMappingNode(element: cheerio.Cheerio<any>, outputLength: number): MappingNode {
@@ -568,9 +631,16 @@ interface MarkdownBox {
   after: string;
   mappings: MappingNode[];
   multimedia: PositionalContentMultiMedia[];
+  priority?: number;
 }
 
-interface MarkdownOptions {
+interface TruncateOptions {
+  truncateMarker?: string;
+  truncateDirection?: 'start' | 'middle' | 'end';
+  tokenEncodingModel?: string;
+}
+
+interface MarkdownOptions extends TruncateOptions {
   markdownBaseHeaderLevel: number;
   markdownTableCollapse: boolean;
 
@@ -586,7 +656,10 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
       markdownBaseHeaderLevel: options.markdownBaseHeaderLevel ?? 1,
       markdownTableCollapse: options.markdownTableCollapse ?? false,
       csvSeparator: options.csvSeparator ?? ',',
-      csvHeader: options.csvHeader ?? true
+      csvHeader: options.csvHeader ?? true,
+      truncateMarker: options.truncateMarker ?? ' (...truncated)',
+      truncateDirection: options.truncateDirection ?? 'end',
+      tokenEncodingModel: options.tokenEncodingModel ?? 'gpt-3.5-turbo'
     };
   }
 
@@ -601,21 +674,32 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
     element: cheerio.Cheerio<any>
   ): MarkdownBox {
     const newBeforeAfter = layout === 'block' ? '\n\n' : layout === 'newline' ? '\n' : '';
+    const charLimitAttr = element.attr('char-limit');
+    const tokenLimitAttr = element.attr('token-limit');
+    const priorityAttr = element.attr('priority');
+    const charLimit = charLimitAttr !== undefined ? parseInt(charLimitAttr, 10) : undefined;
+    const tokenLimit = tokenLimitAttr !== undefined ? parseInt(tokenLimitAttr, 10) : undefined;
+    const priority = priorityAttr !== undefined ? parseFloat(priorityAttr) : undefined;
     if (typeof text === 'string') {
+      const truncated = this.truncateText(text, charLimit, tokenLimit, this.options);
       return {
-        text: text,
+        text: truncated,
         before: newBeforeAfter,
         after: newBeforeAfter,
-        mappings: [this.createMappingNode(element, text.length)],
-        multimedia: []
+        mappings: [this.createMappingNode(element, truncated.length)],
+        multimedia: [],
+        priority
       };
     } else {
+      const combinedText = text.text;
+      const truncated = this.truncateText(combinedText, charLimit, tokenLimit, this.options);
       return {
-        text: text.text,
+        text: truncated,
         before: this.consolidateSpace(newBeforeAfter, text.before),
         after: this.consolidateSpace(text.after, newBeforeAfter),
-        mappings: [...text.mappings, this.createMappingNode(element, text.text.length)],
-        multimedia: text.multimedia
+        mappings: [...text.mappings, this.createMappingNode(element, truncated.length)],
+        multimedia: text.multimedia,
+        priority
       };
     }
   }
@@ -673,7 +757,57 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
     return result;
   }
 
-  private concatMarkdownBoxes(boxes: MarkdownBox[]): MarkdownBox {
+  private reduceBoxesByLimit(
+    boxes: MarkdownBox[],
+    charLimit?: number,
+    tokenLimit?: number
+  ): MarkdownBox[] {
+    if (boxes.length === 0 || (charLimit === undefined && tokenLimit === undefined)) {
+      return boxes;
+    }
+
+    const tokenModel = (this.options as any).tokenEncodingModel || 'gpt-3.5-turbo';
+    const getTokenLength = (t: string) => {
+      if (tokenLimit === undefined) {
+        return 0;
+      }
+      let enc = this.tokenizerCache[tokenModel];
+      if (!enc) {
+        enc = encodingForModel(tokenModel as any);
+        this.tokenizerCache[tokenModel] = enc;
+      }
+      return enc.encode(t).length;
+    };
+
+    const totalChars = (arr: MarkdownBox[]) => arr.reduce((a, b) => a + b.text.length, 0);
+    const totalTokens = (arr: MarkdownBox[]) => arr.reduce((a, b) => a + getTokenLength(b.text), 0);
+    let current = [...boxes];
+    while (current.length > 0) {
+      const exceeds =
+        (charLimit !== undefined && totalChars(current) > charLimit) ||
+        (tokenLimit !== undefined && totalTokens(current) > tokenLimit);
+      if (!exceeds) {
+        break;
+      }
+      const priorities = current.map(b => b.priority ?? 0);
+      const minP = Math.min(...priorities);
+      if (current.every(b => (b.priority ?? 0) === minP)) {
+        break;
+      }
+      current = current.filter(b => (b.priority ?? 0) !== minP);
+    }
+
+    return current;
+  }
+
+  private concatMarkdownBoxes(
+    boxes: MarkdownBox[],
+    element?: cheerio.Cheerio<any>
+  ): MarkdownBox {
+    const charLimitAttr = element?.attr('char-limit');
+    const tokenLimitAttr = element?.attr('token-limit');
+    const charLimit = charLimitAttr !== undefined ? parseInt(charLimitAttr, 10) : undefined;
+    const tokenLimit = tokenLimitAttr !== undefined ? parseInt(tokenLimitAttr, 10) : undefined;
     const multimedia: PositionalContentMultiMedia[] = [];
 
     // Remove all spaces children before and after block elements
@@ -707,6 +841,8 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
       // Repeat until no more space can be removed
       removedSpace = afterRemoveSpace;
     }
+
+    removedSpace = this.reduceBoxesByLimit(removedSpace, charLimit, tokenLimit);
 
     // When concatenating, we handle 3 cases.
     // 1. If both ends are text, the same space characters will be overlapped and consolidated.
@@ -787,7 +923,12 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
       }
     }
 
-    return { text, before, after, mappings, multimedia };
+    let finalText = text;
+    if (charLimit !== undefined || tokenLimit !== undefined) {
+      finalText = this.truncateText(finalText, charLimit, tokenLimit, this.options);
+    }
+
+    return { text: finalText, before, after, mappings, multimedia };
   }
 
   private indentText(text: string, indent: number, firstLineIndent: number) {
@@ -829,7 +970,11 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
     }
   };
 
-  private writeElementTrees(elements: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): MarkdownBox {
+  private writeElementTrees(
+    elements: cheerio.Cheerio<any>,
+    $: cheerio.CheerioAPI,
+    element?: cheerio.Cheerio<any>
+  ): MarkdownBox {
     const children: MarkdownBox[] = elements
       .toArray()
       .filter(element => element.type !== 'comment')
@@ -841,7 +986,7 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         }
       });
 
-    return this.concatMarkdownBoxes(children);
+    return this.concatMarkdownBoxes(children, element);
   }
 
   private handleList(
@@ -892,8 +1037,8 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
       );
     };
 
-    const items = listSelf.contents().toArray().map((item) => renderListItem(item));
-    return this.handleParagraph(this.concatMarkdownBoxes(items), listSelf);
+    const items = listSelf.contents().toArray().map(item => renderListItem(item));
+    return this.handleParagraph(this.concatMarkdownBoxes(items, listSelf), listSelf);
   }
 
   protected processMultipleTableRows(elements: cheerio.Cheerio<any>, $: cheerio.CheerioAPI) {
@@ -981,10 +1126,10 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
     $: cheerio.CheerioAPI
   ): MarkdownBox {
     if (element.is('p')) {
-      let paragraphs = this.writeElementTrees(element.contents(), $);
+      let paragraphs = this.writeElementTrees(element.contents(), $, element);
       return this.handleParagraph(paragraphs, element);
     } else if (element.is('span')) {
-      return this.makeBox(this.writeElementTrees(element.contents(), $), 'inline', element);
+      return this.makeBox(this.writeElementTrees(element.contents(), $, element), 'inline', element);
     } else if (element.is('nl')) {
       const nlText = '\n'.repeat(parseInt(element.attr('count') || '1'));
       return {
@@ -995,7 +1140,7 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         multimedia: []
       };
     } else if (element.is('h')) {
-      let paragraphs = this.writeElementTrees(element.contents(), $);
+      let paragraphs = this.writeElementTrees(element.contents(), $, element);
       const level =
         parseInt(element.attr('level') || '1') + this.options.markdownBaseHeaderLevel - 1;
       return this.handleParagraph(
@@ -1003,26 +1148,26 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         element
       );
     } else if (element.is('b')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $), '**', '**', element);
+      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '**', '**', element);
     } else if (element.is('i')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $), '*', '*', element);
+      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '*', '*', element);
     } else if (element.is('s')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $), '~~', '~~', element);
+      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '~~', '~~', element);
     } else if (element.is('u')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $), '__', '__', element);
+      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '__', '__', element);
     } else if (element.is('code')) {
       let paragraphs;
       if (element.attr('inline') === 'false') {
         const lang = element.attr('lang') || '';
         paragraphs = this.wrapBox(
-          this.writeElementTrees(element.contents(), $),
+          this.writeElementTrees(element.contents(), $, element),
           '```' + lang + '\n',
           '\n```'
         );
         return this.handleParagraph(paragraphs, element);
       } else {
         // inline = true or undefined
-        return this.wrapBox(this.writeElementTrees(element.contents(), $), '`', '`', element);
+        return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '`', '`', element);
       }
     } else if (element.is('table')) {
       const contents = element.contents();
@@ -1063,7 +1208,7 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         element.attr('presentation') === 'markup' &&
         element.attr('markup-lang') === this.markupLanguage()
       ) {
-        return this.makeBox(this.writeElementTrees(element.contents(), $), 'inline', element);
+        return this.makeBox(this.writeElementTrees(element.contents(), $, element), 'inline', element);
       } else {
         const content = new EnvironmentDispatcher(this.ir).writeElementTree(element, $);
         const { output, mappings, multimedia } = content;
@@ -1596,17 +1741,25 @@ export class XmlWriter extends SerializeWriter<XmlOptions> {
   }
 }
 
-type FreeOptions = any;
+type FreeOptions = TruncateOptions;
 
 export class FreeWriter extends Writer<FreeOptions> {
   protected initializeOptions(options?: FreeOptions | undefined): FreeOptions {
-    return {};
+    return {
+      truncateMarker: options?.truncateMarker ?? ' (...truncated)',
+      truncateDirection: options?.truncateDirection ?? 'end',
+      tokenEncodingModel: options?.tokenEncodingModel ?? 'gpt-3.5-turbo'
+    };
   }
 
   private handleFree(element: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): WriterPartialResult {
     let resultText: string = '';
     const mappings: MappingNode[] = [];
     const multimedia: PositionalContentMultiMedia[] = [];
+    const charLimitAttr = element.attr('char-limit');
+    const tokenLimitAttr = element.attr('token-limit');
+    const charLimit = charLimitAttr !== undefined ? parseInt(charLimitAttr, 10) : undefined;
+    const tokenLimit = tokenLimitAttr !== undefined ? parseInt(tokenLimitAttr, 10) : undefined;
     for (const child of element.contents().toArray()) {
       if (child.type === 'text') {
         // if (child.data.trim() === '') {
@@ -1622,6 +1775,7 @@ export class FreeWriter extends Writer<FreeOptions> {
         resultText += result.output;
       }
     }
+    resultText = this.truncateText(resultText, charLimit, tokenLimit, this.options);
     mappings.push(this.createMappingNode(element, resultText.length));
     return {
       output: resultText,

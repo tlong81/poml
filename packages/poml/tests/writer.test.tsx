@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { describe, expect, test } from '@jest/globals';
 import { MarkdownWriter, JsonWriter, MultiMediaWriter, YamlWriter, XmlWriter } from 'poml/writer';
+import * as cheerio from 'cheerio';
 import { readFileSync } from 'fs';
 import { ErrorCollection, richContentFromSourceMap } from 'poml/base';
 
@@ -280,6 +281,83 @@ describe('markdown', () => {
         ]
       }
     ]);
+  });
+
+  test('markdownCharLimit', () => {
+    const writer = new MarkdownWriter();
+    const ir = `<p char-limit="5">helloworld</p>`;
+    const result = writer.write(ir);
+    expect(result).toBe('hello (...truncated)');
+  });
+
+  test('freeCharLimit', () => {
+    const writer = new MarkdownWriter();
+    const ir = `<p><env presentation="free" char-limit="4">abcdefg</env></p>`;
+    const result = writer.write(ir);
+    expect(result).toBe('abcd (...truncated)');
+  });
+
+  test('markdownCharLimitStart', () => {
+    const writer = new MarkdownWriter(undefined, { truncateDirection: 'start' } as any);
+    const ir = `<p char-limit="5">helloworld</p>`;
+    const result = writer.write(ir);
+    expect(result).toBe(' (...truncated)world');
+  });
+
+  test('markdownCharLimitMiddleCustomMarker', () => {
+    const writer = new MarkdownWriter(undefined, { truncateDirection: 'middle', truncateMarker: '[cut]' } as any);
+    const ir = `<p char-limit="5">helloworld</p>`;
+    const result = writer.write(ir);
+    expect(result).toBe('hel[cut]ld');
+  });
+
+  test('markdownPriorityProperty', () => {
+    const writer: any = new MarkdownWriter();
+    const $ = cheerio.load('<p priority="2">abc</p>', { xml: { xmlMode: true, withStartIndices: true, withEndIndices: true } }, false);
+    const box = writer.makeBox('abc', 'inline', $('p'));
+    expect(box.priority).toBe(2);
+  });
+
+  test('markdownPriorityRemoval', () => {
+    const writer = new MarkdownWriter();
+    const ir = '<p char-limit="5"><span priority="1">hello</span><span priority="2">world</span></p>';
+    const result = writer.write(ir);
+    expect(result).toBe('world');
+  });
+
+  test('markdownPriorityTruncateAfterRemoval', () => {
+    const writer = new MarkdownWriter();
+    const ir = '<p char-limit="3"><span priority="1">ab</span><span priority="1">cd</span></p>';
+    const result = writer.write(ir);
+    expect(result).toBe('abc (...truncated)');
+  });
+
+  test('markdownTokenLimit', () => {
+    const writer = new MarkdownWriter();
+    const ir = `<p token-limit="1">hello world</p>`;
+    const result = writer.write(ir);
+    expect(result).toBe('hello (...truncated)');
+  });
+
+  test('freeTokenLimit', () => {
+    const writer = new MarkdownWriter();
+    const ir = `<p><env presentation="free" token-limit="1">hello world</env></p>`;
+    const result = writer.write(ir);
+    expect(result).toBe('hello (...truncated)');
+  });
+
+  test('markdownPriorityRemovalToken', () => {
+    const writer = new MarkdownWriter();
+    const ir = '<p token-limit="1"><span priority="1">hello</span><span priority="2">world</span></p>';
+    const result = writer.write(ir);
+    expect(result).toBe('world');
+  });
+
+  test('markdownPriorityTokenTruncateAfterRemoval', () => {
+    const writer = new MarkdownWriter();
+    const ir = '<p token-limit="1"><span priority="1">hi</span><span priority="1">there</span></p>';
+    const result = writer.write(ir);
+    expect(result).toBe('h (...truncated)');
   });
 });
 

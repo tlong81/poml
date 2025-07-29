@@ -104,6 +104,13 @@ export interface PropsBase {
   // Experimental
   writerOptions?: object;
   whiteSpace?: 'pre' | 'filter' | 'trim';
+
+  /** Soft character limit before truncation is applied. */
+  charLimit?: number;
+  /** Soft token limit before truncation is applied. */
+  tokenLimit?: number;
+  /** Priority used when truncating globally. Lower numbers are dropped first. */
+  priority?: number;
 }
 
 /**
