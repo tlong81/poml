@@ -23,23 +23,40 @@ __all__ = [
 _trace_enabled: bool = False
 _weave_enabled: bool = False
 _agentops_enabled: bool = False
+_mlflow_enabled: bool = False
 _trace_log: List[Dict[str, Any]] = []
 _trace_dir: Optional[Path] = None
 
-Backend = Literal["local", "weave"]
+Backend = Literal["local", "weave", "agentops", "mlflow"]
 OutputFormat = Literal["raw", "dict", "openai_chat"]
 
 def set_trace(
-    enabled: bool | List[str] | str = True,
+    enabled: bool | List[Backend] | Backend = True,
     /, *,
     tempdir: Optional[str | Path] = None
 ) -> Optional[Path]:
-    """Enable or disable tracing of ``poml`` calls.
+    """Enable or disable tracing of ``poml`` calls with optional backend integrations.
 
-    If ``tempdir`` is provided when enabling tracing, a subdirectory named by
-    the current timestamp (``YYYYMMDDHHMMSSffffff``) is created inside ``tempdir``. The
-    returned directory may be shared with subprocesses by setting the
-    ``POML_TRACE`` environment variable in the invoking script.
+    Args:
+        enabled: Controls which tracing backends to enable. Can be:
+            - True: Enable local tracing only (equivalent to ["local"])
+            - False: Disable all tracing (equivalent to [])
+            - str: Enable a single backend ("local", "weave", "agentops", "mlflow")
+            - List[str]: Enable multiple backends. "local" is auto-enabled if any backends are specified.
+        tempdir: Optional directory for local trace files. If provided when local
+            tracing is enabled, a subdirectory named by the current timestamp
+            (YYYYMMDDHHMMSSffffff) is created inside tempdir.
+
+    Returns:
+        Path to the trace directory if local tracing is enabled, None otherwise.
+        The directory may be shared with POML Node.js by setting the
+        POML_TRACE environment variable in the invoking script.
+
+    Available backends:
+        - "local": Save trace files to disk
+        - "weave": Log to Weights & Biases Weave (requires local tracing)
+        - "agentops": Log to AgentOps (requires local tracing)
+        - "mlflow": Log to MLflow (requires local tracing)
     """
 
     if enabled is True:
@@ -50,7 +67,7 @@ def set_trace(
     if isinstance(enabled, str):
         enabled = [enabled]
 
-    global _trace_enabled, _trace_dir, _weave_enabled, _agentops_enabled
+    global _trace_enabled, _trace_dir, _weave_enabled, _agentops_enabled, _mlflow_enabled
     if enabled or "local" in enabled:
         # When enabled is non-empty, we always enable local tracing.
         _trace_enabled = True
@@ -81,6 +98,11 @@ def set_trace(
         _agentops_enabled = True
     else:
         _agentops_enabled = False
+
+    if "mlflow" in enabled:
+        _mlflow_enabled = True
+    else:
+        _mlflow_enabled = False
 
     return _trace_dir
 
@@ -352,6 +374,23 @@ def poml(
                 agentops.log_poml_call(
                     trace_prefix.name,
                     str(markup),
+                    json.loads(context_content) if context_content else None,
+                    json.loads(stylesheet_content) if stylesheet_content else None,
+                    result
+                )
+
+            if _mlflow_enabled:
+                from .integration import mlflow
+                trace_prefix = _latest_trace_prefix()
+                current_version = _current_trace_version()
+                if trace_prefix is None or current_version is None:
+                    raise RuntimeError("MLflow tracing requires local tracing to be enabled.")
+                poml_content = _read_latest_traced_file(".poml")
+                context_content = _read_latest_traced_file(".context.json")
+                stylesheet_content = _read_latest_traced_file(".stylesheet.json")
+                mlflow.log_poml_call(
+                    trace_prefix.name,
+                    poml_content or str(markup),
                     json.loads(context_content) if context_content else None,
                     json.loads(stylesheet_content) if stylesheet_content else None,
                     result
