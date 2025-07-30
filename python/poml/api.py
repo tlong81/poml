@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -5,6 +7,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Literal
+import warnings
 from .cli import run
 
 __all__ = [
@@ -24,7 +27,7 @@ Backend = Literal["local", "weave"]
 
 
 def set_trace(
-    enabled: bool | List[str] = True,
+    enabled: bool | List[str] | str = True,
     /, *,
     tempdir: Optional[str | Path] = None
 ) -> Optional[Path]:
@@ -41,9 +44,12 @@ def set_trace(
     elif enabled is False:
         enabled = []
 
+    if isinstance(enabled, str):
+        enabled = [enabled]
+
     global _trace_enabled, _trace_dir, _weave_enabled
     if enabled or "local" in enabled:
-        # When enabled is non-empty, we enable local tracing.
+        # When enabled is non-empty, we always enable local tracing.
         _trace_enabled = True
         env_dir = os.environ.get("POML_TRACE")
         if tempdir is not None:
@@ -121,8 +127,7 @@ def _read_latest_traced_file(file_suffix: str) -> Optional[str]:
     prefix = _latest_trace_prefix()
     if prefix is None:
         return None
-    suffix = file_suffix if file_suffix.startswith(".") else f".{file_suffix}"
-    path = Path(str(prefix) + suffix)
+    path = Path(str(prefix) + file_suffix)
     if not path.exists():
         return None
     with open(path, "r") as f:
@@ -193,6 +198,10 @@ def poml(
             if os.path.exists(markup):
                 markup = Path(markup)
             else:
+                # Test if the markup looks like a path.
+                if re.match(r"^[\w\-./]+$", markup):
+                    warnings.warn(f"The markup '{markup}' looks like a file path, but it does not exist. Assuming it is a POML string.")
+
                 temp_input_file = write_file(markup)
                 markup = Path(temp_input_file.name)
         with tempfile.NamedTemporaryFile("r") as temp_output_file:
@@ -232,7 +241,9 @@ def poml(
 
             if extra_args:
                 args.extend(extra_args)
-            run(*args)
+            process = run(*args)
+            if process.returncode != 0:
+                raise RuntimeError(f"POML command failed with return code {process.returncode}. See the log for details.")
 
             if output_file_specified:
                 with open(output_file, "r") as output_file_handle:
@@ -252,17 +263,9 @@ def poml(
                 poml_content = _read_latest_traced_file(".poml")
                 context_content = _read_latest_traced_file(".context.json")
                 stylesheet_content = _read_latest_traced_file(".stylesheet.json")
-                if poml_content is not None:
-                    weave.log_poml_file(poml_content, trace_prefix.name, current_version)
-                if context_content is not None:
-                    weave.log_context_file(
-                        json.loads(context_content), trace_prefix.name, current_version
-                    )
-                if stylesheet_content is not None and stylesheet_content.strip() != "{}":
-                    weave.log_context_file(
-                        json.loads(stylesheet_content), trace_prefix.name, current_version
-                    )
+
                 weave.log_poml_call(
+                    current_version + "-" + trace_prefix.name,
                     poml_content or str(markup),
                     json.loads(context_content) if context_content else None,
                     json.loads(stylesheet_content) if stylesheet_content else None,
