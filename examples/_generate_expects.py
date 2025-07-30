@@ -10,7 +10,7 @@ def process_example(example_content, output_file):
     Process the example content and return the expected output.
     """
     # Capture stdout
-    poml.poml(example_content, parse_output=False, output_file=output_file, extra_args=["--prettyPrint", "true"])
+    poml.poml(example_content, format="raw", output_file=output_file, extra_args=["--prettyPrint", "true"])
 
 
 def generate_expectations():

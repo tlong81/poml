@@ -1,6 +1,7 @@
 import os
 from openai import OpenAI
 import agentops
+import poml
 
 agentops.init()
 client = OpenAI(
@@ -8,12 +9,12 @@ client = OpenAI(
     api_key=os.environ["OPENAI_API_KEY"],
 )
 
+poml.set_trace("agentops", tempdir="logs")
+messages = poml.poml("example_poml.poml", context={"code_path": "example_agentops_original.py"}, format="openai_chat")
+
 response = client.chat.completions.create(
     model="gpt-4o-mini",
-    messages=[{
-        "role": "user",
-        "content": "Write a haiku about AI and humans working together"
-    }]
+    messages=messages,
 )
 
 print(response.choices[0].message.content)

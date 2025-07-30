@@ -16,15 +16,18 @@ __all__ = [
     "get_trace",
     "trace_artifact",
     "poml",
+    "Backend",
+    "OutputFormat",
 ]
 
 _trace_enabled: bool = False
 _weave_enabled: bool = False
+_agentops_enabled: bool = False
 _trace_log: List[Dict[str, Any]] = []
 _trace_dir: Optional[Path] = None
 
 Backend = Literal["local", "weave"]
-
+OutputFormat = Literal["raw", "dict", "openai_chat"]
 
 def set_trace(
     enabled: bool | List[str] | str = True,
@@ -47,7 +50,7 @@ def set_trace(
     if isinstance(enabled, str):
         enabled = [enabled]
 
-    global _trace_enabled, _trace_dir, _weave_enabled
+    global _trace_enabled, _trace_dir, _weave_enabled, _agentops_enabled
     if enabled or "local" in enabled:
         # When enabled is non-empty, we always enable local tracing.
         _trace_enabled = True
@@ -73,6 +76,11 @@ def set_trace(
         _weave_enabled = True
     else:
         _weave_enabled = False
+
+    if "agentops" in enabled:
+        _agentops_enabled = True
+    else:
+        _agentops_enabled = False
 
     return _trace_dir
 
@@ -153,6 +161,56 @@ def write_file(content: str):
     temp_file.flush()
     return temp_file
 
+def _poml_response_to_openai_chat(response: Any) -> List[Dict[str, str]]:
+    # Convert to OpenAI format
+    if isinstance(response, list):
+        # Convert list of messages to OpenAI format
+        messages = []
+        speaker_to_role = {
+            "human": "user",
+            "assistant": "assistant",
+            "system": "system",
+        }
+        for item in response:
+            if isinstance(item, dict) and "speaker" in item and "content" in item:
+                if item["speaker"] not in speaker_to_role:
+                    raise ValueError(f"Unknown speaker: {item['speaker']} in {item}")
+                role = speaker_to_role[item["speaker"]]
+
+                if isinstance(item["content"], str):
+                    messages.append({"role": role, "content": item["content"]})
+                elif isinstance(item["content"], list):
+                    contents = []
+                    for content_part in item["content"]:
+                        if isinstance(content_part, str):
+                            contents.append({"type": "text", "text": content_part})
+                        elif isinstance(content_part, dict):
+                            if "type" in content_part and "base64" in content_part:
+                                contents.append({
+                                    "type": "image_url",
+                                    "image_url": f'data:{content_part["type"]};base64,{content_part["base64"]}'
+                                })
+                            else:
+                                raise ValueError(f"Unexpected content part. Found keys: {content_part.keys()}")
+                        else:
+                            raise ValueError(f"Unexpected content part: {content_part}")
+                    messages.append({"role": role, "content": contents})
+                else:
+                    raise ValueError(f"Unexpected content type: {type(item['content'])} in {item}")
+            else:
+                raise ValueError(
+                    "Unexpected format for OpenAI output: expected a list of dictionaries with "
+                    f"'speaker' and 'content' keys; got {item}"
+                )
+        return messages
+    elif isinstance(response, str):
+        return [{"role": "user", "content": response}]
+    else:
+        raise ValueError(
+            "Unexpected format for OpenAI output: expected a list or a string; "
+            f"got {type(response)}"
+        )
+
 
 def poml(
     markup: str | Path,
@@ -160,7 +218,7 @@ def poml(
     stylesheet: dict | str | Path | None = None,
     chat: bool = True,
     output_file: str | Path | None = None,
-    parse_output: bool = True,
+    format: OutputFormat = "dict",
     extra_args: Optional[List[str]] = None,
 ) -> list | dict | str:
     temp_input_file = temp_context_file = temp_stylesheet_file = None
@@ -251,8 +309,18 @@ def poml(
             else:
                 result = temp_output_file.read()
 
-            if parse_output:
+            if format == "raw":
+                # Do nothing
+                pass
+            else:
                 result = json.loads(result)
+                if format == "openai_chat":
+                    result = _poml_response_to_openai_chat(result)
+                elif format == "dict":
+                    # Do nothing
+                    pass
+                else:
+                    raise ValueError(f"Unknown output format: {format}")
 
             if _weave_enabled:
                 from .integration import weave
@@ -265,8 +333,25 @@ def poml(
                 stylesheet_content = _read_latest_traced_file(".stylesheet.json")
 
                 weave.log_poml_call(
-                    current_version + "-" + trace_prefix.name,
+                    trace_prefix.name,
                     poml_content or str(markup),
+                    json.loads(context_content) if context_content else None,
+                    json.loads(stylesheet_content) if stylesheet_content else None,
+                    result
+                )
+
+            if _agentops_enabled:
+                from .integration import agentops
+                trace_prefix = _latest_trace_prefix()
+                current_version = _current_trace_version()
+                if trace_prefix is None or current_version is None:
+                    raise RuntimeError("AgentOps tracing requires local tracing to be enabled.")
+                poml_content = _read_latest_traced_file(".poml")
+                context_content = _read_latest_traced_file(".context.json")
+                stylesheet_content = _read_latest_traced_file(".stylesheet.json")
+                agentops.log_poml_call(
+                    trace_prefix.name,
+                    str(markup),
                     json.loads(context_content) if context_content else None,
                     json.loads(stylesheet_content) if stylesheet_content else None,
                     result
