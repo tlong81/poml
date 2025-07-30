@@ -4,16 +4,29 @@ import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 from .cli import run
 
+__all__ = [
+    "set_trace",
+    "clear_trace",
+    "get_trace",
+    "trace_artifact",
+    "poml",
+]
+
 _trace_enabled: bool = False
+_weave_enabled: bool = False
 _trace_log: List[Dict[str, Any]] = []
 _trace_dir: Optional[Path] = None
 
+Backend = Literal["local", "weave"]
+
 
 def set_trace(
-    enabled: bool = True, tempdir: Optional[str | Path] = None
+    enabled: bool | List[str] = True,
+    /, *,
+    tempdir: Optional[str | Path] = None
 ) -> Optional[Path]:
     """Enable or disable tracing of ``poml`` calls.
 
@@ -23,27 +36,38 @@ def set_trace(
     ``POML_TRACE`` environment variable in the invoking script.
     """
 
-    global _trace_enabled, _trace_dir
-    _trace_enabled = enabled
+    if enabled is True:
+        enabled = ["local"]
+    elif enabled is False:
+        enabled = []
 
-    if not enabled:
-        _trace_dir = None
-        return None
-
-    env_dir = os.environ.get("POML_TRACE")
-    if tempdir is not None:
-        base = Path(tempdir)
-        base.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d%H%M%S%f")
-        run_dir = base / ts
-        run_dir.mkdir(parents=True, exist_ok=True)
-        _trace_dir = run_dir
-    elif env_dir:
-        run_dir = Path(env_dir)
-        run_dir.mkdir(parents=True, exist_ok=True)
-        _trace_dir = run_dir
+    global _trace_enabled, _trace_dir, _weave_enabled
+    if enabled or "local" in enabled:
+        # When enabled is non-empty, we enable local tracing.
+        _trace_enabled = True
+        env_dir = os.environ.get("POML_TRACE")
+        if tempdir is not None:
+            base = Path(tempdir)
+            base.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d%H%M%S%f")
+            run_dir = base / ts
+            run_dir.mkdir(parents=True, exist_ok=True)
+            _trace_dir = run_dir
+        elif env_dir:
+            run_dir = Path(env_dir)
+            run_dir.mkdir(parents=True, exist_ok=True)
+            _trace_dir = run_dir
+        else:
+            _trace_dir = None
     else:
+        _trace_enabled = False
         _trace_dir = None
+
+    if "weave" in enabled:
+        _weave_enabled = True
+    else:
+        _weave_enabled = False
+
     return _trace_dir
 
 
@@ -55,6 +79,14 @@ def clear_trace() -> None:
 def get_trace() -> List[Dict[str, Any]]:
     """Return a copy of the trace log."""
     return list(_trace_log)
+
+
+def _current_trace_version() -> Optional[str]:
+    """Return the current trace version."""
+    if not (_trace_enabled and _trace_dir):
+        return None
+    else:
+        return _trace_dir.name
 
 
 def _latest_trace_prefix() -> Optional[Path]:
@@ -82,6 +114,19 @@ def _latest_trace_prefix() -> Optional[Path]:
             latest_prefix = _trace_dir / prefix_part
 
     return latest_prefix
+
+
+def _read_latest_traced_file(file_suffix: str) -> Optional[str]:
+    """Read the most recent traced file with the given suffix."""
+    prefix = _latest_trace_prefix()
+    if prefix is None:
+        return None
+    suffix = file_suffix if file_suffix.startswith(".") else f".{file_suffix}"
+    path = Path(str(prefix) + suffix)
+    if not path.exists():
+        return None
+    with open(path, "r") as f:
+        return f.read()
 
 
 def trace_artifact(file_suffix: str, contents: str | bytes) -> Optional[Path]:
@@ -197,6 +242,32 @@ def poml(
 
             if parse_output:
                 result = json.loads(result)
+
+            if _weave_enabled:
+                from .integration import weave
+                trace_prefix = _latest_trace_prefix()
+                current_version = _current_trace_version()
+                if trace_prefix is None or current_version is None:
+                    raise RuntimeError("Weave tracing requires local tracing to be enabled.")
+                poml_content = _read_latest_traced_file(".poml")
+                context_content = _read_latest_traced_file(".context.json")
+                stylesheet_content = _read_latest_traced_file(".stylesheet.json")
+                if poml_content is not None:
+                    weave.log_poml_file(poml_content, trace_prefix.name, current_version)
+                if context_content is not None:
+                    weave.log_context_file(
+                        json.loads(context_content), trace_prefix.name, current_version
+                    )
+                if stylesheet_content is not None and stylesheet_content.strip() != "{}":
+                    weave.log_context_file(
+                        json.loads(stylesheet_content), trace_prefix.name, current_version
+                    )
+                weave.log_poml_call(
+                    poml_content or str(markup),
+                    json.loads(context_content) if context_content else None,
+                    json.loads(stylesheet_content) if stylesheet_content else None,
+                    result
+                )
 
             if trace_record is not None:
                 trace_record["result"] = result
