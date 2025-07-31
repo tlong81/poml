@@ -6,8 +6,8 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["sidePanel", "activeTab"],
-  "host_permissions": ["file:///*"],
+  "permissions": ["sidePanel", "activeTab", "tabs", "scripting", "clipboardRead"],
+  "host_permissions": ["file:///*", "https://docs.google.com/*"],
   "minimum_chrome_version": "138",
   "side_panel": {
     "default_path": "sidepanel/index.html"

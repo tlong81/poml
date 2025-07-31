@@ -6,6 +6,7 @@ import { marked } from 'marked';
 const inputPrompt = document.body.querySelector('#input-prompt');
 const buttonPrompt = document.body.querySelector('#button-prompt');
 const buttonReset = document.body.querySelector('#button-reset');
+const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs');
 const elementResponse = document.body.querySelector('#response');
 const elementLoading = document.body.querySelector('#loading');
 const elementError = document.body.querySelector('#error');
@@ -177,8 +178,9 @@ inputPrompt.addEventListener('drop', (e) => {
             action: 'readFile',
             filePath: draggedText.trim()
           }, (response) => {
-            // Check for chrome.runtime.lastError
+            // Check for chrome.runtime.lastError first to avoid unchecked error
             if (chrome.runtime.lastError) {
+              console.log('Background script connection failed:', chrome.runtime.lastError.message);
               // No background script or connection failed, fallback to path insertion
               const contentToInsert = `File path detected: ${draggedText}\n(Note: No background script available to read file)\n`;
               insertContent(contentToInsert);
@@ -270,3 +272,111 @@ function show(element) {
 function hide(element) {
   element.setAttribute('hidden', '');
 }
+
+async function checkGoogleDocsTab() {
+  try {
+    if (!chrome.tabs) {
+      return false;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tab && tab.url && tab.url.includes('docs.google.com/document');
+  } catch (error) {
+    console.error('Error checking tab:', error);
+    return false;
+  }
+}
+
+async function fetchGoogleDocsContent() {
+  try {
+    if (!chrome.tabs || !chrome.scripting) {
+      throw new Error('Chrome extension APIs not available');
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab || !tab.url || !tab.url.includes('docs.google.com/document')) {
+      throw new Error('No Google Docs document tab found');
+    }
+
+    // Step 1: Execute script in Google Docs to select all and copy
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        // Focus the document first
+        const documentElement = document.querySelector('.kix-canvas-tile-content');
+        
+        if (documentElement) {
+          documentElement.click();
+          documentElement.focus();
+        }
+        
+        // Select all content (Ctrl+A)
+        document.execCommand('selectAll');
+        
+        // Copy to clipboard (Ctrl+C)
+        document.execCommand('copy');
+        
+        return true;
+      }
+    });
+
+    // Step 2: Wait a moment for the copy operation to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Step 3: Read from clipboard in the sidepanel context
+    if (!navigator.clipboard) {
+      throw new Error('Clipboard API not available');
+    }
+
+    const clipboardText = await navigator.clipboard.readText();
+    
+    if (!clipboardText || !clipboardText.trim()) {
+      throw new Error('No content found in clipboard after copy operation');
+    }
+
+    return clipboardText;
+  } catch (error) {
+    console.error('Error fetching Google Docs content:', error);
+    throw error;
+  }
+}
+
+async function updateGdocsButtonState() {
+  try {
+    const isGoogleDocs = await checkGoogleDocsTab();
+    if (isGoogleDocs) {
+      buttonFetchGdocs.removeAttribute('disabled');
+    } else {
+      buttonFetchGdocs.setAttribute('disabled', '');
+    }
+  } catch (error) {
+    console.error('Error updating button state:', error);
+    buttonFetchGdocs.setAttribute('disabled', '');
+  }
+}
+
+// Wait for DOM to be fully loaded and Chrome APIs to be available
+document.addEventListener('DOMContentLoaded', () => {
+  updateGdocsButtonState();
+  setInterval(updateGdocsButtonState, 2000);
+});
+
+buttonFetchGdocs.addEventListener('click', async () => {
+  try {
+    showLoading();
+    const content = await fetchGoogleDocsContent();
+    
+    if (content.trim()) {
+      const currentValue = inputPrompt.value;
+      const newValue = currentValue + (currentValue ? '\n\n' : '') + content;
+      inputPrompt.value = newValue;
+      inputPrompt.dispatchEvent(new Event('input'));
+      inputPrompt.focus();
+      hide(elementLoading);
+    } else {
+      throw new Error('No content found in Google Docs');
+    }
+  } catch (error) {
+    showError(`Error fetching Google Docs content: ${error.message}`);
+  }
+});
