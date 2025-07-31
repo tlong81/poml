@@ -18,6 +18,7 @@ const labelTemperature = document.body.querySelector('#label-temperature');
 const labelTopK = document.body.querySelector('#label-top-k');
 
 let session;
+let accessToken = null;
 
 async function runPrompt(prompt, params) {
   try {
@@ -288,9 +289,42 @@ async function checkGoogleDocsTab() {
   }
 }
 
-async function fetchGoogleDocsContent() {
+async function authenticateGoogle() {
   try {
-    if (!chrome.tabs || !chrome.scripting) {
+    if (!chrome.identity) {
+      throw new Error('Chrome identity API not available');
+    }
+
+    // Use Chrome's identity.getAuthToken which works with the manifest oauth2 config
+    const token = await chrome.identity.getAuthToken({ 
+      interactive: true,
+      scopes: ['https://www.googleapis.com/auth/documents.readonly']
+    });
+
+    if (!token) {
+      throw new Error('Failed to get access token');
+    }
+
+    if (!token.token) {
+      throw new Error(`Invalid token format: ${JSON.stringify(token)}`);
+    }
+
+    accessToken = token.token;
+    return accessToken;
+  } catch (error) {
+    console.error('Authentication failed:', error);
+    throw error;
+  }
+}
+
+function extractDocumentId(url) {
+  const match = url.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : null;
+}
+
+async function fetchGoogleDocsContent(isRetry = false) {
+  try {
+    if (!chrome.tabs) {
       throw new Error('Chrome extension APIs not available');
     }
 
@@ -300,43 +334,73 @@ async function fetchGoogleDocsContent() {
       throw new Error('No Google Docs document tab found');
     }
 
-    // Step 1: Execute script in Google Docs to select all and copy
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        // Focus the document first
-        const documentElement = document.querySelector('.kix-canvas-tile-content');
-        
-        if (documentElement) {
-          documentElement.click();
-          documentElement.focus();
-        }
-        
-        // Select all content (Ctrl+A)
-        document.execCommand('selectAll');
-        
-        // Copy to clipboard (Ctrl+C)
-        document.execCommand('copy');
-        
-        return true;
+    const documentId = extractDocumentId(tab.url);
+    if (!documentId) {
+      throw new Error('Could not extract document ID from URL');
+    }
+
+    // Authenticate if we don't have a token
+    if (!accessToken) {
+      await authenticateGoogle();
+    }
+
+    // Fetch document content using Google Docs API
+    const apiUrl = `https://docs.googleapis.com/v1/documents/${documentId}`;
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
       }
     });
 
-    // Step 2: Wait a moment for the copy operation to complete
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Step 3: Read from clipboard in the sidepanel context
-    if (!navigator.clipboard) {
-      throw new Error('Clipboard API not available');
+    if (!response.ok) {
+      if (response.status === 401 && !isRetry) {
+        console.error(response);
+        // Log response body for debugging
+        console.error(await response.json());
+        // Token expired, re-authenticate (only retry once)
+        accessToken = null; // Clear the invalid token
+        await authenticateGoogle();
+        return fetchGoogleDocsContent(true); // Retry with new token, mark as retry
+      }
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
     }
 
-    const clipboardText = await navigator.clipboard.readText();
+    const document = await response.json();
     
-    if (!clipboardText || !clipboardText.trim()) {
-      throw new Error('No content found in clipboard after copy operation');
+    // Extract text content from the document structure
+    let textContent = '';
+    
+    function extractTextFromContent(content) {
+      if (!content || !content.content) return '';
+      
+      let text = '';
+      for (const element of content.content) {
+        if (element.paragraph) {
+          for (const paragraphElement of element.paragraph.elements || []) {
+            if (paragraphElement.textRun) {
+              text += paragraphElement.textRun.content || '';
+            }
+          }
+        } else if (element.table) {
+          for (const row of element.table.tableRows || []) {
+            for (const cell of row.tableCells || []) {
+              text += extractTextFromContent(cell);
+            }
+          }
+        }
+      }
+      return text;
     }
 
-    return clipboardText;
+    textContent = extractTextFromContent(document.body);
+    
+    if (!textContent.trim()) {
+      throw new Error('No text content found in document');
+    }
+
+    return textContent;
   } catch (error) {
     console.error('Error fetching Google Docs content:', error);
     throw error;
@@ -380,5 +444,94 @@ buttonFetchGdocs.addEventListener('click', async () => {
     }
   } catch (error) {
     showError(`Error fetching Google Docs content: ${error.message}`);
+  }
+});
+
+async function extractPageContent() {
+  try {
+    if (!chrome.tabs || !chrome.scripting) {
+      throw new Error('Chrome extension APIs not available');
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab || !tab.url) {
+      throw new Error('No active tab found');
+    }
+
+    // Skip chrome:// pages and extension pages
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      throw new Error('Cannot extract content from chrome:// or extension pages');
+    }
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        // Create a clone of the document to avoid modifying the original
+        const documentClone = document.cloneNode(true);
+        
+        // Use Readability to extract main content
+        const reader = new Readability(documentClone, {
+          debug: false,
+          maxElemsToDivide: 300,
+          nbTopCandidates: 5,
+          charThreshold: 500,
+          classesToPreserve: []
+        });
+        
+        const article = reader.parse();
+        
+        if (!article) {
+          return null;
+        }
+        
+        return {
+          title: article.title || '',
+          content: article.textContent || '',
+          excerpt: article.excerpt || ''
+        };
+      }
+    });
+
+    if (results && results[0] && results[0].result) {
+      const article = results[0].result;
+      
+      if (!article.content.trim()) {
+        throw new Error('No readable content found on this page');
+      }
+      
+      let extractedText = '';
+      if (article.title) {
+        extractedText += `# ${article.title}\n\n`;
+      }
+      extractedText += article.content;
+      
+      return extractedText;
+    } else {
+      throw new Error('Could not extract readable content from page');
+    }
+  } catch (error) {
+    console.error('Error extracting page content:', error);
+    throw error;
+  }
+}
+
+buttonExtractContent.addEventListener('click', async () => {
+  try {
+    showLoading();
+    const content = await extractPageContent();
+    
+    if (content.trim()) {
+      const currentValue = inputPrompt.value;
+      const newValue = currentValue + (currentValue ? '\n\n' : '') + content;
+      inputPrompt.value = newValue;
+      inputPrompt.dispatchEvent(new Event('input'));
+      inputPrompt.focus();
+      hide(elementLoading);
+    } else {
+      throw new Error('No readable content found');
+    }
+  } catch (error) {
+    showError(`Error extracting page content: ${error.message}`);
   }
 });
