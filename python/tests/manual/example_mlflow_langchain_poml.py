@@ -25,6 +25,7 @@ prompt_template = LangchainPomlTemplate.from_file("example_poml.poml")
 
 chain = prompt_template | llm | StrOutputParser()
 
-chain.invoke(
+result = chain.invoke(
     {"code_path": "example_agentops_original.py"}
 )
+print(result)

@@ -53,10 +53,7 @@ class LangchainPomlTemplate(PromptTemplate):
         instance.speaker_mode = speaker_mode
         return instance
 
-    def format(self, **kwargs):
-        raise NotImplementedError("LangchainPomlTemplate does not support format. Use format_prompt instead.")
-
-    def format_prompt(self, **kwargs) -> Union[ChatPromptValue, StringPromptValue]:
+    def format(self, **kwargs) -> Union[ChatPromptValue, StringPromptValue]:  # type: ignore
         kwargs = self._merge_partial_and_user_variables(**kwargs)
         if self.template_file:
             formatted_messages = poml_formatter(self.template_file, self.speaker_mode, kwargs)
@@ -88,3 +85,6 @@ class LangchainPomlTemplate(PromptTemplate):
                 raise ValueError(
                     f"Multiple messages returned, but non-speaker mode requires a single message: {formatted_messages}"
                 )
+
+    def format_prompt(self, **kwargs):
+        return self.format(**kwargs)
