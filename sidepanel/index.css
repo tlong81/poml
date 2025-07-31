@@ -80,3 +80,19 @@ textarea {
 [hidden] {
   display: none;
 }
+
+.drag-preview {
+  position: fixed;
+  background: rgba(51, 51, 51, 0.9);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  max-width: 200px;
+  word-wrap: break-word;
+  box-shadow: rgba(0, 0, 0, 0.3) 0px 4px 12px;
+  pointer-events: none;
+  z-index: 10000;
+  transform: translate(10px, 10px);
+  opacity: 0.8;
+}

@@ -89,6 +89,142 @@ inputPrompt.addEventListener('input', () => {
   }
 });
 
+// Add drag and drop support for text
+let dragPreviewElement = null;
+
+// Create drag preview bubble when dragging starts outside the textarea
+document.addEventListener('dragstart', (e) => {
+  const selectedText = window.getSelection().toString();
+  if (selectedText && e.target !== inputPrompt) {
+    // Create preview element
+    dragPreviewElement = document.createElement('div');
+    dragPreviewElement.className = 'drag-preview';
+    dragPreviewElement.textContent = selectedText.length > 50 ? selectedText.substring(0, 50) + '...' : selectedText;
+    document.body.appendChild(dragPreviewElement);
+    
+    // Initially hide it
+    dragPreviewElement.style.display = 'none';
+  }
+});
+
+// Update drag preview position during drag
+document.addEventListener('dragover', (e) => {
+  if (dragPreviewElement) {
+    dragPreviewElement.style.display = 'block';
+    dragPreviewElement.style.left = e.clientX + 'px';
+    dragPreviewElement.style.top = e.clientY + 'px';
+  }
+});
+
+// Clean up drag preview when drag ends
+document.addEventListener('dragend', () => {
+  if (dragPreviewElement) {
+    document.body.removeChild(dragPreviewElement);
+    dragPreviewElement = null;
+  }
+});
+
+inputPrompt.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  inputPrompt.style.backgroundColor = '#f0f8ff';
+});
+
+inputPrompt.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  inputPrompt.style.backgroundColor = '';
+});
+
+inputPrompt.addEventListener('drop', (e) => {
+  e.preventDefault();
+  inputPrompt.style.backgroundColor = '';
+  
+  // Clean up drag preview
+  if (dragPreviewElement) {
+    document.body.removeChild(dragPreviewElement);
+    dragPreviewElement = null;
+  }
+  
+  const draggedText = e.dataTransfer.getData('text/plain');
+  if (draggedText) {
+    // Check if the dragged text looks like a file path
+    const isPath = /^[\/~][\w\/\-\.]+\.[a-zA-Z0-9]+$/.test(draggedText.trim()) || 
+                   /^[a-zA-Z]:[\\\/][\w\\\/\-\.]+\.[a-zA-Z0-9]+$/.test(draggedText.trim());
+    
+    if (isPath) {
+      // Helper function to insert content
+      const insertContent = (content) => {
+        const currentValue = inputPrompt.value;
+        const cursorPosition = inputPrompt.selectionStart;
+        
+        const newValue = currentValue.slice(0, cursorPosition) + content + currentValue.slice(cursorPosition);
+        inputPrompt.value = newValue;
+        
+        // Set cursor position after the inserted content
+        inputPrompt.setSelectionRange(cursorPosition + content.length, cursorPosition + content.length);
+        
+        // Trigger input event to enable the run button if needed
+        inputPrompt.dispatchEvent(new Event('input'));
+        
+        // Focus the textarea
+        inputPrompt.focus();
+      };
+      
+      // Try to read the file content using chrome extension APIs
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        try {
+          // Send message to background script to read file
+          chrome.runtime.sendMessage({
+            action: 'readFile',
+            filePath: draggedText.trim()
+          }, (response) => {
+            // Check for chrome.runtime.lastError
+            if (chrome.runtime.lastError) {
+              // No background script or connection failed, fallback to path insertion
+              const contentToInsert = `File path detected: ${draggedText}\n(Note: No background script available to read file)\n`;
+              insertContent(contentToInsert);
+              return;
+            }
+            
+            if (response && response.success && response.content) {
+              // Successfully read file content
+              insertContent(response.content);
+            } else {
+              // File reading failed, show error message with path
+              const errorMsg = response && response.error ? response.error : 'Unknown error reading file';
+              const contentToInsert = `File path detected: ${draggedText}\n(Error: ${errorMsg})\n`;
+              insertContent(contentToInsert);
+            }
+          });
+        } catch (error) {
+          // Chrome extension API not available, use fallback
+          const contentToInsert = `File path detected: ${draggedText}\n(Note: Chrome extension API error)\n`;
+          insertContent(contentToInsert);
+        }
+      } else {
+        // Fallback: just insert the path as text with a note
+        const contentToInsert = `File path detected: ${draggedText}\n(Note: Cannot read file content in this environment)\n`;
+        insertContent(contentToInsert);
+      }
+    } else {
+      // Not a path, insert as regular text
+      const currentValue = inputPrompt.value;
+      const cursorPosition = inputPrompt.selectionStart;
+      
+      const newValue = currentValue.slice(0, cursorPosition) + draggedText + currentValue.slice(cursorPosition);
+      inputPrompt.value = newValue;
+      
+      // Set cursor position after the inserted text
+      inputPrompt.setSelectionRange(cursorPosition + draggedText.length, cursorPosition + draggedText.length);
+      
+      // Trigger input event to enable the run button if needed
+      inputPrompt.dispatchEvent(new Event('input'));
+      
+      // Focus the textarea
+      inputPrompt.focus();
+    }
+  }
+});
+
 buttonPrompt.addEventListener('click', async () => {
   const prompt = inputPrompt.value.trim();
   showLoading();

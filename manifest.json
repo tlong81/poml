@@ -1,12 +1,13 @@
 {
-  "name": "Chrome Prompt AI Demo",
-  "version": "0.2",
+  "name": "POML Browser Demo",
+  "version": "0.1",
   "manifest_version": 3,
   "description": "Try Chrome's built-in prompt API built with Gemini Nano.",
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["sidePanel"],
+  "permissions": ["sidePanel", "activeTab"],
+  "host_permissions": ["file:///*"],
   "minimum_chrome_version": "138",
   "side_panel": {
     "default_path": "sidepanel/index.html"
