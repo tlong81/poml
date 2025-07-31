@@ -6,7 +6,8 @@ import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal, Union
+from pydantic import BaseModel
 import warnings
 from .cli import run
 
@@ -28,7 +29,7 @@ _trace_log: List[Dict[str, Any]] = []
 _trace_dir: Optional[Path] = None
 
 Backend = Literal["local", "weave", "agentops", "mlflow"]
-OutputFormat = Literal["raw", "dict", "openai_chat"]
+OutputFormat = Literal["raw", "dict", "openai_chat", "langchain", "pydantic"]
 
 def set_trace(
     enabled: bool | List[Backend] | Backend = True,
@@ -183,55 +184,88 @@ def write_file(content: str):
     temp_file.flush()
     return temp_file
 
-def _poml_response_to_openai_chat(response: Any) -> List[Dict[str, str]]:
-    # Convert to OpenAI format
-    if isinstance(response, list):
-        # Convert list of messages to OpenAI format
-        messages = []
-        speaker_to_role = {
-            "human": "user",
-            "assistant": "assistant",
-            "system": "system",
-        }
-        for item in response:
-            if isinstance(item, dict) and "speaker" in item and "content" in item:
-                if item["speaker"] not in speaker_to_role:
-                    raise ValueError(f"Unknown speaker: {item['speaker']} in {item}")
-                role = speaker_to_role[item["speaker"]]
 
-                if isinstance(item["content"], str):
-                    messages.append({"role": role, "content": item["content"]})
-                elif isinstance(item["content"], list):
-                    contents = []
-                    for content_part in item["content"]:
-                        if isinstance(content_part, str):
-                            contents.append({"type": "text", "text": content_part})
-                        elif isinstance(content_part, dict):
-                            if "type" in content_part and "base64" in content_part:
-                                contents.append({
-                                    "type": "image_url",
-                                    "image_url": f'data:{content_part["type"]};base64,{content_part["base64"]}'
-                                })
-                            else:
-                                raise ValueError(f"Unexpected content part. Found keys: {content_part.keys()}")
-                        else:
-                            raise ValueError(f"Unexpected content part: {content_part}")
-                    messages.append({"role": role, "content": contents})
+class ContentMultiMedia(BaseModel):
+    type: str  # image/png, image/jpeg, ...
+    base64: str
+    alt: Optional[str] = None
+
+
+RichContent = Union[str, List[Union[str, ContentMultiMedia]]]
+
+Speaker = Literal["human", "assistant", "system"]
+
+
+class PomlMessage(BaseModel):
+    speaker: Speaker
+    content: RichContent
+
+
+def _poml_response_to_openai_chat(messages: List[PomlMessage]) -> List[Dict[str, Any]]:
+    """Convert PomlMessage objects to OpenAI chat format."""
+    openai_messages = []
+    speaker_to_role = {
+        "human": "user",
+        "assistant": "assistant",
+        "system": "system",
+    }
+    
+    for msg in messages:
+        if msg.speaker not in speaker_to_role:
+            raise ValueError(f"Unknown speaker: {msg.speaker}")
+        role = speaker_to_role[msg.speaker]
+
+        if isinstance(msg.content, str):
+            openai_messages.append({"role": role, "content": msg.content})
+        elif isinstance(msg.content, list):
+            contents = []
+            for content_part in msg.content:
+                if isinstance(content_part, str):
+                    contents.append({"type": "text", "text": content_part})
+                elif isinstance(content_part, ContentMultiMedia):
+                    contents.append({
+                        "type": "image_url",
+                        "image_url": {"url": f'data:{content_part.type};base64,{content_part.base64}'}
+                    })
                 else:
-                    raise ValueError(f"Unexpected content type: {type(item['content'])} in {item}")
-            else:
-                raise ValueError(
-                    "Unexpected format for OpenAI output: expected a list of dictionaries with "
-                    f"'speaker' and 'content' keys; got {item}"
-                )
-        return messages
-    elif isinstance(response, str):
-        return [{"role": "user", "content": response}]
-    else:
-        raise ValueError(
-            "Unexpected format for OpenAI output: expected a list or a string; "
-            f"got {type(response)}"
-        )
+                    raise ValueError(f"Unexpected content part: {content_part}")
+            openai_messages.append({"role": role, "content": contents})
+        else:
+            raise ValueError(f"Unexpected content type: {type(msg.content)}")
+    
+    return openai_messages
+
+
+def _poml_response_to_langchain(messages: List[PomlMessage]) -> List[Dict[str, Any]]:
+    """Convert PomlMessage objects to Langchain format."""
+    langchain_messages = []
+    for msg in messages:
+        if isinstance(msg.content, str):
+            langchain_messages.append({
+                "type": msg.speaker,
+                "data": {"content": msg.content}
+            })
+        elif isinstance(msg.content, list):
+            content_parts = []
+            for content_part in msg.content:
+                if isinstance(content_part, str):
+                    content_parts.append({"type": "text", "text": content_part})
+                elif isinstance(content_part, ContentMultiMedia):
+                    content_parts.append({
+                        "type": "image",
+                        "source_type": "base64",
+                        "data": content_part.base64,
+                        "mime_type": content_part.type,
+                    })
+                else:
+                    raise ValueError(f"Unexpected content part: {content_part}")
+            langchain_messages.append({
+                "type": msg.speaker,
+                "data": {"content": content_parts}
+            })
+        else:
+            raise ValueError(f"Unexpected content type: {type(msg.content)}")
+    return langchain_messages
 
 
 def poml(
@@ -336,13 +370,22 @@ def poml(
                 pass
             else:
                 result = json.loads(result)
-                if format == "openai_chat":
-                    result = _poml_response_to_openai_chat(result)
-                elif format == "dict":
-                    # Do nothing
-                    pass
-                else:
-                    raise ValueError(f"Unknown output format: {format}")
+                if format != "dict":
+                    # Continue to validate the format.
+                    if chat:
+                        pydantic_result = [PomlMessage(**item) for item in result]
+                    else:
+                        # TODO: Make it a RichContent object
+                        pydantic_result = [PomlMessage(speaker="human", content=result)]
+
+                    if format == "pydantic":
+                        return pydantic_result
+                    elif format == "openai_chat":
+                        return _poml_response_to_openai_chat(pydantic_result)
+                    elif format == "langchain":
+                        return _poml_response_to_langchain(pydantic_result)
+                    else:
+                        raise ValueError(f"Unknown output format: {format}")
 
             if _weave_enabled:
                 from .integration import weave

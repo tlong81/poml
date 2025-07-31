@@ -6,7 +6,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
 dependencies = [
-  "nodejs-wheel"
+  "nodejs-wheel",
+  "pydantic",
 ]
 
 [project.optional-dependencies]

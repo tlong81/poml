@@ -7,22 +7,22 @@ from langchain_core.messages import messages_from_dict
 from langchain_core.prompt_values import ChatPromptValue, StringPromptValue
 
 
-def poml_formatter(markup: Union[str, Path], context: dict | None = None):
-    messages = poml(markup, context=context, format="dict")
-    converted_messages = [{"type": msg["speaker"], "data": {"content": msg["content"]}} for msg in messages]
-    return messages_from_dict(converted_messages)
+def poml_formatter(markup: Union[str, Path], speaker_mode: bool, context: dict | None = None):
+    messages = poml(markup, chat=speaker_mode, context=context, format="langchain")
+    return messages_from_dict(messages)
 
 
 class LangchainPomlTemplate(PromptTemplate):
 
     template_file: Union[str, Path, None] = None
-    speaker_mode: bool = False
+    speaker_mode: bool = True
 
     @property
     @override
     def lc_attributes(self) -> dict[str, Any]:
         return {
             "template_file": self.template_file,
+            "speaker_mode": self.speaker_mode,
             # Template format is not used
             # "template_format": self.template_format,
         }
@@ -40,29 +40,51 @@ class LangchainPomlTemplate(PromptTemplate):
 
     @classmethod
     def from_file(
-        cls, template_file: Union[str, Path], *args, speaker_mode: bool = False, **kwargs
+        cls, template_file: Union[str, Path], *args, speaker_mode: bool = True, **kwargs
     ) -> "LangchainPomlTemplate":
         instance: LangchainPomlTemplate = super().from_file(template_file, **kwargs)  # type: ignore
         instance.template_file = template_file
+        instance.speaker_mode = speaker_mode
         return instance
 
     @classmethod
-    def from_template(cls, *args, speaker_mode: bool = False, **kwargs) -> "LangchainPomlTemplate":
+    def from_template(cls, *args, speaker_mode: bool = True, **kwargs) -> "LangchainPomlTemplate":
         instance: LangchainPomlTemplate = super().from_template(*args, **kwargs)  # type: ignore
         instance.speaker_mode = speaker_mode
         return instance
 
     def format(self, **kwargs):
+        raise NotImplementedError("LangchainPomlTemplate does not support format. Use format_prompt instead.")
+
+    def format_prompt(self, **kwargs) -> Union[ChatPromptValue, StringPromptValue]:
         kwargs = self._merge_partial_and_user_variables(**kwargs)
         if self.template_file:
-            return poml_formatter(self.template_file, kwargs)
+            formatted_messages = poml_formatter(self.template_file, self.speaker_mode, kwargs)
         else:
-            return poml_formatter(self.template, kwargs)
-
-    def format_prompt(self, **kwargs):
-        """Format the prompt with the given kwargs."""
-        formatted_messages = self.format(**kwargs)
+            formatted_messages = poml_formatter(self.template, self.speaker_mode, kwargs)
         if self.speaker_mode:
-            return StringPromptValue(value=formatted_messages)
-        else:
             return ChatPromptValue(messages=formatted_messages)
+        else:
+            if len(formatted_messages) == 1:
+                if isinstance(formatted_messages[0].content, str):
+                    return StringPromptValue(text=formatted_messages[0].content)
+                elif isinstance(formatted_messages[0].content, list):
+                    # If the content is a list, we assume it's a single message with multiple parts.
+                    if len(formatted_messages[0].content) == 1:
+                        # If there's only one part, return it as a StringPromptValue
+                        if isinstance(formatted_messages[0].content[0], str):
+                            return StringPromptValue(text=formatted_messages[0].content[0])
+                        else:
+                            raise ValueError(
+                                f"Unsupported content type for non-speaker mode: {formatted_messages[0].content[0]}"
+                            )
+                    else:
+                        raise ValueError(
+                            f"Multi-part contents is not supported for non-speaker mode: {formatted_messages[0].content}"
+                        )
+                else:
+                    raise ValueError(f"Unsupported content type for non-speaker mode: {formatted_messages[0].content}")
+            else:
+                raise ValueError(
+                    f"Multiple messages returned, but non-speaker mode requires a single message: {formatted_messages}"
+                )
