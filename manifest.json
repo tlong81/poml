@@ -1,8 +1,8 @@
 {
-  "name": "POML Browser Demo",
+  "name": "Prompt Scratchpad",
   "version": "0.1",
   "manifest_version": 3,
-  "description": "Try Chrome's built-in prompt API built with Gemini Nano.",
+  "description": "Orchestrate the prompts in browser sidebar.",
   "background": {
     "service_worker": "background.js"
   },
@@ -19,6 +19,6 @@
       "48": "images/icon48.png",
       "128": "images/icon128.png"
     },
-    "default_title": "Open Chat Interface"
+    "default_title": "Open Prompt Scratchpad"
   }
 }

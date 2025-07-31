@@ -2,11 +2,13 @@
 
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
+import { Readability } from '@mozilla/readability';
 
 const inputPrompt = document.body.querySelector('#input-prompt');
 const buttonPrompt = document.body.querySelector('#button-prompt');
 const buttonReset = document.body.querySelector('#button-reset');
 const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs');
+const buttonExtractContent = document.body.querySelector('#button-extract-content');
 const elementResponse = document.body.querySelector('#response');
 const elementLoading = document.body.querySelector('#loading');
 const elementError = document.body.querySelector('#error');
