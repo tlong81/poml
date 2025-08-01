@@ -47,6 +47,7 @@ const inputPrompt = document.body.querySelector('#input-prompt') as HTMLTextArea
 const buttonPrompt = document.body.querySelector('#button-prompt') as HTMLButtonElement;
 const buttonReset = document.body.querySelector('#button-reset') as HTMLButtonElement;
 const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs') as HTMLButtonElement;
+const buttonFetchMsWord = document.body.querySelector('#button-fetch-msword') as HTMLButtonElement;
 const buttonExtractContent = document.body.querySelector('#button-extract-content') as HTMLButtonElement;
 const buttonTestChatGPT = document.body.querySelector('#button-test-chatgpt') as HTMLButtonElement;
 const elementResponse = document.body.querySelector('#response') as HTMLDivElement;
@@ -59,6 +60,7 @@ const labelTopK = document.body.querySelector('#label-top-k') as HTMLSpanElement
 
 let session: LanguageModelSession | null = null;
 let accessToken: string | null = null;
+let msAccessToken: string | null = null;
 
 async function runPrompt(prompt: string, params: LanguageModelParams): Promise<string> {
   try {
@@ -467,7 +469,11 @@ async function updateGdocsButtonState(): Promise<void> {
 // Wait for DOM to be fully loaded and Chrome APIs to be available
 document.addEventListener('DOMContentLoaded', () => {
   updateGdocsButtonState();
-  setInterval(updateGdocsButtonState, 2000);
+  updateMsWordButtonState();
+  setInterval(() => {
+    updateGdocsButtonState();
+    updateMsWordButtonState();
+  }, 2000);
 });
 
 buttonFetchGdocs.addEventListener('click', async () => {
@@ -484,6 +490,247 @@ buttonFetchGdocs.addEventListener('click', async () => {
       hide(elementLoading);
     } else {
       throw new Error('No content found in Google Docs');
+    }
+  } catch (error) {
+    showError(error as Error);
+  }
+});
+
+async function checkWordOnlineTab(): Promise<boolean> {
+  try {
+    if (!chrome.tabs) {
+      return false;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url) {
+      return false;
+    }
+    
+    // Check for various Word Online patterns
+    const wordPatterns = [
+      /sharepoint\.com.*\/_layouts\/15\/Doc.aspx/,
+      /office\.com.*\/edit/,
+      /onedrive\.live\.com.*\/edit/,
+      /sharepoint\.com.*\/edit/,
+      /officeapps\.live\.com\/we\/wordeditorframe\.aspx/,
+      /word-edit\.officeapps\.live\.com/
+    ];
+    
+    return wordPatterns.some(pattern => pattern.test(tab.url!));
+  } catch (error) {
+    console.error('Error checking Word tab:', error);
+    return false;
+  }
+}
+
+async function authenticateMicrosoft(): Promise<string> {
+  try {
+    // Microsoft Graph requires OAuth2 flow
+    // Note: You'll need to register your extension as an app in Azure AD
+    // and update the client_id below with your actual Microsoft app ID
+    const m365DevTenant = false;
+
+    const clientId = m365DevTenant ? 'f54e787f-94f1-4cb0-b401-8f0d30776ac5' : 'b0aeac32-b3a2-4bb3-bc0a-97c84bbab6c6';
+    const tenantId = m365DevTenant ? 'common' : '72f988bf-86f1-41af-91ab-2d7cd011db47';
+
+    const authUrl = new URL(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`);
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('response_type', 'token');
+    console.log(chrome.identity.getRedirectURL());
+    authUrl.searchParams.set('redirect_uri', chrome.identity.getRedirectURL());
+    authUrl.searchParams.set('scope', 'https://graph.microsoft.com/Files.Read');
+    authUrl.searchParams.set('response_mode', 'fragment');
+
+    const responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: true
+    });
+
+    if (!responseUrl) {
+      throw new Error('Failed to get access token');
+    }
+
+    // Extract token from response URL
+    const urlParams = new URLSearchParams(responseUrl.split('#')[1]);
+    console.log(responseUrl);
+    console.log(urlParams);
+    const token = urlParams.get('access_token');
+
+    if (!token) {
+      throw new Error('No access token in response');
+    }
+
+    msAccessToken = token;
+    return msAccessToken;
+  } catch (error) {
+    console.error('Microsoft authentication failed:', error);
+    throw error;
+  }
+}
+
+function extractWordDocumentId(url: string): string | null {
+  // Extract document ID from various Word Online URL formats
+  const patterns = [
+    /\/edit\/([^\/\?]+)/,  // Standard edit URL
+    /resid=([^&]+)/,       // OneDrive shared link
+    /sourcedoc=\{([^}]+)\}/, // SharePoint format
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+async function fetchWordOnlineContent(isRetry: boolean = false): Promise<string> {
+  try {
+    if (!chrome.tabs) {
+      throw new Error('Chrome extension APIs not available');
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab || !tab.url) {
+      throw new Error('No active tab found');
+    }
+
+    if (!(await checkWordOnlineTab())) {
+      throw new Error('No Word Online document tab found');
+    }
+
+    // First try to extract content using content script injection
+    // try {
+    //   const results = await chrome.scripting.executeScript({
+    //     target: { tabId: tab.id! },
+    //     func: extractWordContent
+    //   });
+
+    //   if (results && results[0] && results[0].result) {
+    //     return results[0].result;
+    //   }
+    // } catch (scriptError) {
+    //   console.warn('Content script extraction failed, trying API approach:', scriptError);
+    // }
+
+    // Fallback to Microsoft Graph API approach
+    if (!msAccessToken) {
+      await authenticateMicrosoft();
+    }
+
+    // Try to extract file information from the URL
+    const documentId = extractWordDocumentId(tab.url);
+    if (!documentId) {
+      throw new Error('Could not extract document ID from URL. Try using the "Extract Page Content" button instead.');
+    }
+
+    // Use Microsoft Graph API to get document content
+    const apiUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${documentId}/content`;
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${msAccessToken}`,
+        'Accept': 'text/plain'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 && !isRetry) {
+        // Token expired, re-authenticate (only retry once)
+        msAccessToken = null;
+        await authenticateMicrosoft();
+        return fetchWordOnlineContent(true);
+      }
+      throw new Error(`Microsoft Graph API request failed: ${response.status} ${response.statusText}. Try using the "Extract Page Content" button instead.`);
+    }
+
+    const content = await response.text();
+    
+    if (!content.trim()) {
+      throw new Error('No text content found in document');
+    }
+
+    return content;
+  } catch (error) {
+    console.error('Error fetching Word Online content:', error);
+    throw error;
+  }
+}
+
+// Function to be injected into Word Online page to extract content
+function extractWordContent(): string {
+  try {
+    // Try to find the main content area in Word Online
+    const selectors = [
+      '[data-automation-id="documentContent"]',
+      '.c-documentContent',
+      '.WACDocumentBody',
+      '.EJRWMDiv',
+      '[role="textbox"][aria-label*="Document content"]',
+      '.c-editor-content'
+    ];
+
+    let content = '';
+    
+    for (const selector of selectors) {
+      const element = document.querySelector(selector) as HTMLElement;
+      if (element) {
+        content = element.textContent || (element as any).innerText || '';
+        if (content.trim()) {
+          break;
+        }
+      }
+    }
+
+    // If no content found with specific selectors, try general approach
+    if (!content.trim()) {
+      // Look for elements that might contain document text
+      const possibleElements = document.querySelectorAll('div[contenteditable="true"], div[role="textbox"]');
+      for (let i = 0; i < possibleElements.length; i++) {
+        const el = possibleElements[i] as HTMLElement;
+        const text = el.textContent || (el as any).innerText || '';
+        if (text.length > content.length) {
+          content = text;
+        }
+      }
+    }
+
+    return content.trim() || 'No readable content found in Word document';
+  } catch (error) {
+    return `Error extracting content: ${error}`;
+  }
+}
+
+async function updateMsWordButtonState(): Promise<void> {
+  try {
+    const isWordOnline = await checkWordOnlineTab();
+    if (isWordOnline) {
+      buttonFetchMsWord.removeAttribute('disabled');
+    } else {
+      buttonFetchMsWord.setAttribute('disabled', '');
+    }
+  } catch (error) {
+    console.error('Error updating MS Word button state:', error);
+    buttonFetchMsWord.setAttribute('disabled', '');
+  }
+}
+
+buttonFetchMsWord.addEventListener('click', async () => {
+  try {
+    showLoading();
+    const content = await fetchWordOnlineContent();
+    
+    if (content.trim()) {
+      const currentValue = inputPrompt.value;
+      const newValue = currentValue + (currentValue ? '\n\n' : '') + content;
+      inputPrompt.value = newValue;
+      inputPrompt.dispatchEvent(new Event('input'));
+      inputPrompt.focus();
+      hide(elementLoading);
+    } else {
+      throw new Error('No content found in Word document');
     }
   } catch (error) {
     showError(error as Error);
