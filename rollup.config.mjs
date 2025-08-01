@@ -19,11 +19,42 @@ export default [
       copy({
         targets: [
           {
-            src: ['manifest.json', 'background.js', 'sidepanel', 'images'],
+            src: ['manifest.json', 'sidepanel', 'images'],
             dest: 'dist'
           }
         ]
       })
+    ]
+  },
+  {
+    input: 'background.js',
+    output: {
+      file: 'dist/background.js',
+      format: 'es',
+    },
+    plugins: [
+      nodeResolve({
+        jsnext: true,
+        main: true,
+        browser: true
+      }),
+      commonjs()
+    ]
+  },
+  {
+    input: 'contentExtractor.js',
+    output: {
+      file: 'dist/contentExtractor.js',
+      format: 'iife',
+      name: 'ContentExtractor'
+    },
+    plugins: [
+      nodeResolve({
+        jsnext: true,
+        main: true,
+        browser: true
+      }),
+      commonjs()
     ]
   }
 ];

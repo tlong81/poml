@@ -2,7 +2,6 @@
 
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
-import { Readability } from '@mozilla/readability';
 
 const inputPrompt = document.body.querySelector('#input-prompt');
 const buttonPrompt = document.body.querySelector('#button-prompt');
@@ -449,7 +448,7 @@ buttonFetchGdocs.addEventListener('click', async () => {
 
 async function extractPageContent() {
   try {
-    if (!chrome.tabs || !chrome.scripting) {
+    if (!chrome.tabs || !chrome.runtime) {
       throw new Error('Chrome extension APIs not available');
     }
 
@@ -464,52 +463,24 @@ async function extractPageContent() {
       throw new Error('Cannot extract content from chrome:// or extension pages');
     }
 
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        // Create a clone of the document to avoid modifying the original
-        const documentClone = document.cloneNode(true);
-        
-        // Use Readability to extract main content
-        const reader = new Readability(documentClone, {
-          debug: false,
-          maxElemsToDivide: 300,
-          nbTopCandidates: 5,
-          charThreshold: 500,
-          classesToPreserve: []
-        });
-        
-        const article = reader.parse();
-        
-        if (!article) {
-          return null;
+    // Send message to background script to extract content
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        action: 'extractPageContent',
+        tabId: tab.id
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(`Background script error: ${chrome.runtime.lastError.message}`));
+          return;
         }
         
-        return {
-          title: article.title || '',
-          content: article.textContent || '',
-          excerpt: article.excerpt || ''
-        };
-      }
+        if (response && response.success) {
+          resolve(response.content);
+        } else {
+          reject(new Error(response?.error || 'Unknown error extracting content'));
+        }
+      });
     });
-
-    if (results && results[0] && results[0].result) {
-      const article = results[0].result;
-      
-      if (!article.content.trim()) {
-        throw new Error('No readable content found on this page');
-      }
-      
-      let extractedText = '';
-      if (article.title) {
-        extractedText += `# ${article.title}\n\n`;
-      }
-      extractedText += article.content;
-      
-      return extractedText;
-    } else {
-      throw new Error('Could not extract readable content from page');
-    }
   } catch (error) {
     console.error('Error extracting page content:', error);
     throw error;
