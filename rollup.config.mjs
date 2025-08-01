@@ -24,8 +24,8 @@ export default [
       copy({
         targets: [
           {
-            src: ['manifest.json', 'sidepanel/*.html', 'sidepanel/*.css', 'images'],
-            dest: 'dist'
+            src: ['sidepanel/*.html', 'sidepanel/*.css'],
+            dest: 'dist/sidepanel'
           }
         ]
       })
@@ -46,7 +46,15 @@ export default [
         main: true,
         browser: true
       }),
-      commonjs()
+      commonjs(),
+      copy({
+        targets: [
+          {
+            src: ['manifest.json', 'images'],
+            dest: 'dist'
+          }
+        ]
+      })
     ]
   },
   {

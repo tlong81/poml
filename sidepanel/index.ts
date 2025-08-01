@@ -48,6 +48,7 @@ const buttonPrompt = document.body.querySelector('#button-prompt') as HTMLButton
 const buttonReset = document.body.querySelector('#button-reset') as HTMLButtonElement;
 const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs') as HTMLButtonElement;
 const buttonExtractContent = document.body.querySelector('#button-extract-content') as HTMLButtonElement;
+const buttonTestChatGPT = document.body.querySelector('#button-test-chatgpt') as HTMLButtonElement;
 const elementResponse = document.body.querySelector('#response') as HTMLDivElement;
 const elementLoading = document.body.querySelector('#loading') as HTMLDivElement;
 const elementError = document.body.querySelector('#error') as HTMLDivElement;
@@ -545,6 +546,67 @@ buttonExtractContent.addEventListener('click', async () => {
     } else {
       throw new Error('No readable content found');
     }
+  } catch (error) {
+    showError(error as Error);
+  }
+});
+
+async function testSendToChatGPT(): Promise<void> {
+  try {
+    if (!chrome.tabs || !chrome.runtime) {
+      throw new Error('Chrome extension APIs not available');
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab || !tab.id) {
+      throw new Error('No active tab found');
+    }
+
+    // Check if current tab is ChatGPT
+    if (!tab.url || !tab.url.includes('chatgpt.com')) {
+      throw new Error('Please navigate to ChatGPT to test this functionality');
+    }
+
+    // Create temp file data
+    const tempFileData = {
+      name: 'foo.txt',
+      content: 'bar',
+      type: 'text/plain'
+    };
+
+    // Send message to background script to call sendToChatGPT
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        action: 'sendToChatGPT',
+        tabId: tab.id,
+        prompt: 'hello world',
+        files: [tempFileData]
+      }, {}, (response?: any) => {
+        if ((chrome.runtime as any).lastError) {
+          reject(new Error(`Background script error: ${(chrome.runtime as any).lastError.message}`));
+          return;
+        }
+        
+        if (response && response.success) {
+          resolve();
+        } else {
+          reject(new Error(response?.error || 'Unknown error sending to ChatGPT'));
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error testing sendToChatGPT:', error);
+    throw error;
+  }
+}
+
+buttonTestChatGPT.addEventListener('click', async () => {
+  try {
+    showLoading();
+    await testSendToChatGPT();
+    hide(elementLoading);
+    await showResponse('Successfully sent "hello world" prompt and foo.txt file to ChatGPT!');
   } catch (error) {
     showError(error as Error);
   }

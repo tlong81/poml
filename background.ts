@@ -1,9 +1,17 @@
 /// <reference types="chrome-types" />
 
+interface FileData {
+  name: string;
+  content: string;
+  type: string;
+}
+
 interface MessageRequest {
   action: string;
   filePath?: string;
   tabId?: number;
+  prompt?: string;
+  files?: FileData[];
 }
 
 interface MessageResponse {
@@ -56,6 +64,28 @@ chrome.runtime.onMessage.addListener(
         })
         .catch((error) => {
           console.error("Error extracting page content:", error);
+          sendResponse({ success: false, error: error.message });
+        });
+
+      // Return true to indicate we will send a response asynchronously
+      return true;
+    } else if (request.action === "sendToChatGPT") {
+      if (!request.tabId || !request.prompt) {
+        sendResponse({ success: false, error: "Missing required parameters (tabId, prompt)" });
+        return true;
+      }
+
+      // Convert FileData objects back to File objects
+      const files = (request.files || []).map(fileData => 
+        new File([fileData.content], fileData.name, { type: fileData.type })
+      );
+      
+      sendToChatGPT(request.tabId, request.prompt, files)
+        .then(() => {
+          sendResponse({ success: true });
+        })
+        .catch((error) => {
+          console.error("Error sending to ChatGPT:", error);
           sendResponse({ success: false, error: error.message });
         });
 
@@ -210,6 +240,7 @@ async function sendToChatGPT(
         document.querySelector("form textarea");
 
       if (ta) {
+        console.log("[DEBUG] Textarea found for prompt injection", ta);
         (ta as any).focus();
         (ta as any).value = prompt;
         ta.dispatchEvent(new Event("input", { bubbles: true }));
@@ -225,6 +256,7 @@ async function sendToChatGPT(
           'input[type="file"][multiple]'
         );
         if (hiddenInput) {
+          console.log("[DEBUG] Hidden file input found for file attachment");
           // Trick: create a DataTransfer so the input thinks the user selected files
           const dt = new DataTransfer();
           files.forEach((f) => dt.items.add(f));
