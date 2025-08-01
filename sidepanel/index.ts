@@ -47,6 +47,7 @@ const inputPrompt = document.body.querySelector('#input-prompt') as HTMLTextArea
 const buttonPrompt = document.body.querySelector('#button-prompt') as HTMLButtonElement;
 const buttonReset = document.body.querySelector('#button-reset') as HTMLButtonElement;
 const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs') as HTMLButtonElement;
+const buttonFetchMsWord = document.body.querySelector('#button-fetch-msword') as HTMLButtonElement;
 const buttonExtractContent = document.body.querySelector('#button-extract-content') as HTMLButtonElement;
 const buttonTestChatGPT = document.body.querySelector('#button-test-chatgpt') as HTMLButtonElement;
 const elementResponse = document.body.querySelector('#response') as HTMLDivElement;
@@ -189,7 +190,11 @@ inputPrompt.addEventListener('drop', (e) => {
     document.body.removeChild(dragPreviewElement);
     dragPreviewElement = null;
   }
-  
+
+  for (const type of e.dataTransfer?.types ?? []) {
+    console.log('[DEBUG] Dragged type:', type);
+    console.log('[DEBUG] Dragged data:', e.dataTransfer?.getData(type));
+  }
   const draggedText = e.dataTransfer?.getData('text/plain');
   if (draggedText) {
     // Check if the dragged text looks like a file path
@@ -272,6 +277,15 @@ inputPrompt.addEventListener('drop', (e) => {
   }
 });
 
+// Add paste event listener for debugging
+inputPrompt.addEventListener('paste', (e) => {
+  console.log('[DEBUG] Paste event triggered');
+  for (const type of e.clipboardData?.types ?? []) {
+    console.log('[DEBUG] Pasted type:', type);
+    console.log('[DEBUG] Pasted data:', e.clipboardData?.getData(type));
+  }
+});
+
 buttonPrompt.addEventListener('click', async () => {
   const prompt = inputPrompt.value.trim();
   showLoading();
@@ -328,6 +342,33 @@ async function checkGoogleDocsTab(): Promise<boolean> {
     return tab && tab.url && tab.url.includes('docs.google.com/document') || false;
   } catch (error) {
     console.error('Error checking tab:', error);
+    return false;
+  }
+}
+
+async function checkMsWordTab(): Promise<boolean> {
+  try {
+    if (!chrome.tabs) {
+      return false;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url) {
+      return false;
+    }
+
+    // Check for various Word Online patterns
+    const wordPatterns = [
+      /sharepoint\.com.*\/_layouts\/15\/Doc.aspx/,
+      /office\.com.*\/edit/,
+      /onedrive\.live\.com.*\/edit/,
+      /sharepoint\.com.*\/edit/,
+      /officeapps\.live\.com\/we\/wordeditorframe\.aspx/,
+      /word-edit\.officeapps\.live\.com/
+    ];
+    
+    return wordPatterns.some(pattern => pattern.test(tab.url!));
+  } catch (error) {
+    console.error('Error checking MS Word tab:', error);
     return false;
   }
 }
@@ -450,6 +491,53 @@ async function fetchGoogleDocsContent(isRetry: boolean = false): Promise<string>
   }
 }
 
+async function fetchMsWordContent(): Promise<string> {
+  try {
+    if (!chrome.tabs || !chrome.runtime) {
+      throw new Error('Chrome extension APIs not available');
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab || !tab.url) {
+      throw new Error('No active tab found');
+    }
+
+    // Check if it's a valid MS Word document tab
+    const isMsWordTab = await checkMsWordTab();
+    if (!isMsWordTab) {
+      throw new Error('No MS Word document tab found');
+    }
+
+    // Skip chrome:// pages and extension pages
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      throw new Error('Cannot extract content from chrome:// or extension pages');
+    }
+
+    // Send message to background script to extract MS Word content
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        action: 'extractMsWordContent',
+        tabId: tab.id
+      }, {}, (response?: any) => {
+        if ((chrome.runtime as any).lastError) {
+          reject(new Error(`Background script error: ${(chrome.runtime as any).lastError.message}`));
+          return;
+        }
+        
+        if (response && response.success) {
+          resolve(response.content);
+        } else {
+          reject(new Error(response?.error || 'Unknown error extracting MS Word content'));
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error fetching MS Word content:', error);
+    throw error;
+  }
+}
+
 async function updateGdocsButtonState(): Promise<void> {
   try {
     const isGoogleDocs = await checkGoogleDocsTab();
@@ -464,10 +552,28 @@ async function updateGdocsButtonState(): Promise<void> {
   }
 }
 
+async function updateMsWordButtonState(): Promise<void> {
+  try {
+    const isMsWord = await checkMsWordTab();
+    if (isMsWord) {
+      buttonFetchMsWord.removeAttribute('disabled');
+    } else {
+      buttonFetchMsWord.setAttribute('disabled', '');
+    }
+  } catch (error) {
+    console.error('Error updating MS Word button state:', error);
+    buttonFetchMsWord.setAttribute('disabled', '');
+  }
+}
+
 // Wait for DOM to be fully loaded and Chrome APIs to be available
 document.addEventListener('DOMContentLoaded', () => {
   updateGdocsButtonState();
-  setInterval(updateGdocsButtonState, 2000);
+  updateMsWordButtonState();
+  setInterval(() => {
+    updateGdocsButtonState();
+    updateMsWordButtonState();
+  }, 2000);
 });
 
 buttonFetchGdocs.addEventListener('click', async () => {
@@ -484,6 +590,26 @@ buttonFetchGdocs.addEventListener('click', async () => {
       hide(elementLoading);
     } else {
       throw new Error('No content found in Google Docs');
+    }
+  } catch (error) {
+    showError(error as Error);
+  }
+});
+
+buttonFetchMsWord.addEventListener('click', async () => {
+  try {
+    showLoading();
+    const content = await fetchMsWordContent();
+    
+    if (content.trim()) {
+      const currentValue = inputPrompt.value;
+      const newValue = currentValue + (currentValue ? '\n\n' : '') + content;
+      inputPrompt.value = newValue;
+      inputPrompt.dispatchEvent(new Event('input'));
+      inputPrompt.focus();
+      hide(elementLoading);
+    } else {
+      throw new Error('No content found in MS Word document');
     }
   } catch (error) {
     showError(error as Error);

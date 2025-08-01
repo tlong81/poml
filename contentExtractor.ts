@@ -99,3 +99,174 @@ declare global {
 }
 
 (window as any).extractContent = extractContent;
+
+// The following are to extract contents from a Word.
+
+/**
+ * Defines the structure for a Header block.
+ */
+interface HeaderBlock {
+  type: 'header';
+  level: number;
+  content: string;
+}
+
+/**
+ * Defines the structure for a Paragraph block.
+ * This also covers list items, which are treated as paragraphs.
+ */
+interface ParagraphBlock {
+  type: 'paragraph';
+  content: string;
+}
+
+/**
+ * Defines the structure for an Image block.
+ */
+interface ImageBlock {
+  type: 'image';
+  src: string;
+  alt: string;
+}
+
+/**
+ * A union type representing any possible block.
+ */
+type Block = HeaderBlock | ParagraphBlock | ImageBlock;
+
+/**
+ * Cleans and normalizes a string by replacing non-breaking spaces,
+ * collapsing multiple whitespace characters, and trimming the result.
+ * @param text - The input string to clean.
+ * @returns The cleaned string.
+ */
+function cleanText(text: string | null): string {
+  if (!text) {
+    return '';
+  }
+  // Replace non-breaking spaces with regular spaces and collapse whitespace
+  return text.replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Parses an HTML string and converts it into a structured list of blocks.
+ *
+ * @param htmlContent - The raw HTML string of the document.
+ * @returns An array of Block objects (Header, Paragraph, Image).
+ */
+function convertDomToMarkup(): Block[] {
+  const blocks: Block[] = [];
+  
+  console.log('[DEBUG] Starting convertDomToMarkup');
+  console.log('[DEBUG] Document URL:', document.location.href);
+  console.log('[DEBUG] Document title:', document.title);
+  
+  // Since we're now injected directly into the frame, we can access the document directly
+  const targetDocument = document;
+  
+  // Select all primary content containers, which seem to be '.OutlineElement'
+  const elements = targetDocument.querySelectorAll('.OutlineElement');
+
+  console.log('[DEBUG] Found', elements.length, 'OutlineElement elements to process');
+  
+  // If no OutlineElements found, try alternative selectors for Word content
+  if (elements.length === 0) {
+    console.log('[DEBUG] No OutlineElement found, trying alternative selectors');
+    
+    // Try other common Word Online selectors
+    const alternativeSelectors = [
+      '.Paragraph',
+      '[role="document"] p',
+      '.DocumentFragment p',
+      '.Page p',
+      'p',
+      'div[contenteditable="true"] *',
+      '[data-automation-id="documentCanvas"] *'
+    ];
+    
+    for (const selector of alternativeSelectors) {
+      const altElements = targetDocument.querySelectorAll(selector);
+      console.log(`[DEBUG] Found ${altElements.length} elements with selector: ${selector}`);
+      
+      if (altElements.length > 0) {
+        // Process these elements directly as paragraphs
+        altElements.forEach(element => {
+          const content = cleanText(element.textContent);
+          if (content) {
+            // Check if it's a heading
+            if (element.getAttribute('role') === 'heading' || element.tagName.match(/^H[1-6]$/)) {
+              const level = element.tagName.match(/^H([1-6])$/) ? 
+                parseInt(element.tagName.charAt(1)) : 
+                parseInt(element.getAttribute('aria-level') || '1', 10);
+              
+              const headerBlock: HeaderBlock = {
+                type: 'header',
+                level: isNaN(level) ? 1 : level,
+                content: content,
+              };
+              blocks.push(headerBlock);
+            } else {
+              const paragraphBlock: ParagraphBlock = {
+                type: 'paragraph',
+                content: content,
+              };
+              blocks.push(paragraphBlock);
+            }
+          }
+        });
+        break; // Stop after finding the first working selector
+      }
+    }
+  } else {
+    // Process OutlineElements as originally intended
+    elements.forEach(element => {
+      // 1. Check for Images
+      const imageEl = element.querySelector('image');
+      if (imageEl && imageEl.getAttribute('href')) {
+        const imageBlock: ImageBlock = {
+          type: 'image',
+          // The src is stored in the 'href' attribute of the <image> SVG tag
+          src: imageEl.getAttribute('href')!,
+          // Alt text is not clearly available, so we'll use a default
+          alt: 'Document image'
+        };
+        blocks.push(imageBlock);
+        return; // Continue to the next element
+      }
+
+      // 2. Check for Paragraphs and Headers
+      const p = element.querySelector('p.Paragraph');
+      if (p) {
+        const content = cleanText(p.textContent);
+
+        // Skip empty or whitespace-only paragraphs
+        if (!content) {
+          return;
+        }
+        
+        // Check if the paragraph is a header
+        if (p.getAttribute('role') === 'heading') {
+          const level = parseInt(p.getAttribute('aria-level') || '1', 10);
+          const headerBlock: HeaderBlock = {
+            type: 'header',
+            level: isNaN(level) ? 1 : level,
+            content: content,
+          };
+          blocks.push(headerBlock);
+        } else {
+          // Otherwise, it's a standard paragraph (or list item)
+          const paragraphBlock: ParagraphBlock = {
+            type: 'paragraph',
+            content: content,
+          };
+          blocks.push(paragraphBlock);
+        }
+      }
+    });
+  }
+
+  console.log('[DEBUG] Processed', blocks.length, 'blocks total');
+  return blocks;
+}
+
+(window as any).convertDomToMarkup = convertDomToMarkup;

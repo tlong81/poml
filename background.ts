@@ -69,6 +69,23 @@ chrome.runtime.onMessage.addListener(
 
       // Return true to indicate we will send a response asynchronously
       return true;
+    } else if (request.action === "extractMsWordContent") {
+      if (!request.tabId) {
+        sendResponse({ success: false, error: "No tab ID provided" });
+        return true;
+      }
+
+      extractMsWordContent(request.tabId)
+        .then((content) => {
+          sendResponse({ success: true, content: content });
+        })
+        .catch((error) => {
+          console.error("Error extracting MS Word content:", error);
+          sendResponse({ success: false, error: error.message });
+        });
+
+      // Return true to indicate we will send a response asynchronously
+      return true;
     } else if (request.action === "sendToChatGPT") {
       if (!request.tabId || !request.prompt) {
         sendResponse({ success: false, error: "Missing required parameters (tabId, prompt)" });
@@ -222,6 +239,146 @@ async function extractPageContent(tabId: number): Promise<string> {
     }
   } catch (error) {
     console.error("[DEBUG] Error in background extractPageContent:", error);
+    throw error;
+  }
+}
+
+async function extractMsWordContent(tabId: number): Promise<string> {
+  try {
+    if (!chrome.scripting) {
+      throw new Error("Chrome scripting API not available");
+    }
+
+    console.log(`[DEBUG] Starting MS Word content extraction for tab ${tabId}`);
+
+    // First, try to find all frames in the tab
+    const frames = await chrome.webNavigation.getAllFrames({ tabId: tabId });
+    console.log(`[DEBUG] Found ${frames?.length || 0} frames in tab`);
+
+    let wordFrameId: number | undefined;
+    
+    // Look for the Word iframe frame
+    if (frames) {
+      for (const frame of frames) {
+        console.log(`[DEBUG] Frame ${frame.frameId}: ${frame.url}`);
+        if (frame.url && (
+          frame.url.includes('word-edit.officeapps.live.com') ||
+          frame.url.includes('word-view.officeapps.live.com') ||
+          frame.url.includes('officeapps.live.com') ||
+          frame.url.includes('WopiFrame')
+        )) {
+          wordFrameId = frame.frameId;
+          console.log(`[DEBUG] Found Word frame with ID: ${wordFrameId}`);
+          break;
+        }
+      }
+    }
+
+    if (wordFrameId === undefined) {
+      console.log(`[DEBUG] No Word frame found, trying main frame`);
+      wordFrameId = 0; // Main frame
+    }
+
+    // Inject the content extractor script into the Word frame
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId, frameIds: [wordFrameId] },
+      files: ["contentExtractor.js"],
+    });
+
+    console.log(`[DEBUG] Content extractor script injected into frame ${wordFrameId}`);
+
+    // Now execute the convertDomToMarkup function in the Word frame
+    const extractionResults = await chrome.scripting.executeScript({
+      target: { tabId: tabId, frameIds: [wordFrameId] },
+      func: () => {
+        console.log('[DEBUG] Executing convertDomToMarkup in frame');
+        console.log('[DEBUG] Current document URL:', document.location.href);
+        console.log('[DEBUG] Document title:', document.title);
+        
+        // The contentExtractor.js should have made convertDomToMarkup available globally
+        if (typeof (window as any).convertDomToMarkup === "function") {
+          const blocks = (window as any).convertDomToMarkup();
+          
+          console.log(`[DEBUG] convertDomToMarkup returned ${blocks.length} blocks`);
+          
+          // Convert blocks to markdown text
+          let content = '';
+          
+          for (const block of blocks) {
+            switch (block.type) {
+              case 'header':
+                content += '#'.repeat(block.level) + ' ' + block.content + '\n\n';
+                break;
+              case 'paragraph':
+                content += block.content + '\n\n';
+                break;
+              case 'image':
+                content += `![${block.alt}](${block.src})\n\n`;
+                break;
+            }
+          }
+          
+          return {
+            title: document.title || "MS Word Document",
+            content: content.trim(),
+            excerpt: "",
+            debug: `Extracted ${blocks.length} blocks from MS Word document in frame`
+          };
+        } else {
+          console.error("[DEBUG] convertDomToMarkup function not found in frame");
+          // Fallback - try to get any text content from the document
+          const fallbackContent = document.body
+            ? document.body.innerText || document.body.textContent || ""
+            : "";
+          
+          return {
+            title: document.title || "MS Word Document",
+            content: fallbackContent,
+            excerpt: "",
+            debug: "convertDomToMarkup function not available in frame, used fallback text extraction",
+          };
+        }
+      },
+    });
+
+    console.log("[DEBUG] MS Word script execution completed");
+    console.log("[DEBUG] MS Word extraction results:", extractionResults);
+
+    if (
+      extractionResults &&
+      extractionResults[0] &&
+      extractionResults[0].result
+    ) {
+      const article = extractionResults[0].result;
+      console.log("[DEBUG] MS Word article debug info:", article.debug);
+
+      if (!article.content.trim()) {
+        console.log("[DEBUG] No content found in MS Word document result");
+        throw new Error(
+          `No readable content found in MS Word document. Debug: ${article.debug}`
+        );
+      }
+
+      let extractedText = "";
+      if (article.title && !article.title.includes("Word")) {
+        extractedText += `# ${article.title}\n\n`;
+      }
+      extractedText += article.content;
+
+      console.log(
+        "[DEBUG] Successfully extracted MS Word content:",
+        extractedText.length,
+        "characters"
+      );
+      return extractedText;
+    } else {
+      console.log("[DEBUG] No results returned from MS Word script execution");
+      throw new Error(
+        "Could not extract readable content from MS Word document - no results returned"
+      );
+    }
+  } catch (error) {
+    console.error("[DEBUG] Error in background extractMsWordContent:", error);
     throw error;
   }
 }
