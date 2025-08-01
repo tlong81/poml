@@ -182,6 +182,16 @@ describe('templateEngine', () => {
     expect(await poml(text)).toBe('1\n\n2\n\n3');
   })
 
+  test('forLoopIf', async () => {
+    const text = '<p><p for="i in [0,1,2]" if="i % 2 == 0">{{i}}</p></p>';
+    expect(await poml(text)).toBe('0\n\n2');
+  });
+
+  test('forLoopIfLoopIndex', async () => {
+    const text = '<p><p for="i in [1,2]" if="loop.index == 1">{{i}}</p></p>';
+    expect(await poml(text)).toBe('2');
+  });
+
   test('ifCondition', async () => {
     const text =
       '<p><p if="true">hello</p><p if="i == 0">world</p><p if="{{ i == 1 }}">foo</p></p>';
