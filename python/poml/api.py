@@ -34,7 +34,7 @@ OutputFormat = Literal["raw", "dict", "openai_chat", "langchain", "pydantic"]
 def set_trace(
     enabled: bool | List[Backend] | Backend = True,
     /, *,
-    tempdir: Optional[str | Path] = None
+    trace_dir: Optional[str | Path] = None
 ) -> Optional[Path]:
     """Enable or disable tracing of ``poml`` calls with optional backend integrations.
 
@@ -44,9 +44,9 @@ def set_trace(
             - False: Disable all tracing (equivalent to [])
             - str: Enable a single backend ("local", "weave", "agentops", "mlflow")
             - List[str]: Enable multiple backends. "local" is auto-enabled if any backends are specified.
-        tempdir: Optional directory for local trace files. If provided when local
+        trace_dir: Optional directory for local trace files. If provided when local
             tracing is enabled, a subdirectory named by the current timestamp
-            (YYYYMMDDHHMMSSffffff) is created inside tempdir.
+            (YYYYMMDDHHMMSSffffff) is created inside trace_dir.
 
     Returns:
         Path to the trace directory if local tracing is enabled, None otherwise.
@@ -73,8 +73,8 @@ def set_trace(
         # When enabled is non-empty, we always enable local tracing.
         _trace_enabled = True
         env_dir = os.environ.get("POML_TRACE")
-        if tempdir is not None:
-            base = Path(tempdir)
+        if trace_dir is not None:
+            base = Path(trace_dir)
             base.mkdir(parents=True, exist_ok=True)
             ts = datetime.now().strftime("%Y%m%d%H%M%S%f")
             run_dir = base / ts

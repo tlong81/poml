@@ -94,7 +94,7 @@ def test_trace():
 
 def test_trace_directory(tmp_path: Path):
     clear_trace()
-    run_dir = set_trace(True, tmp_path)
+    run_dir = set_trace(True, trace_dir=tmp_path)
     assert run_dir is not None
     result = poml("<p>Dir</p>")
     set_trace(False)
@@ -105,7 +105,7 @@ def test_trace_directory(tmp_path: Path):
 
 def test_trace_artifact(tmp_path: Path):
     clear_trace()
-    run_dir = set_trace(True, tmp_path)
+    run_dir = set_trace(trace_dir=tmp_path)
     poml("<p>A</p>")
     trace_artifact("reply.txt", "hello")
     set_trace(False)
@@ -116,7 +116,7 @@ def test_trace_artifact(tmp_path: Path):
 
 def test_trace_prefix_regex(tmp_path: Path):
     clear_trace()
-    run_dir = set_trace(True, tmp_path)
+    run_dir = set_trace(True, trace_dir=tmp_path)
     src = tmp_path / "my.file.poml"
     src.write_text("<p>B</p>")
     poml(src)
@@ -128,7 +128,7 @@ def test_trace_prefix_regex(tmp_path: Path):
 
 def test_trace_directory_name_format(tmp_path: Path):
     clear_trace()
-    run_dir = set_trace(True, tmp_path)
+    run_dir = set_trace(trace_dir=tmp_path)
     assert run_dir is not None
     assert re.fullmatch(r"\d{20}", run_dir.name)
     set_trace(False)
@@ -140,7 +140,7 @@ def _mp_worker():
 
 def test_multiprocessing_trace(tmp_path: Path):
     clear_trace()
-    run_dir = set_trace(True, tmp_path)
+    run_dir = set_trace(True, trace_dir=tmp_path)
     os.environ["POML_TRACE"] = str(run_dir)
     procs = [multiprocessing.Process(target=_mp_worker) for _ in range(3)]
     for p in procs:

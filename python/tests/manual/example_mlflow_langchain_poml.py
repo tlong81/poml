@@ -6,7 +6,7 @@ from poml.integration.langchain import LangchainPomlTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
 
-poml.set_trace("mlflow", tempdir="logs")
+poml.set_trace("mlflow", trace_dir="logs")
 
 # Enabling autolog for LangChain will enable trace logging.
 mlflow.langchain.autolog()

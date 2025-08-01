@@ -9,7 +9,7 @@ client = OpenAI(
     api_key=os.environ["OPENAI_API_KEY"],
 )
 
-poml.set_trace("agentops", tempdir="logs")
+poml.set_trace("agentops", trace_dir="logs")
 messages = poml.poml("example_poml.poml", context={"code_path": "example_agentops_original.py"}, format="openai_chat")
 
 response = client.chat.completions.create(

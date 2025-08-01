@@ -11,7 +11,7 @@ mlflow.set_experiment("openai-tracing-quickstart")
 # Enable automatic tracing for all OpenAI API calls
 mlflow.openai.autolog()
 
-poml.set_trace("mlflow", tempdir="logs")
+poml.set_trace("mlflow", trace_dir="logs")
 
 client = OpenAI(
     base_url=os.environ["OPENAI_API_BASE"],
