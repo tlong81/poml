@@ -1,3 +1,17 @@
+/// <reference types="chrome-types" />
+
+interface MessageRequest {
+  action: string;
+  filePath?: string;
+  tabId?: number;
+}
+
+interface MessageResponse {
+  success: boolean;
+  content?: string;
+  error?: string;
+}
+
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'install') {
     chrome.sidePanel
@@ -7,8 +21,17 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 });
 
 // Handle messages from content script/sidepanel
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((
+  request: MessageRequest, 
+  _sender: chrome.runtime.MessageSender, 
+  sendResponse: (response: MessageResponse) => void
+): boolean => {
   if (request.action === 'readFile') {
+    if (!request.filePath) {
+      sendResponse({ success: false, error: 'No file path provided' });
+      return true;
+    }
+    
     readFileContent(request.filePath)
       .then(content => {
         sendResponse({ success: true, content: content });
@@ -21,6 +44,11 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     // Return true to indicate we will send a response asynchronously
     return true;
   } else if (request.action === 'extractPageContent') {
+    if (!request.tabId) {
+      sendResponse({ success: false, error: 'No tab ID provided' });
+      return true;
+    }
+    
     extractPageContent(request.tabId)
       .then(content => {
         sendResponse({ success: true, content: content });
@@ -33,9 +61,11 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     // Return true to indicate we will send a response asynchronously
     return true;
   }
+  
+  return false;
 });
 
-async function readFileContent(filePath) {
+async function readFileContent(filePath: string): Promise<string> {
   try {
     // Normalize the file path
     let normalizedPath = filePath.trim();
@@ -67,14 +97,14 @@ async function readFileContent(filePath) {
     
   } catch (error) {
     // If fetch fails, try alternative approaches or provide helpful error
-    if (error.message.includes('Not allowed to load local resource')) {
+    if (error instanceof Error && error.message.includes('Not allowed to load local resource')) {
       throw new Error('Browser security policy prevents reading local files. Try using a local server or file input instead.');
     }
     throw error;
   }
 }
 
-async function extractPageContent(tabId) {
+async function extractPageContent(tabId: number): Promise<string> {
   try {
     if (!chrome.scripting) {
       throw new Error('Chrome scripting API not available');
@@ -95,10 +125,10 @@ async function extractPageContent(tabId) {
       target: { tabId: tabId },
       func: () => {
         // The content-extractor.js should have made extractContent available globally
-        if (typeof window.extractContent === 'function') {
-          return window.extractContent();
-        } else if (typeof ContentExtractor !== 'undefined' && ContentExtractor.extractContent) {
-          return ContentExtractor.extractContent();
+        if (typeof (window as any).extractContent === 'function') {
+          return (window as any).extractContent();
+        } else if (typeof (window as any).ContentExtractor !== 'undefined' && (window as any).ContentExtractor.extractContent) {
+          return (window as any).ContentExtractor.extractContent();
         } else {
           console.error('[DEBUG] extractContent function not found');
           // Fallback

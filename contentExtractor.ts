@@ -1,7 +1,14 @@
 import { Readability } from '@mozilla/readability';
 
+interface ExtractedContent {
+  title: string;
+  content: string;
+  excerpt: string;
+  debug: string;
+}
+
 // Content extraction function that will be injected into pages
-function extractContent() {
+function extractContent(): ExtractedContent {
   try {
     console.log('[DEBUG] Content extractor script loaded');
     console.log('[DEBUG] Document title:', document.title);
@@ -29,13 +36,13 @@ function extractContent() {
     console.log('[DEBUG] Readability is available, proceeding with extraction');
     
     // Create a clone of the document to avoid modifying the original
-    const documentClone = document.cloneNode(true);
+    const documentClone = document.cloneNode(true) as Document;
     console.log('[DEBUG] Document cloned successfully');
     
     // Use Readability to extract main content
     const reader = new Readability(documentClone, {
       debug: true,
-      maxElemsToDivide: 300,
+      // maxElemsToDivide: 300,
       nbTopCandidates: 5,
       charThreshold: 500,
       classesToPreserve: []
@@ -79,10 +86,16 @@ function extractContent() {
       title: emergencyTitle,
       content: emergencyContent,
       excerpt: '',
-      debug: `Script error: ${error.message}`
+      debug: `Script error: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }
 
 // Make the function globally available when loaded as a script
-window.extractContent = extractContent;
+declare global {
+  interface Window {
+    extractContent: () => ExtractedContent;
+  }
+}
+
+(window as any).extractContent = extractContent;

@@ -3,23 +3,63 @@
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
-const inputPrompt = document.body.querySelector('#input-prompt');
-const buttonPrompt = document.body.querySelector('#button-prompt');
-const buttonReset = document.body.querySelector('#button-reset');
-const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs');
-const buttonExtractContent = document.body.querySelector('#button-extract-content');
-const elementResponse = document.body.querySelector('#response');
-const elementLoading = document.body.querySelector('#loading');
-const elementError = document.body.querySelector('#error');
-const sliderTemperature = document.body.querySelector('#temperature');
-const sliderTopK = document.body.querySelector('#top-k');
-const labelTemperature = document.body.querySelector('#label-temperature');
-const labelTopK = document.body.querySelector('#label-top-k');
+// Type definitions for LanguageModel API
+declare global {
+  interface Window {
+    LanguageModel: {
+      create(params: LanguageModelParams): Promise<LanguageModelSession>;
+      params(): Promise<LanguageModelDefaults>;
+    };
+  }
+  const LanguageModel: {
+    create(params: LanguageModelParams): Promise<LanguageModelSession>;
+    params(): Promise<LanguageModelDefaults>;
+  };
+}
 
-let session;
-let accessToken = null;
+interface LanguageModelParams {
+  initialPrompts?: Array<{ role: string; content: string }>;
+  temperature?: number;
+  topK?: number;
+}
 
-async function runPrompt(prompt, params) {
+interface LanguageModelSession {
+  prompt(text: string): Promise<string>;
+  destroy(): void;
+}
+
+interface LanguageModelDefaults {
+  defaultTemperature: number;
+  maxTemperature: number;
+  defaultTopK: number;
+  maxTopK: number;
+}
+
+interface ExtractedContent {
+  title: string;
+  content: string;
+  excerpt: string;
+  debug?: string;
+}
+
+// DOM Elements
+const inputPrompt = document.body.querySelector('#input-prompt') as HTMLTextAreaElement;
+const buttonPrompt = document.body.querySelector('#button-prompt') as HTMLButtonElement;
+const buttonReset = document.body.querySelector('#button-reset') as HTMLButtonElement;
+const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs') as HTMLButtonElement;
+const buttonExtractContent = document.body.querySelector('#button-extract-content') as HTMLButtonElement;
+const elementResponse = document.body.querySelector('#response') as HTMLDivElement;
+const elementLoading = document.body.querySelector('#loading') as HTMLDivElement;
+const elementError = document.body.querySelector('#error') as HTMLDivElement;
+const sliderTemperature = document.body.querySelector('#temperature') as HTMLInputElement;
+const sliderTopK = document.body.querySelector('#top-k') as HTMLInputElement;
+const labelTemperature = document.body.querySelector('#label-temperature') as HTMLSpanElement;
+const labelTopK = document.body.querySelector('#label-top-k') as HTMLSpanElement;
+
+let session: LanguageModelSession | null = null;
+let accessToken: string | null = null;
+
+async function runPrompt(prompt: string, params: LanguageModelParams): Promise<string> {
   try {
     if (!session) {
       session = await LanguageModel.create(params);
@@ -35,33 +75,33 @@ async function runPrompt(prompt, params) {
   }
 }
 
-async function reset() {
+async function reset(): Promise<void> {
   if (session) {
     session.destroy();
   }
   session = null;
 }
 
-async function initDefaults() {
+async function initDefaults(): Promise<void> {
   const defaults = await LanguageModel.params();
   console.log('Model default:', defaults);
   if (!('LanguageModel' in self)) {
-    showResponse('Model not available');
+    await showResponse('Model not available');
     return;
   }
-  sliderTemperature.value = defaults.defaultTemperature;
+  sliderTemperature.value = defaults.defaultTemperature.toString();
   // Pending https://issues.chromium.org/issues/367771112.
   // sliderTemperature.max = defaults.maxTemperature;
   if (defaults.defaultTopK > 3) {
     // limit default topK to 3
-    sliderTopK.value = 3;
-    labelTopK.textContent = 3;
+    sliderTopK.value = '3';
+    labelTopK.textContent = '3';
   } else {
-    sliderTopK.value = defaults.defaultTopK;
-    labelTopK.textContent = defaults.defaultTopK;
+    sliderTopK.value = defaults.defaultTopK.toString();
+    labelTopK.textContent = defaults.defaultTopK.toString();
   }
-  sliderTopK.max = defaults.maxTopK;
-  labelTemperature.textContent = defaults.defaultTemperature;
+  sliderTopK.max = defaults.maxTopK.toString();
+  labelTemperature.textContent = defaults.defaultTemperature.toString();
 }
 
 initDefaults();
@@ -75,12 +115,14 @@ buttonReset.addEventListener('click', () => {
 });
 
 sliderTemperature.addEventListener('input', (event) => {
-  labelTemperature.textContent = event.target.value;
+  const target = event.target as HTMLInputElement;
+  labelTemperature.textContent = target.value;
   reset();
 });
 
 sliderTopK.addEventListener('input', (event) => {
-  labelTopK.textContent = event.target.value;
+  const target = event.target as HTMLInputElement;
+  labelTopK.textContent = target.value;
   reset();
 });
 
@@ -93,11 +135,11 @@ inputPrompt.addEventListener('input', () => {
 });
 
 // Add drag and drop support for text
-let dragPreviewElement = null;
+let dragPreviewElement: HTMLDivElement | null = null;
 
 // Create drag preview bubble when dragging starts outside the textarea
 document.addEventListener('dragstart', (e) => {
-  const selectedText = window.getSelection().toString();
+  const selectedText = window.getSelection()?.toString();
   if (selectedText && e.target !== inputPrompt) {
     // Create preview element
     dragPreviewElement = document.createElement('div');
@@ -147,7 +189,7 @@ inputPrompt.addEventListener('drop', (e) => {
     dragPreviewElement = null;
   }
   
-  const draggedText = e.dataTransfer.getData('text/plain');
+  const draggedText = e.dataTransfer?.getData('text/plain');
   if (draggedText) {
     // Check if the dragged text looks like a file path
     const isPath = /^[\/~][\w\/\-\.]+\.[a-zA-Z0-9]+$/.test(draggedText.trim()) || 
@@ -155,7 +197,7 @@ inputPrompt.addEventListener('drop', (e) => {
     
     if (isPath) {
       // Helper function to insert content
-      const insertContent = (content) => {
+      const insertContent = (content: string) => {
         const currentValue = inputPrompt.value;
         const cursorPosition = inputPrompt.selectionStart;
         
@@ -179,10 +221,10 @@ inputPrompt.addEventListener('drop', (e) => {
           chrome.runtime.sendMessage({
             action: 'readFile',
             filePath: draggedText.trim()
-          }, (response) => {
+          }, {}, (response?: any) => {
             // Check for chrome.runtime.lastError first to avoid unchecked error
-            if (chrome.runtime.lastError) {
-              console.log('Background script connection failed:', chrome.runtime.lastError.message);
+            if ((chrome.runtime as any).lastError) {
+              console.log('Background script connection failed:', (chrome.runtime as any).lastError.message);
               // No background script or connection failed, fallback to path insertion
               const contentToInsert = `File path detected: ${draggedText}\n(Note: No background script available to read file)\n`;
               insertContent(contentToInsert);
@@ -233,62 +275,63 @@ buttonPrompt.addEventListener('click', async () => {
   const prompt = inputPrompt.value.trim();
   showLoading();
   try {
-    const params = {
+    const params: LanguageModelParams = {
       initialPrompts: [
         { role: 'system', content: 'You are a helpful and friendly assistant.' }
       ],
-      temperature: sliderTemperature.value,
-      topK: sliderTopK.value
+      temperature: parseFloat(sliderTemperature.value),
+      topK: parseInt(sliderTopK.value)
     };
     const response = await runPrompt(prompt, params);
-    showResponse(response);
+    await showResponse(response);
   } catch (e) {
-    showError(e);
+    showError(e as Error);
   }
 });
 
-function showLoading() {
+function showLoading(): void {
   buttonReset.removeAttribute('disabled');
   hide(elementResponse);
   hide(elementError);
   show(elementLoading);
 }
 
-function showResponse(response) {
+async function showResponse(response: string): Promise<void> {
   hide(elementLoading);
   show(elementResponse);
-  elementResponse.innerHTML = DOMPurify.sanitize(marked.parse(response));
+  const parsedMarkdown = await marked.parse(response);
+  elementResponse.innerHTML = DOMPurify.sanitize(parsedMarkdown);
 }
 
-function showError(error) {
+function showError(error: Error): void {
   show(elementError);
   hide(elementResponse);
   hide(elementLoading);
-  elementError.textContent = error;
+  elementError.textContent = error.message || error.toString();
 }
 
-function show(element) {
+function show(element: HTMLElement): void {
   element.removeAttribute('hidden');
 }
 
-function hide(element) {
+function hide(element: HTMLElement): void {
   element.setAttribute('hidden', '');
 }
 
-async function checkGoogleDocsTab() {
+async function checkGoogleDocsTab(): Promise<boolean> {
   try {
     if (!chrome.tabs) {
       return false;
     }
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    return tab && tab.url && tab.url.includes('docs.google.com/document');
+    return tab && tab.url && tab.url.includes('docs.google.com/document') || false;
   } catch (error) {
     console.error('Error checking tab:', error);
     return false;
   }
 }
 
-async function authenticateGoogle() {
+async function authenticateGoogle(): Promise<string> {
   try {
     if (!chrome.identity) {
       throw new Error('Chrome identity API not available');
@@ -304,11 +347,11 @@ async function authenticateGoogle() {
       throw new Error('Failed to get access token');
     }
 
-    if (!token.token) {
+    if (typeof token !== 'string') {
       throw new Error(`Invalid token format: ${JSON.stringify(token)}`);
     }
 
-    accessToken = token.token;
+    accessToken = token;
     return accessToken;
   } catch (error) {
     console.error('Authentication failed:', error);
@@ -316,12 +359,12 @@ async function authenticateGoogle() {
   }
 }
 
-function extractDocumentId(url) {
+function extractDocumentId(url: string): string | null {
   const match = url.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
   return match ? match[1] : null;
 }
 
-async function fetchGoogleDocsContent(isRetry = false) {
+async function fetchGoogleDocsContent(isRetry: boolean = false): Promise<string> {
   try {
     if (!chrome.tabs) {
       throw new Error('Chrome extension APIs not available');
@@ -371,7 +414,7 @@ async function fetchGoogleDocsContent(isRetry = false) {
     // Extract text content from the document structure
     let textContent = '';
     
-    function extractTextFromContent(content) {
+    function extractTextFromContent(content: any): string {
       if (!content || !content.content) return '';
       
       let text = '';
@@ -406,7 +449,7 @@ async function fetchGoogleDocsContent(isRetry = false) {
   }
 }
 
-async function updateGdocsButtonState() {
+async function updateGdocsButtonState(): Promise<void> {
   try {
     const isGoogleDocs = await checkGoogleDocsTab();
     if (isGoogleDocs) {
@@ -442,11 +485,11 @@ buttonFetchGdocs.addEventListener('click', async () => {
       throw new Error('No content found in Google Docs');
     }
   } catch (error) {
-    showError(`Error fetching Google Docs content: ${error.message}`);
+    showError(error as Error);
   }
 });
 
-async function extractPageContent() {
+async function extractPageContent(): Promise<string> {
   try {
     if (!chrome.tabs || !chrome.runtime) {
       throw new Error('Chrome extension APIs not available');
@@ -468,9 +511,9 @@ async function extractPageContent() {
       chrome.runtime.sendMessage({
         action: 'extractPageContent',
         tabId: tab.id
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(`Background script error: ${chrome.runtime.lastError.message}`));
+      }, {}, (response?: any) => {
+        if ((chrome.runtime as any).lastError) {
+          reject(new Error(`Background script error: ${(chrome.runtime as any).lastError.message}`));
           return;
         }
         
@@ -503,6 +546,6 @@ buttonExtractContent.addEventListener('click', async () => {
       throw new Error('No readable content found');
     }
   } catch (error) {
-    showError(`Error extracting page content: ${error.message}`);
+    showError(error as Error);
   }
 });
