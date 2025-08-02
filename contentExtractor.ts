@@ -1,4 +1,5 @@
 import { Readability } from '@mozilla/readability';
+import * as pdfjsLib from 'pdfjs-dist';
 
 interface ExtractedContent {
   title: string;
@@ -7,14 +8,105 @@ interface ExtractedContent {
   debug: string;
 }
 
+// PDF text extraction function
+async function extractPdfContent(): Promise<ExtractedContent> {
+  try {
+    console.log('[DEBUG] Starting PDF text extraction');
+    
+    // Set worker source to use the local worker file
+    pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.min.mjs');
+    
+    // Get PDF URL - handle different PDF embedding scenarios
+    const pdfUrl = document.location.href;
+    
+    console.log('[DEBUG] PDF URL:', pdfUrl);
+    
+    // For file:// URLs, we need to request file content from background script
+    let loadingTask;
+    if (pdfUrl.startsWith('file://')) {
+      console.log('[DEBUG] Local file detected, requesting binary data from background script');
+      
+      // Send message to background script to read the file as binary
+      const response = await chrome.runtime.sendMessage({
+        action: 'readFile',
+        filePath: pdfUrl,
+        binary: true
+      }) as {success: boolean, base64Data?: string, error?: string};
+      
+      if (!response.success || !response.base64Data) {
+        throw new Error(`Failed to read PDF file: ${response.error || 'Unknown error'}`);
+      }
+      
+      // Convert base64 back to ArrayBuffer
+      const binaryString = atob(response.base64Data);
+      const uint8Array = Uint8Array.from(binaryString, c => c.charCodeAt(0));
+      
+      console.log('[DEBUG] Received and converted base64 to Uint8Array, size:', uint8Array.byteLength);
+      loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+    } else {
+      // Load the PDF document directly from URL
+      loadingTask = pdfjsLib.getDocument(pdfUrl);
+    }
+    const pdf = await loadingTask.promise;
+    
+    console.log('[DEBUG] PDF loaded, pages:', pdf.numPages);
+    
+    let fullText = '';
+    const title = document.title || 'PDF Document';
+    
+    // Extract text from all pages
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      // Combine all text items from the page
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      
+      fullText += pageText + '\n\n';
+      console.log(`[DEBUG] Extracted text from page ${pageNum}, length: ${pageText.length}`);
+    }
+    
+    // Clean up the text
+    fullText = fullText.trim();
+    
+    console.log('[DEBUG] Total PDF text extracted, length:', fullText.length);
+    
+    return {
+      title: title,
+      content: fullText,
+      excerpt: fullText.substring(0, 200) + (fullText.length > 200 ? '...' : ''),
+      debug: `PDF extraction successful - ${pdf.numPages} pages processed`
+    };
+    
+  } catch (error) {
+    console.error('[DEBUG] Error extracting PDF content:', error);
+    
+    return {
+      title: document.title || 'PDF Document',
+      content: 'Error extracting PDF content',
+      excerpt: '',
+      debug: `PDF extraction failed: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
 // Content extraction function that will be injected into pages
-function extractContent(): ExtractedContent {
+async function extractContent(): Promise<ExtractedContent> {
   try {
     console.log('[DEBUG] Content extractor script loaded');
     console.log('[DEBUG] Document title:', document.title);
     console.log('[DEBUG] Document URL:', document.location.href);
     console.log('[DEBUG] Document body exists:', !!document.body);
     console.log('[DEBUG] Document body innerHTML length:', document.body ? document.body.innerHTML.length : 0);
+    
+    // Check if this is a PDF document
+    if (document.location.href.toLowerCase().includes('.pdf') || 
+        document.contentType === 'application/pdf') {
+      console.log('[DEBUG] PDF detected, attempting PDF text extraction');
+      return await extractPdfContent();
+    }
     
     // Always provide fallback first, then try to enhance with Readability
     const fallbackTitle = document.title || 'Untitled';
@@ -94,7 +186,7 @@ function extractContent(): ExtractedContent {
 // Make the function globally available when loaded as a script
 declare global {
   interface Window {
-    extractContent: () => ExtractedContent;
+    extractContent: () => Promise<ExtractedContent>;
   }
 }
 

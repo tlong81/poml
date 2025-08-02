@@ -12,11 +12,13 @@ interface MessageRequest {
   tabId?: number;
   prompt?: string;
   files?: FileData[];
+  binary?: boolean;
 }
 
 interface MessageResponse {
   success: boolean;
   content?: string;
+  base64Data?: string;
   error?: string;
 }
 
@@ -41,9 +43,26 @@ chrome.runtime.onMessage.addListener(
         return true;
       }
 
-      readFileContent(request.filePath)
-        .then((content) => {
-          sendResponse({ success: true, content: content });
+      readFileContent(request.filePath, request.binary)
+        .then((result) => {
+          if (request.binary) {
+            // Convert ArrayBuffer to base64 for message passing
+            const arrayBuffer = result as ArrayBuffer;
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Convert to base64 in chunks to avoid call stack overflow
+            let binaryString = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < uint8Array.length; i += chunkSize) {
+              const chunk = uint8Array.subarray(i, i + chunkSize);
+              binaryString += String.fromCharCode(...chunk);
+            }
+            const base64 = btoa(binaryString);
+            
+            sendResponse({ success: true, base64Data: base64 });
+          } else {
+            sendResponse({ success: true, content: result as string });
+          }
         })
         .catch((error) => {
           console.error("Error reading file:", error);
@@ -114,7 +133,7 @@ chrome.runtime.onMessage.addListener(
   }
 );
 
-async function readFileContent(filePath: string): Promise<string> {
+async function readFileContent(filePath: string, binary: boolean = false): Promise<string | ArrayBuffer> {
   try {
     // Normalize the file path
     let normalizedPath = filePath.trim();
@@ -141,8 +160,13 @@ async function readFileContent(filePath: string): Promise<string> {
       throw new Error(`File not found or access denied: ${response.status}`);
     }
 
-    const content = await response.text();
-    return content;
+    if (binary) {
+      const arrayBuffer = await response.arrayBuffer();
+      return arrayBuffer;
+    } else {
+      const content = await response.text();
+      return content;
+    }
   } catch (error) {
     // If fetch fails, try alternative approaches or provide helpful error
     if (

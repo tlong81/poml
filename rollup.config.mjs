@@ -52,6 +52,10 @@ export default [
           {
             src: ['manifest.json', 'images'],
             dest: 'dist'
+          },
+          {
+            src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
+            dest: 'dist'
           }
         ]
       })

@@ -28,5 +28,16 @@
     "scopes": [
       "https://www.googleapis.com/auth/documents.readonly"
     ]
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pdf.mjs",
+        "pdf.min.mjs",
+        "pdf.worker.mjs",
+        "pdf.worker.min.mjs"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
