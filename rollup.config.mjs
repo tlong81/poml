@@ -24,7 +24,7 @@ export default [
       copy({
         targets: [
           {
-            src: ['sidepanel/*.html', 'sidepanel/*.css'],
+            src: ['sidepanel/*.html', 'sidepanel/*.css', 'sidepanel/*.png', 'sidepanel/*.pdf'],
             dest: 'dist/sidepanel'
           }
         ]

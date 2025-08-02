@@ -280,6 +280,10 @@ inputPrompt.addEventListener('drop', (e) => {
 // Add paste event listener for debugging
 inputPrompt.addEventListener('paste', (e) => {
   console.log('[DEBUG] Paste event triggered');
+  console.log('[DEBUG] Clipboard data:', e.clipboardData);
+  if (e.clipboardData && e.clipboardData.files.length > 0) {
+    console.log('[DEBUG] Pasted files:', e.clipboardData.files);
+  }
   for (const type of e.clipboardData?.types ?? []) {
     console.log('[DEBUG] Pasted type:', type);
     console.log('[DEBUG] Pasted data:', e.clipboardData?.getData(type));
@@ -690,37 +694,77 @@ async function testSendToChatGPT(): Promise<void> {
     }
 
     // Check if current tab is ChatGPT
-    if (!tab.url || !tab.url.includes('chatgpt.com')) {
-      throw new Error('Please navigate to ChatGPT to test this functionality');
-    }
+    // if (!tab.url || !tab.url.includes('chatgpt.com')) {
+    //   throw new Error('Please navigate to ChatGPT to test this functionality');
+    // }
 
     // Create temp file data
-    const tempFileData = {
-      name: 'foo.txt',
-      content: 'bar',
-      type: 'text/plain'
-    };
+    // const tempFileData = {
+    //   name: 'foo.txt',
+    //   content: 'bar',
+    //   type: 'text/plain'
+    // };
+
+    const fetched = await fetch("test.pdf");
+    const content = await fetched.bytes();
+    const mimeType = 'application/pdf';
+    const blob = new Blob([content], { type: mimeType });
+
+    // 2. Create a File object from the Blob
+    // The filename is important for the website receiving the paste
+    const file = new File([blob], 'test.pdf', { type: mimeType });
+
+    const clipboardItem = new ClipboardItem({
+      [`web ${file.type}`]: file
+    });
+
+    // 4. Write the ClipboardItem to the clipboard
+    
+
+    // Put both "hello world" string and temp file into clipboard
+    try {
+      await navigator.clipboard.write([clipboardItem]);
+      // const file = new File([tempFileData.content], tempFileData.name, { type: tempFileData.type });
+      // await navigator.clipboard.write([
+      //   new ClipboardItem({
+      //     'text/plain': new Blob(['hello world'], { type: 'text/plain' }),
+      //     'text/plain': file
+      //   })
+      // ]);
+    } catch (clipboardError) {
+      console.error('Failed to write text to clipboard:', clipboardError);
+    }
+
+    const res = await navigator.clipboard.read();
+    console.log('Clipboard contents:', res);
+    for (const item of res) {
+      for (const type of item.types) {
+        console.log(`Clipboard item type: ${type}`);
+        const blob = await item.getType(type);
+        console.log(`Blob for type ${type}:`, blob);
+      }
+    }
 
     // Send message to background script to call sendToChatGPT
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({
-        action: 'sendToChatGPT',
-        tabId: tab.id,
-        prompt: 'hello world',
-        files: [tempFileData]
-      }, {}, (response?: any) => {
-        if ((chrome.runtime as any).lastError) {
-          reject(new Error(`Background script error: ${(chrome.runtime as any).lastError.message}`));
-          return;
-        }
+    // return new Promise((resolve, reject) => {
+    //   chrome.runtime.sendMessage({
+    //     action: 'sendToChatGPT',
+    //     tabId: tab.id,
+    //     prompt: 'hello world',
+    //     files: [tempFileData]
+    //   }, {}, (response?: any) => {
+    //     if ((chrome.runtime as any).lastError) {
+    //       reject(new Error(`Background script error: ${(chrome.runtime as any).lastError.message}`));
+    //       return;
+    //     }
         
-        if (response && response.success) {
-          resolve();
-        } else {
-          reject(new Error(response?.error || 'Unknown error sending to ChatGPT'));
-        }
-      });
-    });
+    //     if (response && response.success) {
+    //       resolve();
+    //     } else {
+    //       reject(new Error(response?.error || 'Unknown error sending to ChatGPT'));
+    //     }
+    //   });
+    // });
   } catch (error) {
     console.error('Error testing sendToChatGPT:', error);
     throw error;
