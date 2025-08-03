@@ -191,6 +191,32 @@ inputPrompt.addEventListener('drop', (e) => {
     dragPreviewElement = null;
   }
 
+  console.log('[DEBUG] Drop event triggered', e.dataTransfer);
+  console.log('[DEBUG] DataTransfer files:', e.dataTransfer?.files);
+  console.log('[DEBUG] DataTransfer items:', e.dataTransfer?.items);
+  
+  // Check for files in dataTransfer.files
+  if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+    console.log('[DEBUG] Found files in dataTransfer.files:', e.dataTransfer.files);
+    for (let i = 0; i < e.dataTransfer.files.length; i++) {
+      const file = e.dataTransfer.files[i];
+      console.log(`[DEBUG] File ${i}:`, { name: file.name, type: file.type, size: file.size });
+    }
+  }
+  
+  // Check for files in dataTransfer.items
+  if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+    console.log('[DEBUG] Found items in dataTransfer.items:', e.dataTransfer.items);
+    for (let i = 0; i < e.dataTransfer.items.length; i++) {
+      const item = e.dataTransfer.items[i];
+      console.log(`[DEBUG] Item ${i}:`, { kind: item.kind, type: item.type });
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        console.log(`[DEBUG] File from item ${i}:`, file);
+      }
+    }
+  }
+  
   for (const type of e.dataTransfer?.types ?? []) {
     console.log('[DEBUG] Dragged type:', type);
     console.log('[DEBUG] Dragged data:', e.dataTransfer?.getData(type));
@@ -693,46 +719,21 @@ async function testSendToChatGPT(): Promise<void> {
       throw new Error('No active tab found');
     }
 
-    // Check if current tab is ChatGPT
-    // if (!tab.url || !tab.url.includes('chatgpt.com')) {
-    //   throw new Error('Please navigate to ChatGPT to test this functionality');
-    // }
+    // Create files array for testing
+    const files = await createFilesArray();
 
-    // Create temp file data
-    // const tempFileData = {
-    //   name: 'foo.txt',
-    //   content: 'bar',
-    //   type: 'text/plain'
-    // };
-
-    const fetched = await fetch("test.pdf");
-    const content = await fetched.bytes();
-    const mimeType = 'application/pdf';
-    const blob = new Blob([content], { type: mimeType });
-
-    // 2. Create a File object from the Blob
-    // The filename is important for the website receiving the paste
-    const file = new File([blob], 'test.pdf', { type: mimeType });
-
-    const clipboardItem = new ClipboardItem({
-      [`web ${file.type}`]: file
-    });
-
-    // 4. Write the ClipboardItem to the clipboard
+    console.log('Created files for testing:', files.map(f => ({ name: f.name, type: f.type, size: f.size })));
     
+    // For testing, we can still use clipboard to verify the files are created correctly
+    const clipboardItems = files.map(file => new ClipboardItem({
+      [`web ${file.type}`]: file
+    }));
 
-    // Put both "hello world" string and temp file into clipboard
     try {
-      await navigator.clipboard.write([clipboardItem]);
-      // const file = new File([tempFileData.content], tempFileData.name, { type: tempFileData.type });
-      // await navigator.clipboard.write([
-      //   new ClipboardItem({
-      //     'text/plain': new Blob(['hello world'], { type: 'text/plain' }),
-      //     'text/plain': file
-      //   })
-      // ]);
+      await navigator.clipboard.write(clipboardItems);
+      console.log('Files written to clipboard for testing');
     } catch (clipboardError) {
-      console.error('Failed to write text to clipboard:', clipboardError);
+      console.error('Failed to write files to clipboard:', clipboardError);
     }
 
     const res = await navigator.clipboard.read();
@@ -744,40 +745,219 @@ async function testSendToChatGPT(): Promise<void> {
         console.log(`Blob for type ${type}:`, blob);
       }
     }
-
-    // Send message to background script to call sendToChatGPT
-    // return new Promise((resolve, reject) => {
-    //   chrome.runtime.sendMessage({
-    //     action: 'sendToChatGPT',
-    //     tabId: tab.id,
-    //     prompt: 'hello world',
-    //     files: [tempFileData]
-    //   }, {}, (response?: any) => {
-    //     if ((chrome.runtime as any).lastError) {
-    //       reject(new Error(`Background script error: ${(chrome.runtime as any).lastError.message}`));
-    //       return;
-    //     }
-        
-    //     if (response && response.success) {
-    //       resolve();
-    //     } else {
-    //       reject(new Error(response?.error || 'Unknown error sending to ChatGPT'));
-    //     }
-    //   });
-    // });
   } catch (error) {
     console.error('Error testing sendToChatGPT:', error);
     throw error;
   }
 }
 
-buttonTestChatGPT.addEventListener('click', async () => {
+async function createFileClipboardItems(): Promise<ClipboardItem[]> {
+  const files = await Promise.all([
+    createFileFromPath('test.pdf', 'application/pdf'),
+    createFileFromPath('test.png', 'image/png')
+  ]);
+
+  return files.map(file => new ClipboardItem({
+    [`web ${file.type}`]: file
+  }));
+}
+
+async function createFilesArray(): Promise<File[]> {
+  return await Promise.all([
+    createFileFromPath('test.pdf', 'application/pdf'),
+    createFileFromPath('test.png', 'image/png')
+  ]);
+}
+
+async function createFileFromPath(filename: string, mimeType: string): Promise<File> {
+  const response = await fetch(filename);
+  const content = await response.bytes();
+  const blob = new Blob([content], { type: mimeType });
+  return new File([blob], filename, { type: mimeType });
+}
+
+let dragFilesPreviewElement: HTMLDivElement | null = null;
+let preloadedFiles: File[] | null = null;
+
+// Preload files when the page loads
+async function preloadDragFiles(): Promise<void> {
   try {
-    showLoading();
-    await testSendToChatGPT();
-    hide(elementLoading);
-    await showResponse('Successfully sent "hello world" prompt and foo.txt file to ChatGPT!');
+    preloadedFiles = await createFilesArray();
+    console.log('Files preloaded for drag operations:', preloadedFiles.map(f => ({ name: f.name, type: f.type, size: f.size })));
   } catch (error) {
-    showError(error as Error);
+    console.error('Error preloading files:', error);
+  }
+}
+
+// Preload files on page load
+preloadDragFiles();
+
+// Add drag event handlers for the Test ChatGPT button
+buttonTestChatGPT.addEventListener('dragstart', (e) => {
+  console.log('[DEBUG] Dragstart event triggered', e);
+  console.log('[DEBUG] DataTransfer object:', e.dataTransfer);
+  console.log('[DEBUG] Preloaded files available:', preloadedFiles ? preloadedFiles.length : 'None');
+  
+  if (!e.dataTransfer || !preloadedFiles) {
+    console.log('[DEBUG] Missing dataTransfer or preloaded files');
+    return;
+  }
+  
+  try {
+    console.log('[DEBUG] Adding files to dataTransfer...');
+    // Add preloaded files to dataTransfer (must be synchronous)
+    e.dataTransfer.setData('text/plain', 'Files ready for drag');
+    for (let i = 0; i < preloadedFiles.length; i++) {
+      const file = preloadedFiles[i];
+      console.log(`[DEBUG] Adding file ${i}:`, { name: file.name, type: file.type, size: file.size });
+      e.dataTransfer.items.add(file);
+    }
+    
+    console.log('[DEBUG] DataTransfer after adding files:', e.dataTransfer);
+    console.log('[DEBUG] DataTransfer items length:', e.dataTransfer.items.length);
+    console.log('[DEBUG] DataTransfer files length:', e.dataTransfer.files.length);
+    
+    // Also add as text for broader compatibility
+    // const fileNames = preloadedFiles.map(f => f.name).join(', ');
+    // e.dataTransfer.setData('text/plain', `Files: ${fileNames}`);
+    
+    // Set drag effect
+    e.dataTransfer.effectAllowed = 'all';
+    
+    console.log('[DEBUG] Final dataTransfer state:', {
+      effectAllowed: e.dataTransfer.effectAllowed,
+      types: e.dataTransfer.types,
+      itemsLength: e.dataTransfer.items.length,
+      filesLength: e.dataTransfer.files.length
+    });
+    
+    // Create visual feedback element
+    dragFilesPreviewElement = document.createElement('div');
+    dragFilesPreviewElement.className = 'drag-files-preview';
+    dragFilesPreviewElement.innerHTML = `
+      <div>📎 Dragging Files</div>
+      <div class="file-list">
+        <div class="file-item">test.pdf</div>
+        <div class="file-item">test.png</div>
+      </div>
+    `;
+    document.body.appendChild(dragFilesPreviewElement);
+    
+    // Initially hide it
+    dragFilesPreviewElement.style.display = 'none';
+    
+    console.log('Files added to dataTransfer for drag operation:', preloadedFiles.map(f => ({ name: f.name, type: f.type, size: f.size })));
+  } catch (error) {
+    console.error('Error preparing files for drag:', error);
+  }
+});
+
+// Show preview during drag
+buttonTestChatGPT.addEventListener('drag', (e) => {
+  if (dragFilesPreviewElement) {
+    dragFilesPreviewElement.style.display = 'block';
+    dragFilesPreviewElement.style.left = e.clientX + 'px';
+    dragFilesPreviewElement.style.top = e.clientY + 'px';
+  }
+});
+
+// Clean up when drag ends
+buttonTestChatGPT.addEventListener('dragend', () => {
+  if (dragFilesPreviewElement) {
+    document.body.removeChild(dragFilesPreviewElement);
+    dragFilesPreviewElement = null;
+  }
+  console.log('Drag operation ended');
+});
+
+// Handle mouse events for manual drag simulation
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+
+buttonTestChatGPT.addEventListener('mousedown', async (e) => {
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  isDragging = false;
+});
+
+buttonTestChatGPT.addEventListener('mousemove', async (e) => {
+  if (e.buttons === 1) { // Left mouse button is down
+    const distance = Math.sqrt(
+      Math.pow(e.clientX - dragStartX, 2) + Math.pow(e.clientY - dragStartY, 2)
+    );
+    
+    if (distance > 5 && !isDragging) { // Start drag if moved more than 5 pixels
+      isDragging = true;
+      
+      try {
+        // Create visual feedback element for manual drag
+        if (!dragFilesPreviewElement) {
+          dragFilesPreviewElement = document.createElement('div');
+          dragFilesPreviewElement.className = 'drag-files-preview';
+          dragFilesPreviewElement.innerHTML = `
+            <div>📎 Dragging Files</div>
+            <div class="file-list">
+              <div class="file-item">test.pdf</div>
+              <div class="file-item">test.png</div>
+            </div>
+          `;
+          document.body.appendChild(dragFilesPreviewElement);
+        }
+        
+        dragFilesPreviewElement.style.display = 'block';
+        dragFilesPreviewElement.style.left = e.clientX + 'px';
+        dragFilesPreviewElement.style.top = e.clientY + 'px';
+        
+        console.log('Manual drag preview shown');
+      } catch (error) {
+        console.error('Error preparing manual drag preview:', error);
+      }
+    } else if (isDragging && dragFilesPreviewElement) {
+      // Update preview position
+      dragFilesPreviewElement.style.left = e.clientX + 'px';
+      dragFilesPreviewElement.style.top = e.clientY + 'px';
+    }
+  }
+});
+
+buttonTestChatGPT.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    
+    // Clean up drag preview
+    if (dragFilesPreviewElement) {
+      document.body.removeChild(dragFilesPreviewElement);
+      dragFilesPreviewElement = null;
+    }
+    
+    console.log('Drag operation completed');
+  }
+});
+
+// Clean up on mouse leave
+buttonTestChatGPT.addEventListener('mouseleave', () => {
+  if (isDragging) {
+    isDragging = false;
+    
+    // Clean up drag preview
+    if (dragFilesPreviewElement) {
+      document.body.removeChild(dragFilesPreviewElement);
+      dragFilesPreviewElement = null;
+    }
+  }
+});
+
+buttonTestChatGPT.addEventListener('click', async () => {
+  // Only trigger click if not dragging
+  if (!isDragging) {
+    try {
+      showLoading();
+      await testSendToChatGPT();
+      hide(elementLoading);
+      await showResponse('Successfully sent test.pdf and test.png files to clipboard!');
+    } catch (error) {
+      showError(error as Error);
+    }
   }
 });
