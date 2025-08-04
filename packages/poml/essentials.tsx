@@ -13,7 +13,7 @@ import {
   Free,
   MultiMedia
 } from './presentation';
-import fs from 'fs';
+import fs from './util/fs';
 import { preprocessImage } from './util/image';
 import { preprocessAudio } from './util/audio';
 
