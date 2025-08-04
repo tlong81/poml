@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createTheme, MantineProvider, Stack, Button, Group, Alert } from '@mantine/core';
 import { useListState } from '@mantine/hooks';
+import { IconClipboard } from '@tabler/icons-react';
 import CardList from './components/CardList';
 import CardModal from './components/CardModal';
 import { ExtractedContent } from './types';
@@ -28,7 +29,31 @@ const App: React.FC = () => {
     updateButtonStates();
     const interval = setInterval(updateButtonStates, 2000);
     preloadDragFiles();
-    return () => clearInterval(interval);
+    
+    // Add global keyboard shortcut for paste
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && !e.shiftKey && !e.altKey) {
+        // Only trigger if not focused on an input/textarea
+        const activeElement = document.activeElement;
+        if (activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'TEXTAREA' || 
+          (activeElement as HTMLElement).contentEditable === 'true'
+        )) {
+          return; // Let browser handle normal paste
+        }
+        
+        e.preventDefault();
+        handlePasteFromClipboard();
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const showLoading = () => {
@@ -586,28 +611,29 @@ const App: React.FC = () => {
     }
   };
 
+  const createCardFromContent = (title: string, content: string, insertIndex?: number) => {
+    const newContent: ExtractedContent = {
+      id: Date.now().toString(),
+      title,
+      content,
+      excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+      timestamp: new Date(),
+      isManual: false
+    };
+    
+    // Insert at specified index or append to end
+    if (insertIndex !== undefined) {
+      extractedContentsHandlers.insert(insertIndex, newContent);
+    } else {
+      extractedContentsHandlers.append(newContent);
+    }
+  };
+
   const handleDropFile = async (file: File, insertIndex?: number) => {
     try {
       // Read file content
       const content = await readFileContent(file);
-      
-      // Create new content card
-      const newContent: ExtractedContent = {
-        id: Date.now().toString(),
-        title: file.name,
-        content,
-        excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-        timestamp: new Date(),
-        isManual: false
-      };
-      
-      // Insert at specified index or append to end
-      if (insertIndex !== undefined) {
-        extractedContentsHandlers.insert(insertIndex, newContent);
-      } else {
-        extractedContentsHandlers.append(newContent);
-      }
-      
+      createCardFromContent(file.name, content, insertIndex);
       setTopError(''); // Clear any previous errors
     } catch (error) {
       console.error('Failed to read file:', error);
@@ -632,6 +658,80 @@ const App: React.FC = () => {
         resolve(`File: ${file.name}\nType: ${file.type || 'Unknown'}\nSize: ${file.size} bytes\nLast Modified: ${new Date(file.lastModified).toLocaleString()}\n\n[Binary file content not displayed]`);
       }
     });
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      showLoading();
+      
+      if (!navigator.clipboard) {
+        throw new Error('Clipboard API not available');
+      }
+
+      // Try to read clipboard items (supports both text and files)
+      const clipboardItems = await navigator.clipboard.read();
+      
+      let hasProcessedContent = false;
+      
+      for (const item of clipboardItems) {
+        // Check for files first
+        for (const type of item.types) {
+          console.log('Clipboard item:', item);
+          console.log(`Item type: ${type}`);
+          if (type.startsWith('image/') || type.startsWith('application/') || type.startsWith('text/') && type !== 'text/plain') {
+            try {
+              const blob = await item.getType(type);
+              const file = new File([blob], `clipboard-${Date.now()}.${getFileExtensionFromType(type)}`, { type });
+              await handleDropFile(file);
+              hasProcessedContent = true;
+              break;
+            } catch (error) {
+              console.warn('Failed to read clipboard file:', error);
+            }
+          }
+        }
+        
+        if (hasProcessedContent) break;
+        
+        // Fall back to text content
+        if (item.types.includes('text/plain')) {
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text.trim()) {
+              createCardFromContent('Pasted Text', text.trim());
+              hasProcessedContent = true;
+            }
+          } catch (error) {
+            console.warn('Failed to read clipboard text:', error);
+          }
+        }
+      }
+      
+      if (!hasProcessedContent) {
+        throw new Error('No readable content found in clipboard');
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Paste failed:', error);
+      showError(`Failed to paste from clipboard: ${(error as Error).message}`);
+    }
+  };
+
+  const getFileExtensionFromType = (mimeType: string): string => {
+    const typeMap: { [key: string]: string } = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+      'text/plain': 'txt',
+      'text/html': 'html',
+      'application/json': 'json',
+      'application/pdf': 'pdf',
+      'application/zip': 'zip'
+    };
+    return typeMap[mimeType] || 'bin';
   };
 
   return (
@@ -676,6 +776,16 @@ const App: React.FC = () => {
             onClick={handleTestChatGPT}
           >
             Test sendToChatGPT
+          </Button>
+          
+          <Button
+            variant="outline"
+            leftSection={<IconClipboard size={16} />}
+            loading={loading}
+            onClick={handlePasteFromClipboard}
+            title="Paste from clipboard (Ctrl+V)"
+          >
+            Paste
           </Button>
         </Group>
 
