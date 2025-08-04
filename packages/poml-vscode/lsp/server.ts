@@ -39,6 +39,7 @@ import {
 import { PomlFile, PomlToken } from 'poml/file';
 import { encodingForModel, Tiktoken } from 'js-tiktoken';
 import { readFile } from 'fs/promises';
+import * as fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { PreviewParams, PreviewMethodName, PreviewResponse, WebviewUserOptions } from '../panel/types';
 import { formatComponentDocumentation, formatParameterDocumentation } from './documentFormatter';
@@ -103,6 +104,32 @@ class PomlLspServer {
     this.statisticsReporter = new DelayedTelemetryReporter(this.telemetryReporter);
     this.edittingReporter = new DelayedTelemetryReporter(this.telemetryReporter);
     this.diagnosticsReporter = new DelayedTelemetryReporter(this.telemetryReporter);
+  }
+
+  private getAssociatedOptions(uri: string): WebviewUserOptions {
+    let options = this.associatedOptions.get(uri);
+    if (!options) {
+      const filePath = fileURLToPath(uri);
+      const base = filePath.replace(/(\.source)?\.poml$/i, '');
+      const contexts: string[] = [];
+      const stylesheets: string[] = [];
+      if (fs.existsSync(`${base}.context.json`)) {
+        contexts.push(`${base}.context.json`);
+      }
+      if (fs.existsSync(`${base}.stylesheet.json`)) {
+        stylesheets.push(`${base}.stylesheet.json`);
+      }
+      options = {
+        speakerMode: true,
+        displayFormat: 'plain',
+        contexts,
+        stylesheets,
+      };
+      if (contexts.length > 0 || stylesheets.length > 0) {
+        this.associatedOptions.set(uri, options);
+      }
+    }
+    return options;
   }
 
   public listen() {
@@ -411,12 +438,7 @@ class PomlLspServer {
     const diagnostics: Diagnostic[] = [];
     const otherDiagnostics: Record<string, { text: string; diags: Diagnostic[] }> = {};
 
-    const options = this.associatedOptions.get(textDocument.uri.toString()) ?? {
-      speakerMode: true,
-      displayFormat: 'plain',
-      contexts: [],
-      stylesheets: []
-    };
+    const options = this.getAssociatedOptions(textDocument.uri.toString());
 
     const response = await this.onPreview({
       uri: textDocument.uri,
