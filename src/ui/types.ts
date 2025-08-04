@@ -5,5 +5,6 @@ export interface ExtractedContent {
   excerpt: string;
   url?: string;
   timestamp: Date;
+  isManual?: boolean;
   debug?: string;
 }

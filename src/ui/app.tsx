@@ -546,6 +546,19 @@ const App: React.FC = () => {
     extractedContentsHandlers.reorder({ from, to });
   };
 
+  const handleAddContent = (content: string, insertIndex: number) => {
+    const newContent: ExtractedContent = {
+      id: Date.now().toString(),
+      title: content.split('\n')[0]?.substring(0, 100) || 'Manual Entry',
+      content,
+      excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+      timestamp: new Date(),
+      isManual: true
+    };
+    
+    extractedContentsHandlers.insert(insertIndex, newContent);
+  };
+
   return (
     <MantineProvider theme={theme}>
       <Stack gap="lg" p="md">
@@ -607,6 +620,7 @@ const App: React.FC = () => {
         <CardList
           contents={extractedContents}
           onReorder={handleReorderContents}
+          onAddContent={handleAddContent}
         />
         
         {response && !loading && !error && (
