@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createTheme, MantineProvider, Stack, Button, Group } from '@mantine/core';
+import { createTheme, MantineProvider, Stack, Button, Group, Alert } from '@mantine/core';
 import { useListState } from '@mantine/hooks';
 import CardList from './components/CardList';
+import CardModal from './components/CardModal';
 import { ExtractedContent } from './types';
 
 import '@mantine/core/styles.css';
@@ -12,10 +13,14 @@ const theme = createTheme({
 
 const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [topError, setTopError] = useState(''); // For edit errors
+  const [bottomError, setBottomError] = useState(''); // For command errors
+  const [copySuccess, setCopySuccess] = useState(false);
   const [gdocsEnabled, setGdocsEnabled] = useState(false);
   const [msWordEnabled, setMsWordEnabled] = useState(false);
   const [extractedContents, extractedContentsHandlers] = useListState<ExtractedContent>([]);
+  const [selectedCard, setSelectedCard] = useState<ExtractedContent | null>(null);
+  const [modalOpened, setModalOpened] = useState(false);
   const preloadedFilesRef = useRef<File[] | null>(null);
   const accessTokenRef = useRef<string | null>(null);
 
@@ -28,13 +33,36 @@ const App: React.FC = () => {
 
   const showLoading = () => {
     setLoading(true);
-    setError('');
+    setBottomError('');
+    setCopySuccess(false);
   };
 
   const showError = (errorMsg: string) => {
-    setError(errorMsg);
+    setBottomError(errorMsg);
     setLoading(false);
   };
+
+  // Auto-hide alerts after 5 seconds
+  useEffect(() => {
+    if (copySuccess) {
+      const timer = setTimeout(() => setCopySuccess(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [copySuccess]);
+
+  useEffect(() => {
+    if (bottomError) {
+      const timer = setTimeout(() => setBottomError(''), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [bottomError]);
+
+  useEffect(() => {
+    if (topError) {
+      const timer = setTimeout(() => setTopError(''), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [topError]);
 
   const checkGoogleDocsTab = async (): Promise<boolean> => {
     try {
@@ -479,21 +507,82 @@ const App: React.FC = () => {
   };
 
   const handleAddContent = (content: string, insertIndex: number) => {
-    const newContent: ExtractedContent = {
-      id: Date.now().toString(),
-      title: content.split('\n')[0]?.substring(0, 100) || 'Manual Entry',
-      content,
-      excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-      timestamp: new Date(),
-      isManual: true
-    };
-    
-    extractedContentsHandlers.insert(insertIndex, newContent);
+    try {
+      const newContent: ExtractedContent = {
+        id: Date.now().toString(),
+        title: content.split('\n')[0]?.substring(0, 100) || 'Manual Entry',
+        content,
+        excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+        timestamp: new Date(),
+        isManual: true
+      };
+      
+      extractedContentsHandlers.insert(insertIndex, newContent);
+      setTopError(''); // Clear any previous errors
+    } catch (error) {
+      console.error('Failed to add content:', error);
+      setTopError('Failed to add content to card list');
+    }
+  };
+
+  const handleCopyAllCards = async () => {
+    try {
+      if (extractedContents.length === 0) {
+        setBottomError('No cards to copy');
+        return;
+      }
+
+      // Concatenate all card contents
+      const allContent = extractedContents
+        .map(card => card.content)
+        .join('\n\n---\n\n');
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(allContent);
+      setCopySuccess(true);
+      setBottomError('');
+    } catch (error) {
+      console.error('Copy failed:', error);
+      setBottomError('Failed to copy cards to clipboard');
+    }
+  };
+
+  const handleCardClick = (content: ExtractedContent) => {
+    setSelectedCard(content);
+    setModalOpened(true);
+  };
+
+  const handleModalClose = () => {
+    setModalOpened(false);
+    setSelectedCard(null);
+  };
+
+  const handleSaveCard = (id: string, newContent: string) => {
+    const index = extractedContents.findIndex(card => card.id === id);
+    if (index !== -1) {
+      const updatedCard = {
+        ...extractedContents[index],
+        content: newContent,
+        // Update excerpt when content changes
+        excerpt: newContent.substring(0, 200) + (newContent.length > 200 ? '...' : ''),
+        // Update title if it's a manual card or if the first line changed
+        title: extractedContents[index].isManual || !extractedContents[index].title
+          ? newContent.split('\n')[0]?.substring(0, 100) || 'Updated Content'
+          : extractedContents[index].title
+      };
+      extractedContentsHandlers.setItem(index, updatedCard);
+    }
   };
 
   return (
     <MantineProvider theme={theme}>
       <Stack gap="lg" p="md">
+        {topError && (
+          <Alert variant="light" color="red" title="Edit Error" withCloseButton onClose={() => setTopError('')}>
+            {topError}
+          </Alert>
+        )}
+        
         <Group>
           <Button
             variant="filled"
@@ -534,11 +623,40 @@ const App: React.FC = () => {
           contents={extractedContents}
           onReorder={handleReorderContents}
           onAddContent={handleAddContent}
+          onCardClick={handleCardClick}
         />
-        
-        {error && !loading && (
-          <div className="text" style={{ color: 'red' }}>{error}</div>
+
+        {extractedContents.length > 0 && (
+          <Group justify="center">
+            <Button
+              variant="gradient"
+              gradient={{ from: 'blue', to: 'cyan', deg: 45 }}
+              size="lg"
+              onClick={handleCopyAllCards}
+            >
+              Copy All Cards ({extractedContents.length})
+            </Button>
+          </Group>
         )}
+        
+        {copySuccess && (
+          <Alert variant="light" color="green" title="Success" withCloseButton onClose={() => setCopySuccess(false)}>
+            All cards copied to clipboard successfully!
+          </Alert>
+        )}
+        
+        {bottomError && !loading && (
+          <Alert variant="light" color="red" title="Command Error" withCloseButton onClose={() => setBottomError('')}>
+            {bottomError}
+          </Alert>
+        )}
+
+        <CardModal
+          content={selectedCard}
+          opened={modalOpened}
+          onClose={handleModalClose}
+          onSave={handleSaveCard}
+        />
       </Stack>
     </MantineProvider>
   );

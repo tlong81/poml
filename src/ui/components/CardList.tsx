@@ -8,6 +8,7 @@ interface CardListProps {
   contents: ExtractedContent[];
   onReorder: (from: number, to: number) => void;
   onAddContent: (content: string, insertIndex: number) => void;
+  onCardClick: (content: ExtractedContent) => void;
 }
 
 const InteractiveDivider = ({ 
@@ -85,7 +86,7 @@ const InteractiveDivider = ({
   );
 };
 
-const ContentCard = ({ content, index }: { content: ExtractedContent; index: number }) => (
+const ContentCard = ({ content, index, onCardClick }: { content: ExtractedContent; index: number; onCardClick: (content: ExtractedContent) => void }) => (
   <Draggable key={content.id} index={index} draggableId={content.id}>
     {(provided, snapshot) => (
       <Card
@@ -96,11 +97,16 @@ const ContentCard = ({ content, index }: { content: ExtractedContent; index: num
         style={{
           opacity: snapshot.isDragging ? 0.8 : 1,
           transform: snapshot.isDragging ? 'rotate(2deg)' : 'none',
-          cursor: snapshot.isDragging ? 'grabbing' : 'grab'
+          cursor: snapshot.isDragging ? 'grabbing' : 'pointer'
         }}
         {...provided.draggableProps}
         {...provided.dragHandleProps}
         ref={provided.innerRef}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onCardClick(content);
+        }}
       >
         {content.isManual ? (
           // Simple layout for manual content
@@ -133,7 +139,7 @@ const ContentCard = ({ content, index }: { content: ExtractedContent; index: num
   </Draggable>
 );
 
-export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddContent }) => {
+export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddContent, onCardClick }) => {
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
     onReorder(result.source.index, result.destination.index);
@@ -168,7 +174,7 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
               <InteractiveDivider insertIndex={0} onAddContent={onAddContent} />
               {contents.map((content, index) => (
                 <React.Fragment key={content.id}>
-                  <ContentCard content={content} index={index} />
+                  <ContentCard content={content} index={index} onCardClick={onCardClick} />
                   <InteractiveDivider insertIndex={index + 1} onAddContent={onAddContent} />
                 </React.Fragment>
               ))}
