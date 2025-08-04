@@ -1,20 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
-import { createTheme, MantineProvider } from '@mantine/core';
+import { createTheme, MantineProvider, Stack } from '@mantine/core';
+import { useListState } from '@mantine/hooks';
+import CardList from './components/CardList';
+import { ExtractedContent } from './types';
 
 import '@mantine/core/styles.css';
 
 const theme = createTheme({
   /** Put your mantine theme override here */
 });
-
-interface ExtractedContent {
-  title: string;
-  content: string;
-  excerpt: string;
-  debug?: string;
-}
 
 const App: React.FC = () => {
   const [prompt, setPrompt] = useState('');
@@ -25,6 +21,7 @@ const App: React.FC = () => {
   const [error, setError] = useState('');
   const [gdocsEnabled, setGdocsEnabled] = useState(false);
   const [msWordEnabled, setMsWordEnabled] = useState(false);
+  const [extractedContents, extractedContentsHandlers] = useListState<ExtractedContent>([]);
   
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragPreviewRef = useRef<HTMLDivElement | null>(null);
@@ -403,6 +400,36 @@ const App: React.FC = () => {
       const content = await extractPageContent();
       
       if (content.trim()) {
+        // Get current tab URL
+        let currentUrl = '';
+        try {
+          if (chrome.tabs) {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            currentUrl = tab?.url || '';
+          }
+        } catch (e) {
+          // Ignore URL extraction errors
+        }
+
+        // Extract title and create excerpt
+        const lines = content.split('\n').filter(line => line.trim());
+        const title = lines[0]?.substring(0, 100) || 'Extracted Content';
+        const excerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '');
+        
+        // Create new content card
+        const newContent: ExtractedContent = {
+          id: Date.now().toString(),
+          title,
+          content,
+          excerpt,
+          url: currentUrl,
+          timestamp: new Date()
+        };
+        
+        // Add to card list
+        extractedContentsHandlers.append(newContent);
+        
+        // Also add to prompt as before
         const newValue = prompt + (prompt ? '\n\n' : '') + content;
         setPrompt(newValue);
         setLoading(false);
@@ -515,9 +542,13 @@ const App: React.FC = () => {
     }
   };
 
+  const handleReorderContents = (from: number, to: number) => {
+    extractedContentsHandlers.reorder({ from, to });
+  };
+
   return (
     <MantineProvider theme={theme}>
-      <div>
+      <Stack gap="lg" p="md">
         <textarea
           ref={inputRef}
           value={prompt}
@@ -572,6 +603,11 @@ const App: React.FC = () => {
         <button className="secondary" draggable="true" onClick={handleTestChatGPT}>
           Test sendToChatGPT
         </button>
+
+        <CardList
+          contents={extractedContents}
+          onReorder={handleReorderContents}
+        />
         
         {response && !loading && !error && (
           <div className="text" dangerouslySetInnerHTML={{ __html: response }} />
@@ -586,7 +622,7 @@ const App: React.FC = () => {
         {error && !loading && (
           <div className="text">{error}</div>
         )}
-      </div>
+      </Stack>
     </MantineProvider>
   );
 };
