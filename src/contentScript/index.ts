@@ -14,7 +14,7 @@ async function extractPdfContent(): Promise<ExtractedContent> {
     console.log('[DEBUG] Starting PDF text extraction');
     
     // Set worker source to use the local worker file
-    pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.min.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('external/pdf.worker.min.mjs');
     
     // Get PDF URL - handle different PDF embedding scenarios
     const pdfUrl = document.location.href;

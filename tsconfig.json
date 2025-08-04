@@ -9,14 +9,9 @@
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "rootDir": "./",
+    "rootDir": "src/",
     "types": ["chrome-types"]
   },
-  "include": [
-    "sidepanel/**/*",
-    "background.ts",
-    "contentExtractor.ts"
-  ],
   "exclude": [
     "node_modules",
     "dist"

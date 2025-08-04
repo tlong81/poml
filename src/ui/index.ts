@@ -3,38 +3,6 @@
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
-// Type definitions for LanguageModel API
-declare global {
-  interface Window {
-    LanguageModel: {
-      create(params: LanguageModelParams): Promise<LanguageModelSession>;
-      params(): Promise<LanguageModelDefaults>;
-    };
-  }
-  const LanguageModel: {
-    create(params: LanguageModelParams): Promise<LanguageModelSession>;
-    params(): Promise<LanguageModelDefaults>;
-  };
-}
-
-interface LanguageModelParams {
-  initialPrompts?: Array<{ role: string; content: string }>;
-  temperature?: number;
-  topK?: number;
-}
-
-interface LanguageModelSession {
-  prompt(text: string): Promise<string>;
-  destroy(): void;
-}
-
-interface LanguageModelDefaults {
-  defaultTemperature: number;
-  maxTemperature: number;
-  defaultTopK: number;
-  maxTopK: number;
-}
-
 interface ExtractedContent {
   title: string;
   content: string;
@@ -43,6 +11,9 @@ interface ExtractedContent {
 }
 
 // DOM Elements
+const elementResponse = document.body.querySelector('#response') as HTMLDivElement;
+const elementLoading = document.body.querySelector('#loading') as HTMLDivElement;
+const elementError = document.body.querySelector('#error') as HTMLDivElement;
 const inputPrompt = document.body.querySelector('#input-prompt') as HTMLTextAreaElement;
 const buttonPrompt = document.body.querySelector('#button-prompt') as HTMLButtonElement;
 const buttonReset = document.body.querySelector('#button-reset') as HTMLButtonElement;
@@ -50,91 +21,8 @@ const buttonFetchGdocs = document.body.querySelector('#button-fetch-gdocs') as H
 const buttonFetchMsWord = document.body.querySelector('#button-fetch-msword') as HTMLButtonElement;
 const buttonExtractContent = document.body.querySelector('#button-extract-content') as HTMLButtonElement;
 const buttonTestChatGPT = document.body.querySelector('#button-test-chatgpt') as HTMLButtonElement;
-const elementResponse = document.body.querySelector('#response') as HTMLDivElement;
-const elementLoading = document.body.querySelector('#loading') as HTMLDivElement;
-const elementError = document.body.querySelector('#error') as HTMLDivElement;
-const sliderTemperature = document.body.querySelector('#temperature') as HTMLInputElement;
-const sliderTopK = document.body.querySelector('#top-k') as HTMLInputElement;
-const labelTemperature = document.body.querySelector('#label-temperature') as HTMLSpanElement;
-const labelTopK = document.body.querySelector('#label-top-k') as HTMLSpanElement;
 
-let session: LanguageModelSession | null = null;
 let accessToken: string | null = null;
-
-async function runPrompt(prompt: string, params: LanguageModelParams): Promise<string> {
-  try {
-    if (!session) {
-      session = await LanguageModel.create(params);
-    }
-    return session.prompt(prompt);
-  } catch (e) {
-    console.log('Prompt failed');
-    console.error(e);
-    console.log('Prompt:', prompt);
-    // Reset session
-    reset();
-    throw e;
-  }
-}
-
-async function reset(): Promise<void> {
-  if (session) {
-    session.destroy();
-  }
-  session = null;
-}
-
-async function initDefaults(): Promise<void> {
-  const defaults = await LanguageModel.params();
-  console.log('Model default:', defaults);
-  if (!('LanguageModel' in self)) {
-    await showResponse('Model not available');
-    return;
-  }
-  sliderTemperature.value = defaults.defaultTemperature.toString();
-  // Pending https://issues.chromium.org/issues/367771112.
-  // sliderTemperature.max = defaults.maxTemperature;
-  if (defaults.defaultTopK > 3) {
-    // limit default topK to 3
-    sliderTopK.value = '3';
-    labelTopK.textContent = '3';
-  } else {
-    sliderTopK.value = defaults.defaultTopK.toString();
-    labelTopK.textContent = defaults.defaultTopK.toString();
-  }
-  sliderTopK.max = defaults.maxTopK.toString();
-  labelTemperature.textContent = defaults.defaultTemperature.toString();
-}
-
-initDefaults();
-
-buttonReset.addEventListener('click', () => {
-  hide(elementLoading);
-  hide(elementError);
-  hide(elementResponse);
-  reset();
-  buttonReset.setAttribute('disabled', '');
-});
-
-sliderTemperature.addEventListener('input', (event) => {
-  const target = event.target as HTMLInputElement;
-  labelTemperature.textContent = target.value;
-  reset();
-});
-
-sliderTopK.addEventListener('input', (event) => {
-  const target = event.target as HTMLInputElement;
-  labelTopK.textContent = target.value;
-  reset();
-});
-
-inputPrompt.addEventListener('input', () => {
-  if (inputPrompt.value.trim()) {
-    buttonPrompt.removeAttribute('disabled');
-  } else {
-    buttonPrompt.setAttribute('disabled', '');
-  }
-});
 
 // Add drag and drop support for text
 let dragPreviewElement: HTMLDivElement | null = null;
@@ -313,24 +201,6 @@ inputPrompt.addEventListener('paste', (e) => {
   for (const type of e.clipboardData?.types ?? []) {
     console.log('[DEBUG] Pasted type:', type);
     console.log('[DEBUG] Pasted data:', e.clipboardData?.getData(type));
-  }
-});
-
-buttonPrompt.addEventListener('click', async () => {
-  const prompt = inputPrompt.value.trim();
-  showLoading();
-  try {
-    const params: LanguageModelParams = {
-      initialPrompts: [
-        { role: 'system', content: 'You are a helpful and friendly assistant.' }
-      ],
-      temperature: parseFloat(sliderTemperature.value),
-      topK: parseInt(sliderTopK.value)
-    };
-    const response = await runPrompt(prompt, params);
-    await showResponse(response);
-  } catch (e) {
-    showError(e as Error);
   }
 });
 

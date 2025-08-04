@@ -192,7 +192,7 @@ async function extractPageContent(tabId: number): Promise<string> {
     // Inject the content extractor script that includes Readability
     await chrome.scripting.executeScript({
       target: { tabId: tabId },
-      files: ["contentExtractor.js"],
+      files: ["contentScript.js"],
     });
 
     console.log(`[DEBUG] Content extractor script injected`);
@@ -306,7 +306,7 @@ async function extractMsWordContent(tabId: number): Promise<string> {
     // Inject the content extractor script into the Word frame
     await chrome.scripting.executeScript({
       target: { tabId: tabId, frameIds: [wordFrameId] },
-      files: ["contentExtractor.js"],
+      files: ["contentScript.js"],
     });
 
     console.log(`[DEBUG] Content extractor script injected into frame ${wordFrameId}`);
@@ -319,7 +319,7 @@ async function extractMsWordContent(tabId: number): Promise<string> {
         console.log('[DEBUG] Current document URL:', document.location.href);
         console.log('[DEBUG] Document title:', document.title);
         
-        // The contentExtractor.js should have made convertDomToMarkup available globally
+        // The contentScript.js should have made convertDomToMarkup available globally
         if (typeof (window as any).convertDomToMarkup === "function") {
           const blocks = (window as any).convertDomToMarkup();
           

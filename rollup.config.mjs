@@ -5,15 +5,15 @@ import copy from 'rollup-plugin-copy';
 
 export default [
   {
-    input: 'sidepanel/index.ts',
+    input: 'src/ui/index.ts',
     output: {
-      dir: 'dist/sidepanel',
+      dir: 'dist/ui',
       format: 'iife',
     },
     plugins: [
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['sidepanel/**/*']
+        include: ['ui/**/*']
       }),
       nodeResolve({
         jsnext: true,
@@ -24,22 +24,23 @@ export default [
       copy({
         targets: [
           {
-            src: ['sidepanel/*.html', 'sidepanel/*.css', 'sidepanel/*.png', 'sidepanel/*.pdf'],
-            dest: 'dist/sidepanel'
+            src: ['src/ui/*.html', 'src/ui/*.css'],
+            dest: 'dist/ui'
           }
         ]
       })
     ]
   },
   {
-    input: 'background.ts',
+    input: 'src/background/index.ts',
     output: {
       file: 'dist/background.js',
       format: 'es',
     },
     plugins: [
       typescript({
-        tsconfig: './tsconfig.json'
+        tsconfig: './tsconfig.json',
+        include: ['background/**/*']
       }),
       nodeResolve({
         jsnext: true,
@@ -52,32 +53,36 @@ export default [
           {
             src: ['manifest.json', 'images'],
             dest: 'dist'
-          },
-          {
-            src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
-            dest: 'dist'
           }
         ]
       })
     ]
   },
   {
-    input: 'contentExtractor.ts',
+    input: 'src/contentScript/index.ts',
     output: {
-      file: 'dist/contentExtractor.js',
+      file: 'dist/contentScript.js',
       format: 'iife',
-      name: 'ContentExtractor'
     },
     plugins: [
       typescript({
-        tsconfig: './tsconfig.json'
+        tsconfig: './tsconfig.json',
+        include: ['contentScript/**/*']
       }),
       nodeResolve({
         jsnext: true,
         main: true,
         browser: true
       }),
-      commonjs()
+      commonjs(),
+      copy({
+        targets: [
+          {
+            src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
+            dest: 'dist/external'
+          }
+        ]
+      })
     ]
   }
 ];
