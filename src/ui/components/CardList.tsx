@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Text, Group, Badge, Stack, Box, Center, Divider } from '@mantine/core';
+import { Card, Text, Group, Badge, Stack, Box, Center, Divider, ActionIcon } from '@mantine/core';
+import { IconTrash } from '@tabler/icons-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { ExtractedContent } from '../types';
 import InlineEditor from './InlineEditor';
@@ -9,6 +10,7 @@ interface CardListProps {
   onReorder: (from: number, to: number) => void;
   onAddContent: (content: string, insertIndex: number) => void;
   onCardClick: (content: ExtractedContent) => void;
+  onDeleteCard: (id: string) => void;
 }
 
 const InteractiveDivider = ({ 
@@ -86,7 +88,10 @@ const InteractiveDivider = ({
   );
 };
 
-const ContentCard = ({ content, index, onCardClick }: { content: ExtractedContent; index: number; onCardClick: (content: ExtractedContent) => void }) => (
+const ContentCard = ({ content, index, onCardClick, onDeleteCard }: { content: ExtractedContent; index: number; onCardClick: (content: ExtractedContent) => void; onDeleteCard: (id: string) => void }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
   <Draggable key={content.id} index={index} draggableId={content.id}>
     {(provided, snapshot) => (
       <Card
@@ -97,17 +102,42 @@ const ContentCard = ({ content, index, onCardClick }: { content: ExtractedConten
         style={{
           opacity: snapshot.isDragging ? 0.8 : 1,
           transform: snapshot.isDragging ? 'rotate(2deg)' : 'none',
-          cursor: snapshot.isDragging ? 'grabbing' : 'pointer'
+          cursor: snapshot.isDragging ? 'grabbing' : 'pointer',
+          position: 'relative'
         }}
         {...provided.draggableProps}
         {...provided.dragHandleProps}
         ref={provided.innerRef}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           onCardClick(content);
         }}
       >
+        {/* Delete button - visible on hover */}
+        {isHovered && (
+          <ActionIcon
+            color="red"
+            variant="subtle"
+            size="sm"
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              zIndex: 10
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDeleteCard(content.id);
+            }}
+          >
+            <IconTrash size={16} />
+          </ActionIcon>
+        )}
+
         {content.isManual ? (
           // Simple layout for manual content
           <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
@@ -137,9 +167,10 @@ const ContentCard = ({ content, index, onCardClick }: { content: ExtractedConten
       </Card>
     )}
   </Draggable>
-);
+  );
+};
 
-export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddContent, onCardClick }) => {
+export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddContent, onCardClick, onDeleteCard }) => {
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
     onReorder(result.source.index, result.destination.index);
@@ -174,7 +205,7 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
               <InteractiveDivider insertIndex={0} onAddContent={onAddContent} />
               {contents.map((content, index) => (
                 <React.Fragment key={content.id}>
-                  <ContentCard content={content} index={index} onCardClick={onCardClick} />
+                  <ContentCard content={content} index={index} onCardClick={onCardClick} onDeleteCard={onDeleteCard} />
                   <InteractiveDivider insertIndex={index + 1} onAddContent={onAddContent} />
                 </React.Fragment>
               ))}

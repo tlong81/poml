@@ -34,6 +34,7 @@
     "@mantine/core": "^8.2.2",
     "@mantine/hooks": "^8.2.2",
     "@mozilla/readability": "^0.6.0",
+    "@tabler/icons-react": "^3.34.1",
     "pdfjs-dist": "^5.4.54",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

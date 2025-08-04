@@ -574,6 +574,18 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteCard = (id: string) => {
+    const index = extractedContents.findIndex(card => card.id === id);
+    if (index !== -1) {
+      extractedContentsHandlers.remove(index);
+      // Close modal if the deleted card was being viewed
+      if (selectedCard?.id === id) {
+        setModalOpened(false);
+        setSelectedCard(null);
+      }
+    }
+  };
+
   return (
     <MantineProvider theme={theme}>
       <Stack gap="lg" p="md">
@@ -624,6 +636,7 @@ const App: React.FC = () => {
           onReorder={handleReorderContents}
           onAddContent={handleAddContent}
           onCardClick={handleCardClick}
+          onDeleteCard={handleDeleteCard}
         />
 
         {extractedContents.length > 0 && (
