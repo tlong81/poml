@@ -11,14 +11,25 @@ interface CardListProps {
   onAddContent: (content: string, insertIndex: number) => void;
   onCardClick: (content: ExtractedContent) => void;
   onDeleteCard: (id: string) => void;
+  onDropFile: (file: File, insertIndex?: number) => void;
 }
 
 const InteractiveDivider = ({ 
   insertIndex, 
-  onAddContent 
+  onAddContent,
+  onDropFile,
+  isDragOver,
+  onDragOver,
+  onDragLeave,
+  onDrop
 }: { 
   insertIndex: number; 
   onAddContent: (content: string, insertIndex: number) => void;
+  onDropFile?: (file: File, insertIndex: number) => void;
+  isDragOver?: boolean;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -44,22 +55,32 @@ const InteractiveDivider = ({
   return (
     <Box
       style={{
-        opacity: 0,
+        opacity: isDragOver ? 1 : 0,
         transition: 'opacity 0.2s ease, max-height 0.2s ease',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
-        position: 'relative'
+        position: 'relative',
+        backgroundColor: isDragOver ? '#e3f2fd' : 'transparent',
+        borderRadius: isDragOver ? '8px' : '0',
+        padding: isDragOver ? '12px' : '0'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.opacity = '1';
-        e.currentTarget.style.maxHeight = 'none';
+        if (!isDragOver) {
+          e.currentTarget.style.opacity = '1';
+          e.currentTarget.style.maxHeight = 'none';
+        }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.opacity = '0';
-        e.currentTarget.style.maxHeight = '8px';
+        if (!isDragOver) {
+          e.currentTarget.style.opacity = '0';
+          e.currentTarget.style.maxHeight = '8px';
+        }
       }}
       onClick={() => setIsEditing(true)}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <Center style={{ width: '100%' }}>
         <Divider
@@ -68,16 +89,16 @@ const InteractiveDivider = ({
         />
         <Text 
           size="sm" 
-          c="gray.6" 
+          c={isDragOver ? "blue.6" : "gray.6"}
           mx="md"
           style={{
-            background: '#f8f9fa',
+            background: isDragOver ? '#e3f2fd' : '#f8f9fa',
             padding: '4px 8px',
             borderRadius: '12px',
-            border: '1px solid #e9ecef'
+            border: isDragOver ? '1px solid #2196f3' : '1px solid #e9ecef'
           }}
         >
-          +
+          {isDragOver ? '📁' : '+'}
         </Text>
         <Divider
           style={{ flex: 1, maxWidth: '100px' }}
@@ -170,10 +191,60 @@ const ContentCard = ({ content, index, onCardClick, onDeleteCard }: { content: E
   );
 };
 
-export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddContent, onCardClick, onDeleteCard }) => {
+export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddContent, onCardClick, onDeleteCard, onDropFile }) => {
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isDragOverEnd, setIsDragOverEnd] = useState(false);
+
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
     onReorder(result.source.index, result.destination.index);
+  };
+
+  const handleFileDragOver = (e: React.DragEvent, index?: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (index !== undefined) {
+      setDragOverIndex(index);
+      setIsDragOverEnd(false);
+    } else {
+      setIsDragOverEnd(true);
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleFileDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only clear if we're leaving the entire component
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDragOverIndex(null);
+      setIsDragOverEnd(false);
+    }
+  };
+
+  const handleFileDrop = (e: React.DragEvent, index?: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverIndex(null);
+    setIsDragOverEnd(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      // For now, handle only the first file
+      onDropFile(files[0], index);
+    }
+  };
+
+  const readFileContent = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string || '');
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
   };
 
   if (contents.length === 0) {
@@ -182,10 +253,29 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
         <Text fw={500} size="lg">
           Extracted Content (0)
         </Text>
-        <InteractiveDivider insertIndex={0} onAddContent={onAddContent} />
-        <Card withBorder radius="md" p="xl" style={{ textAlign: 'center' }}>
-          <Text c="dimmed" size="sm">
-            No extracted content yet. Click "Extract Page Content" or use the divider above to add cards.
+        <InteractiveDivider 
+          insertIndex={0} 
+          onAddContent={onAddContent}
+          isDragOver={dragOverIndex === 0}
+          onDragOver={(e) => handleFileDragOver(e, 0)}
+          onDragLeave={handleFileDragLeave}
+          onDrop={(e) => handleFileDrop(e, 0)}
+        />
+        <Card 
+          withBorder 
+          radius="md" 
+          p="xl" 
+          style={{ 
+            textAlign: 'center',
+            backgroundColor: isDragOverEnd ? '#e3f2fd' : 'transparent',
+            border: isDragOverEnd ? '2px dashed #2196f3' : undefined
+          }}
+          onDragOver={(e) => handleFileDragOver(e)}
+          onDragLeave={handleFileDragLeave}
+          onDrop={(e) => handleFileDrop(e)}
+        >
+          <Text c={isDragOverEnd ? "blue.6" : "dimmed"} size="sm">
+            {isDragOverEnd ? "📁 Drop files here to create cards" : "No extracted content yet. Click \"Extract Page Content\" or use the divider above to add cards."}
           </Text>
         </Card>
       </Stack>
@@ -202,14 +292,49 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
         <Droppable droppableId="content-list" direction="vertical">
           {(provided) => (
             <Stack gap="md" {...provided.droppableProps} ref={provided.innerRef}>
-              <InteractiveDivider insertIndex={0} onAddContent={onAddContent} />
+              <InteractiveDivider 
+                insertIndex={0} 
+                onAddContent={onAddContent}
+                isDragOver={dragOverIndex === 0}
+                onDragOver={(e) => handleFileDragOver(e, 0)}
+                onDragLeave={handleFileDragLeave}
+                onDrop={(e) => handleFileDrop(e, 0)}
+              />
               {contents.map((content, index) => (
                 <React.Fragment key={content.id}>
                   <ContentCard content={content} index={index} onCardClick={onCardClick} onDeleteCard={onDeleteCard} />
-                  <InteractiveDivider insertIndex={index + 1} onAddContent={onAddContent} />
+                  <InteractiveDivider 
+                    insertIndex={index + 1} 
+                    onAddContent={onAddContent}
+                    isDragOver={dragOverIndex === index + 1}
+                    onDragOver={(e) => handleFileDragOver(e, index + 1)}
+                    onDragLeave={handleFileDragLeave}
+                    onDrop={(e) => handleFileDrop(e, index + 1)}
+                  />
                 </React.Fragment>
               ))}
               {provided.placeholder}
+              
+              {/* End drop zone */}
+              {isDragOverEnd && (
+                <Card 
+                  withBorder
+                  radius="md"
+                  p="md"
+                  style={{
+                    backgroundColor: '#e3f2fd',
+                    border: '2px dashed #2196f3',
+                    textAlign: 'center'
+                  }}
+                  onDragOver={(e) => handleFileDragOver(e)}
+                  onDragLeave={handleFileDragLeave}
+                  onDrop={(e) => handleFileDrop(e)}
+                >
+                  <Text c="blue.6" size="sm">
+                    📁 Drop files here to add to the end
+                  </Text>
+                </Card>
+              )}
             </Stack>
           )}
         </Droppable>

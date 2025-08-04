@@ -586,6 +586,54 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDropFile = async (file: File, insertIndex?: number) => {
+    try {
+      // Read file content
+      const content = await readFileContent(file);
+      
+      // Create new content card
+      const newContent: ExtractedContent = {
+        id: Date.now().toString(),
+        title: file.name,
+        content,
+        excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+        timestamp: new Date(),
+        isManual: false
+      };
+      
+      // Insert at specified index or append to end
+      if (insertIndex !== undefined) {
+        extractedContentsHandlers.insert(insertIndex, newContent);
+      } else {
+        extractedContentsHandlers.append(newContent);
+      }
+      
+      setTopError(''); // Clear any previous errors
+    } catch (error) {
+      console.error('Failed to read file:', error);
+      setTopError(`Failed to read file: ${file.name}`);
+    }
+  };
+
+  const readFileContent = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string || '');
+      reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+      
+      // Try to read as text, but handle different file types
+      if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md') || 
+          file.name.endsWith('.json') || file.name.endsWith('.js') || file.name.endsWith('.ts') ||
+          file.name.endsWith('.tsx') || file.name.endsWith('.jsx') || file.name.endsWith('.css') ||
+          file.name.endsWith('.html') || file.name.endsWith('.xml') || file.name.endsWith('.csv')) {
+        reader.readAsText(file);
+      } else {
+        // For other file types, show file info instead of content
+        resolve(`File: ${file.name}\nType: ${file.type || 'Unknown'}\nSize: ${file.size} bytes\nLast Modified: ${new Date(file.lastModified).toLocaleString()}\n\n[Binary file content not displayed]`);
+      }
+    });
+  };
+
   return (
     <MantineProvider theme={theme}>
       <Stack gap="lg" p="md">
@@ -637,6 +685,7 @@ const App: React.FC = () => {
           onAddContent={handleAddContent}
           onCardClick={handleCardClick}
           onDeleteCard={handleDeleteCard}
+          onDropFile={handleDropFile}
         />
 
         {extractedContents.length > 0 && (
