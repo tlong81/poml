@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
+import { createTheme, MantineProvider } from '@mantine/core';
+
+import '@mantine/core/styles.css';
+
+const theme = createTheme({
+  /** Put your mantine theme override here */
+});
 
 interface ExtractedContent {
   title: string;
@@ -509,76 +516,78 @@ const App: React.FC = () => {
   };
 
   return (
-    <div>
-      <textarea
-        ref={inputRef}
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        placeholder='Type something, e.g. "Write a haiku about Chrome Extensions"'
-        cols={30}
-        rows={5}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      />
-      
+    <MantineProvider theme={theme}>
       <div>
-        <input
-          type="range"
-          value={temperature}
-          onChange={(e) => setTemperature(Number(e.target.value))}
-          min="0"
-          max="2"
-          step="0.01"
+        <textarea
+          ref={inputRef}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder='Type something, e.g. "Write a haiku about Chrome Extensions"'
+          cols={30}
+          rows={5}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         />
-        <label>Temperature: <span>{temperature}</span></label>
-      </div>
-      
-      <div>
-        <input
-          type="range"
-          value={topK}
-          onChange={(e) => setTopK(Number(e.target.value))}
-          min="1"
-          max="8"
-          step="1"
-        />
-        <label>Top-k: <span>{topK}</span></label>
-      </div>
-      
-      <button className="primary" disabled={!prompt.trim()}>
-        Run
-      </button>
-      <button className="secondary" disabled={!loading && !response && !error}>
-        Reset
-      </button>
-      <button className="secondary" disabled={!gdocsEnabled} onClick={handleFetchGdocs}>
-        Fetch Google Docs
-      </button>
-      <button className="secondary" disabled={!msWordEnabled} onClick={handleFetchMsWord}>
-        Fetch MS Word
-      </button>
-      <button className="secondary" onClick={handleExtractContent}>
-        Extract Page Content
-      </button>
-      <button className="secondary" draggable="true" onClick={handleTestChatGPT}>
-        Test sendToChatGPT
-      </button>
-      
-      {response && !loading && !error && (
-        <div className="text" dangerouslySetInnerHTML={{ __html: response }} />
-      )}
-      
-      {loading && (
-        <div className="text">
-          <span className="blink">...</span>
+        
+        <div>
+          <input
+            type="range"
+            value={temperature}
+            onChange={(e) => setTemperature(Number(e.target.value))}
+            min="0"
+            max="2"
+            step="0.01"
+          />
+          <label>Temperature: <span>{temperature}</span></label>
         </div>
-      )}
-      
-      {error && !loading && (
-        <div className="text">{error}</div>
-      )}
-    </div>
+        
+        <div>
+          <input
+            type="range"
+            value={topK}
+            onChange={(e) => setTopK(Number(e.target.value))}
+            min="1"
+            max="8"
+            step="1"
+          />
+          <label>Top-k: <span>{topK}</span></label>
+        </div>
+        
+        <button className="primary" disabled={!prompt.trim()}>
+          Run
+        </button>
+        <button className="secondary" disabled={!loading && !response && !error}>
+          Reset
+        </button>
+        <button className="secondary" disabled={!gdocsEnabled} onClick={handleFetchGdocs}>
+          Fetch Google Docs
+        </button>
+        <button className="secondary" disabled={!msWordEnabled} onClick={handleFetchMsWord}>
+          Fetch MS Word
+        </button>
+        <button className="secondary" onClick={handleExtractContent}>
+          Extract Page Content
+        </button>
+        <button className="secondary" draggable="true" onClick={handleTestChatGPT}>
+          Test sendToChatGPT
+        </button>
+        
+        {response && !loading && !error && (
+          <div className="text" dangerouslySetInnerHTML={{ __html: response }} />
+        )}
+        
+        {loading && (
+          <div className="text">
+            <span className="blink">...</span>
+          </div>
+        )}
+        
+        {error && !loading && (
+          <div className="text">{error}</div>
+        )}
+      </div>
+    </MantineProvider>
   );
 };
 

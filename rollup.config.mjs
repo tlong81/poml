@@ -3,6 +3,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 import copy from 'rollup-plugin-copy';
 import replace from '@rollup/plugin-replace';
+import postcss from 'rollup-plugin-postcss';
 
 export default [
   {
@@ -11,10 +12,22 @@ export default [
       dir: 'dist/ui',
       format: 'iife',
     },
+    onwarn(warning, warn) {
+      // https://github.com/TanStack/query/issues/5175
+      if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
+        return
+      }
+      warn(warning)
+    },
     plugins: [
       replace({
+        // https://stackoverflow.com/questions/70368760/react-uncaught-referenceerror-process-is-not-defined
         'process.env.NODE_ENV': JSON.stringify('production'),
         preventAssignment: true
+      }),
+      postcss({
+        extract: true,
+        minimize: true
       }),
       typescript({
         tsconfig: './tsconfig.json',
@@ -29,7 +42,7 @@ export default [
       copy({
         targets: [
           {
-            src: ['src/ui/*.html', 'src/ui/*.css'],
+            src: ['src/ui/*.html', 'src/ui/custom.css'],
             dest: 'dist/ui'
           }
         ]
