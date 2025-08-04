@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
-import { createTheme, MantineProvider, Stack } from '@mantine/core';
+import { createTheme, MantineProvider, Stack, Button, Group } from '@mantine/core';
 import { useListState } from '@mantine/hooks';
 import CardList from './components/CardList';
 import { ExtractedContent } from './types';
@@ -13,23 +11,13 @@ const theme = createTheme({
 });
 
 const App: React.FC = () => {
-  const [prompt, setPrompt] = useState('');
-  const [temperature, setTemperature] = useState(1);
-  const [topK, setTopK] = useState(1);
-  const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [gdocsEnabled, setGdocsEnabled] = useState(false);
   const [msWordEnabled, setMsWordEnabled] = useState(false);
   const [extractedContents, extractedContentsHandlers] = useListState<ExtractedContent>([]);
-  
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
-  const dragFilesPreviewRef = useRef<HTMLDivElement | null>(null);
   const preloadedFilesRef = useRef<File[] | null>(null);
   const accessTokenRef = useRef<string | null>(null);
-  const isDraggingRef = useRef(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     updateButtonStates();
@@ -40,19 +28,11 @@ const App: React.FC = () => {
 
   const showLoading = () => {
     setLoading(true);
-    setResponse('');
     setError('');
-  };
-
-  const showResponse = async (responseText: string) => {
-    setLoading(false);
-    const parsedMarkdown = await marked.parse(responseText);
-    setResponse(DOMPurify.sanitize(parsedMarkdown));
   };
 
   const showError = (errorMsg: string) => {
     setError(errorMsg);
-    setResponse('');
     setLoading(false);
   };
 
@@ -102,24 +82,24 @@ const App: React.FC = () => {
     }
   };
 
-  const authenticateGoogle = async (): Promise<string> => {
+  const authenticateGoogle = async (): Promise<any> => {
     try {
       if (!chrome.identity) {
         throw new Error('Chrome identity API not available');
       }
 
-      const token = await chrome.identity.getAuthToken({ 
+      const authResponse = await chrome.identity.getAuthToken({ 
         interactive: true,
         scopes: ['https://www.googleapis.com/auth/documents.readonly']
       });
 
-      if (!token || typeof token !== 'string') {
-        console.error('Failed to get access token:', token);
+      if (!authResponse || typeof authResponse !== 'object' || !authResponse.token) {
+        console.error('Failed to get access token:', authResponse);
         throw new Error('Failed to get access token');
       }
 
-      accessTokenRef.current = token;
-      return token;
+      accessTokenRef.current = authResponse.token;
+      return authResponse;
     } catch (error) {
       console.error('Authentication failed:', error);
       throw error;
@@ -360,12 +340,35 @@ const App: React.FC = () => {
       const content = await fetchGoogleDocsContent();
       
       if (content.trim()) {
-        const newValue = prompt + (prompt ? '\n\n' : '') + content;
-        setPrompt(newValue);
-        setLoading(false);
-        if (inputRef.current) {
-          inputRef.current.focus();
+        // Get current tab URL
+        let currentUrl = '';
+        try {
+          if (chrome.tabs) {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            currentUrl = tab?.url || '';
+          }
+        } catch (e) {
+          // Ignore URL extraction errors
         }
+
+        // Extract title and create excerpt
+        const lines = content.split('\n').filter(line => line.trim());
+        const title = lines[0]?.substring(0, 100) || 'Google Docs Content';
+        const excerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '');
+        
+        // Create new content card
+        const newContent: ExtractedContent = {
+          id: Date.now().toString(),
+          title,
+          content,
+          excerpt,
+          url: currentUrl,
+          timestamp: new Date()
+        };
+        
+        // Add to card list
+        extractedContentsHandlers.append(newContent);
+        setLoading(false);
       } else {
         throw new Error('No content found in Google Docs');
       }
@@ -380,12 +383,35 @@ const App: React.FC = () => {
       const content = await fetchMsWordContent();
       
       if (content.trim()) {
-        const newValue = prompt + (prompt ? '\n\n' : '') + content;
-        setPrompt(newValue);
-        setLoading(false);
-        if (inputRef.current) {
-          inputRef.current.focus();
+        // Get current tab URL
+        let currentUrl = '';
+        try {
+          if (chrome.tabs) {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            currentUrl = tab?.url || '';
+          }
+        } catch (e) {
+          // Ignore URL extraction errors
         }
+
+        // Extract title and create excerpt
+        const lines = content.split('\n').filter(line => line.trim());
+        const title = lines[0]?.substring(0, 100) || 'MS Word Content';
+        const excerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '');
+        
+        // Create new content card
+        const newContent: ExtractedContent = {
+          id: Date.now().toString(),
+          title,
+          content,
+          excerpt,
+          url: currentUrl,
+          timestamp: new Date()
+        };
+        
+        // Add to card list
+        extractedContentsHandlers.append(newContent);
+        setLoading(false);
       } else {
         throw new Error('No content found in MS Word document');
       }
@@ -428,14 +454,7 @@ const App: React.FC = () => {
         
         // Add to card list
         extractedContentsHandlers.append(newContent);
-        
-        // Also add to prompt as before
-        const newValue = prompt + (prompt ? '\n\n' : '') + content;
-        setPrompt(newValue);
         setLoading(false);
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
       } else {
         throw new Error('No readable content found');
       }
@@ -445,102 +464,15 @@ const App: React.FC = () => {
   };
 
   const handleTestChatGPT = async () => {
-    if (!isDraggingRef.current) {
-      try {
-        showLoading();
-        await testSendToChatGPT();
-        setLoading(false);
-        await showResponse('Successfully sent test.pdf and test.png files to clipboard!');
-      } catch (error) {
-        showError((error as Error).message);
-      }
+    try {
+      showLoading();
+      await testSendToChatGPT();
+      setLoading(false);
+    } catch (error) {
+      showError((error as Error).message);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (inputRef.current) {
-      inputRef.current.style.backgroundColor = '#f0f8ff';
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (inputRef.current) {
-      inputRef.current.style.backgroundColor = '';
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (inputRef.current) {
-      inputRef.current.style.backgroundColor = '';
-    }
-    
-    if (dragPreviewRef.current) {
-      document.body.removeChild(dragPreviewRef.current);
-      dragPreviewRef.current = null;
-    }
-
-    console.log('[DEBUG] Drop event triggered', e.dataTransfer);
-    
-    const draggedText = e.dataTransfer?.getData('text/plain');
-    if (draggedText && inputRef.current) {
-      const isPath = /^[\/~][\w\/\-\.]+\.[a-zA-Z0-9]+$/.test(draggedText.trim()) || 
-                     /^[a-zA-Z]:[\\\/][\w\\\/\-\.]+\.[a-zA-Z0-9]+$/.test(draggedText.trim());
-      
-      const insertContent = (content: string) => {
-        if (!inputRef.current) return;
-        
-        const currentValue = inputRef.current.value;
-        const cursorPosition = inputRef.current.selectionStart;
-        
-        const newValue = currentValue.slice(0, cursorPosition) + content + currentValue.slice(cursorPosition);
-        setPrompt(newValue);
-        
-        setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.setSelectionRange(cursorPosition + content.length, cursorPosition + content.length);
-            inputRef.current.focus();
-          }
-        }, 0);
-      };
-      
-      if (isPath) {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-          try {
-            chrome.runtime.sendMessage({
-              action: 'readFile',
-              filePath: draggedText.trim()
-            }, {}, (response?: any) => {
-              if ((chrome.runtime as any).lastError) {
-                console.log('Background script connection failed:', (chrome.runtime as any).lastError.message);
-                const contentToInsert = `File path detected: ${draggedText}\n(Note: No background script available to read file)\n`;
-                insertContent(contentToInsert);
-                return;
-              }
-              
-              if (response && response.success && response.content) {
-                insertContent(response.content);
-              } else {
-                const errorMsg = response && response.error ? response.error : 'Unknown error reading file';
-                const contentToInsert = `File path detected: ${draggedText}\n(Error: ${errorMsg})\n`;
-                insertContent(contentToInsert);
-              }
-            });
-          } catch (error) {
-            const contentToInsert = `File path detected: ${draggedText}\n(Note: Chrome extension API error)\n`;
-            insertContent(contentToInsert);
-          }
-        } else {
-          const contentToInsert = `File path detected: ${draggedText}\n(Note: Cannot read file content in this environment)\n`;
-          insertContent(contentToInsert);
-        }
-      } else {
-        insertContent(draggedText);
-      }
-    }
-  };
 
   const handleReorderContents = (from: number, to: number) => {
     extractedContentsHandlers.reorder({ from, to });
@@ -562,60 +494,41 @@ const App: React.FC = () => {
   return (
     <MantineProvider theme={theme}>
       <Stack gap="lg" p="md">
-        <textarea
-          ref={inputRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder='Type something, e.g. "Write a haiku about Chrome Extensions"'
-          cols={30}
-          rows={5}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        />
-        
-        <div>
-          <input
-            type="range"
-            value={temperature}
-            onChange={(e) => setTemperature(Number(e.target.value))}
-            min="0"
-            max="2"
-            step="0.01"
-          />
-          <label>Temperature: <span>{temperature}</span></label>
-        </div>
-        
-        <div>
-          <input
-            type="range"
-            value={topK}
-            onChange={(e) => setTopK(Number(e.target.value))}
-            min="1"
-            max="8"
-            step="1"
-          />
-          <label>Top-k: <span>{topK}</span></label>
-        </div>
-        
-        <button className="primary" disabled={!prompt.trim()}>
-          Run
-        </button>
-        <button className="secondary" disabled={!loading && !response && !error}>
-          Reset
-        </button>
-        <button className="secondary" disabled={!gdocsEnabled} onClick={handleFetchGdocs}>
-          Fetch Google Docs
-        </button>
-        <button className="secondary" disabled={!msWordEnabled} onClick={handleFetchMsWord}>
-          Fetch MS Word
-        </button>
-        <button className="secondary" onClick={handleExtractContent}>
-          Extract Page Content
-        </button>
-        <button className="secondary" draggable="true" onClick={handleTestChatGPT}>
-          Test sendToChatGPT
-        </button>
+        <Group>
+          <Button
+            variant="filled"
+            disabled={!gdocsEnabled}
+            loading={loading}
+            onClick={handleFetchGdocs}
+          >
+            Fetch Google Docs
+          </Button>
+          
+          <Button
+            variant="filled"
+            disabled={!msWordEnabled}
+            loading={loading}
+            onClick={handleFetchMsWord}
+          >
+            Fetch MS Word
+          </Button>
+          
+          <Button
+            variant="filled"
+            loading={loading}
+            onClick={handleExtractContent}
+          >
+            Extract Page Content
+          </Button>
+          
+          <Button
+            variant="outline"
+            loading={loading}
+            onClick={handleTestChatGPT}
+          >
+            Test sendToChatGPT
+          </Button>
+        </Group>
 
         <CardList
           contents={extractedContents}
@@ -623,18 +536,8 @@ const App: React.FC = () => {
           onAddContent={handleAddContent}
         />
         
-        {response && !loading && !error && (
-          <div className="text" dangerouslySetInnerHTML={{ __html: response }} />
-        )}
-        
-        {loading && (
-          <div className="text">
-            <span className="blink">...</span>
-          </div>
-        )}
-        
         {error && !loading && (
-          <div className="text">{error}</div>
+          <div className="text" style={{ color: 'red' }}>{error}</div>
         )}
       </Stack>
     </MantineProvider>

@@ -42,18 +42,19 @@ const InteractiveDivider = ({
     <Box
       style={{
         opacity: 0,
-        transition: 'opacity 0.2s ease',
+        transition: 'opacity 0.2s ease, max-height 0.2s ease',
         cursor: 'pointer',
-        minHeight: '16px',
         display: 'flex',
         alignItems: 'center',
         position: 'relative'
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.opacity = '1';
+        e.currentTarget.style.maxHeight = 'none';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.opacity = '0';
+        e.currentTarget.style.maxHeight = '8px';
       }}
       onClick={() => setIsEditing(true)}
     >
