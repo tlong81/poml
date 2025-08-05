@@ -35,11 +35,12 @@ interface PomlReaderConfig {
 }
 
 export interface PomlToken {
-  type: 'element' | 'attribute' | 'attributeValue';
+  type: 'element' | 'attribute' | 'attributeValue' | 'expression';
   range: Range;
-  element: string;
+  element?: string;
   attribute?: string; // specified only if it's an attribute
   value?: string; // specified only if it's an attribute value
+  expression?: string; // specified only if it's an expression
 }
 
 /**
@@ -59,6 +60,8 @@ export class PomlFile {
   private tokenVector: IToken[];
   private documentRange: Range;
   private disabledComponents: Set<string> = new Set();
+  private expressionTokens: PomlToken[] = [];
+  private expressionEvaluations: Map<string, any[]> = new Map();
 
   constructor(text: string, options?: PomlReaderOptions, sourcePath?: string) {
     this.config = {
@@ -255,6 +258,8 @@ export class PomlFile {
   }
 
   public react(context?: { [key: string]: any }): React.ReactElement {
+    this.expressionTokens = [];
+    this.expressionEvaluations.clear();
     const rootElement = this.xmlRootElement();
 
     if (rootElement) {
@@ -307,6 +312,83 @@ export class PomlFile {
         attributeValue: [this.handleAttributeValueCompletion(realOffset)]
       }
     });
+  }
+
+  public getExpressionTokens(): PomlToken[] {
+    if (this.expressionTokens.length > 0) {
+      return this.expressionTokens;
+    }
+    if (!this.ast || !this.ast.rootElement) {
+      return [];
+    }
+    const tokens: PomlToken[] = [];
+    const regex = /{{\s*(.+?)\s*}}(?!})/gm;
+
+    const visit = (element: XMLElement) => {
+      // attributes
+      for (const attr of element.attributes) {
+        if (!attr.value) {
+          continue;
+        }
+        const range = this.xmlAttributeValueRange(attr);
+        regex.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = regex.exec(attr.value))) {
+          tokens.push({
+            type: 'expression',
+            range: {
+              start: range.start + match.index,
+              end: range.start + match.index + match[0].length - 1,
+            },
+            expression: match[1],
+          });
+        }
+      }
+
+      // text contents
+      for (const tc of element.textContents) {
+        const text = tc.text || '';
+        const pos = this.xmlElementRange(tc);
+        regex.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = regex.exec(text))) {
+          tokens.push({
+            type: 'expression',
+            range: {
+              start: pos.start + match.index,
+              end: pos.start + match.index + match[0].length - 1,
+            },
+            expression: match[1],
+          });
+        }
+      }
+
+      for (const child of element.subElements) {
+        visit(child);
+      }
+    };
+
+    visit(this.ast.rootElement);
+    return tokens;
+  }
+
+  public getExpressionEvaluations(index: number): any[] {
+    const token = this.expressionTokens[index];
+    if (!token) {
+      return [];
+    }
+    const key = `${token.range.start}:${token.range.end}`;
+    return this.expressionEvaluations.get(key) ?? [];
+  }
+
+  private recordEvaluation(range: Range | undefined, output: any) {
+    if (!range) {
+      return;
+    }
+    const key = `${range.start}:${range.end}`;
+    const list = this.expressionEvaluations.get(key) ?? [];
+    list.push(output);
+    this.expressionEvaluations.set(key, list);
   }
 
   private formatError(msg: string, range?: Range, cause?: any): ReadError {
@@ -688,28 +770,39 @@ export class PomlFile {
     return results;
   };
 
-  private evaluateExpression(
+  public evaluateExpression(
     expression: string,
     context: { [key: string]: any },
     range?: Range,
     stripCurlyBrackets: boolean = false
   ) {
-    try {
-      if (stripCurlyBrackets) {
-        const curlyMatch = expression.match(/^\s*{{\s*(.+?)\s*}}\s*$/m);
-        if (curlyMatch) {
-          expression = curlyMatch[1];
-        }
+    if (stripCurlyBrackets) {
+      const curlyMatch = expression.match(/^\s*{{\s*(.+?)\s*}}\s*$/m);
+      if (curlyMatch) {
+        expression = curlyMatch[1];
       }
-      return evalWithVariables(expression, context || {});
+    }
+
+    if (range) {
+      const exists = this.expressionTokens.some(
+        t => t.range.start === range.start && t.range.end === range.end
+      );
+      if (!exists) {
+        this.expressionTokens.push({ type: 'expression', range, expression });
+      }
+    }
+
+    try {
+      const result = evalWithVariables(expression, context || {});
+      this.recordEvaluation(range, result);
+      return result;
     } catch (e) {
-      this.reportError(
+      const message =
         e !== undefined && (e as Error).message
           ? (e as Error).message
-          : `Error evaluating expression: ${expression}`,
-        range,
-        e
-      );
+          : `Error evaluating expression: ${expression}`;
+      this.recordEvaluation(range, message);
+      this.reportError(message, range, e);
       return '';
     }
   }

@@ -245,6 +245,30 @@ describe('templateEngine', () => {
   });
 });
 
+describe('expressionEvaluation', () => {
+  test('captures evaluation history', () => {
+    ErrorCollection.clear();
+    const text = '<p for="i in [1,2]">{{i}}</p>';
+    const file = new PomlFile(text);
+    file.react();
+    const tokens = file.getExpressionTokens();
+    expect(tokens.length).toBe(2);
+    expect(file.getExpressionEvaluations(1)).toStrictEqual([1, 2]);
+    expect(ErrorCollection.empty()).toBe(true);
+  });
+
+  test('tracks each expression separately', () => {
+    ErrorCollection.clear();
+    const text = '<p>{{1+2}} {{1+2}}</p>';
+    const file = new PomlFile(text);
+    file.react();
+    const tokens = file.getExpressionTokens();
+    expect(tokens.length).toBe(2);
+    expect(file.getExpressionEvaluations(0)).toStrictEqual([3]);
+    expect(file.getExpressionEvaluations(1)).toStrictEqual([3]);
+  });
+});
+
 describe('include', () => {
   test('basic include', async () => {
     const text = '<poml><include src="assets/includeChild.poml"/></poml>';

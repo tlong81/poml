@@ -20,6 +20,7 @@ import {
   TelemetryEventNotification,
   FullDocumentDiagnosticReport,
   UnchangedDocumentDiagnosticReport
+  , CodeLens, CodeLensParams, Command, ExecuteCommandParams, Range
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -126,7 +127,9 @@ class PomlLspServer {
             interFileDependencies: false,
             workspaceDiagnostics: false
           },
-          hoverProvider: true
+          hoverProvider: true,
+          codeLensProvider: { resolveProvider: false },
+          executeCommandProvider: { commands: ['poml.evaluateExpression'] }
         }
       };
     });
@@ -137,6 +140,8 @@ class PomlLspServer {
     this.connection.languages.diagnostics.on(this.onDiagnostic.bind(this));
 
     this.connection.onRequest(PreviewMethodName, this.onPreview.bind(this));
+    this.connection.onCodeLens(this.onCodeLens.bind(this));
+    this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
 
     // Provide a way to force the diagnostics to be reset.
     this.documents.onDidSave(change => {
@@ -170,6 +175,65 @@ class PomlLspServer {
     if (reported) {
       this.statistics = {};
     }
+  }
+
+  private onCodeLens(params: CodeLensParams): CodeLens[] {
+    const document = this.documents.get(params.textDocument.uri);
+    if (!document) {
+      return [];
+    }
+    const text = document.getText();
+    const pomlFile = new PomlFile(text);
+    const tokens = pomlFile.getExpressionTokens();
+    const lenses: CodeLens[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token.expression === undefined) {
+        continue;
+      }
+      const start = document.positionAt(token.range.start);
+      const end = document.positionAt(token.range.end + 1);
+      const range: Range = { start, end };
+      const expr = token.expression;
+      let titleExpr = expr;
+      if (titleExpr.length > 20) {
+        titleExpr = `${titleExpr.slice(0, 10)}...${titleExpr.slice(-10)}`;
+      }
+      const command: Command = {
+        title: `Evaluate ${titleExpr}`,
+        command: 'poml.evaluateExpression',
+        arguments: [i, text]
+      };
+      lenses.push({ range, command });
+    }
+    return lenses;
+  }
+
+  private async onExecuteCommand(params: ExecuteCommandParams): Promise<any> {
+    if (params.command !== 'poml.evaluateExpression') {
+      return;
+    }
+    const index = Number(params.arguments?.[0] ?? -1);
+    const text = String(params.arguments?.[1] ?? '');
+    const file = new PomlFile(text);
+    ErrorCollection.clear();
+    file.react({});
+    const tokens = file.getExpressionTokens();
+    const token = tokens[index];
+    if (!token) {
+      return '';
+    }
+    const evaluations = file.getExpressionEvaluations(index);
+    let output: any = evaluations.length > 0 ? evaluations[evaluations.length - 1] : '';
+    for (const ev of evaluations) {
+      this.connection.console.log(`Eval: ${token.expression} => ${ev}`);
+    }
+    if (!ErrorCollection.empty()) {
+      const err = ErrorCollection.first()?.toString() ?? 'Unknown error';
+      this.connection.console.error(`Eval error: ${token.expression} => ${err}`);
+      output = err;
+    }
+    return output;
   }
 
   private getModelEncoding(model: string): Tiktoken {
@@ -590,8 +654,8 @@ class PomlLspServer {
         kind: MarkupKind.Markdown,
         value:
           token.type !== 'element' && token.attribute
-            ? this.queryDocumentationForParameter(token.element, token.attribute)
-            : this.queryDocumentationForComponent(token.element)
+            ? this.queryDocumentationForParameter(token.element!, token.attribute)
+            : this.queryDocumentationForComponent(token.element!)
       };
       return {
         contents: markdown,
@@ -658,9 +722,9 @@ class PomlLspServer {
     const vscodeSuggestions = suggestions.map((suggestion): CompletionItem | undefined => {
       if (suggestion.type === 'element') {
         return {
-          label: suggestion.element,
+          label: suggestion.element!,
           kind: CompletionItemKind.Class,
-          textEdit: toTextEdit(suggestion, suggestion.element),
+          textEdit: toTextEdit(suggestion, suggestion.element!),
           data: suggestion,
           command
         };
@@ -696,19 +760,19 @@ class PomlLspServer {
     }
     const suggestion = item.data as PomlToken;
     if (suggestion.type === 'element') {
-      item.detail = suggestion.element + ' (Component)';
+      item.detail = suggestion.element! + ' (Component)';
       item.documentation = {
         kind: MarkupKind.Markdown,
-        value: this.queryDocumentationForComponent(suggestion.element)
+        value: this.queryDocumentationForComponent(suggestion.element!)
       };
     } else if (
       (suggestion.type === 'attribute' || suggestion.type === 'attributeValue') &&
       suggestion.attribute !== undefined
     ) {
-      item.detail = suggestion.attribute + ' (Parameter of ' + suggestion.element + ')';
+      item.detail = suggestion.attribute + ' (Parameter of ' + suggestion.element! + ')';
       item.documentation = {
         kind: MarkupKind.Markdown,
-        value: this.queryDocumentationForParameter(suggestion.element, suggestion.attribute)
+        value: this.queryDocumentationForParameter(suggestion.element!, suggestion.attribute)
       };
     }
     this.incrementStatistics('completionResolve');

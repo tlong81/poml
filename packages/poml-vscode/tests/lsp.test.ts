@@ -117,5 +117,14 @@ suite('LSP Server', () => {
     assert.strictEqual(response.error, undefined, 'Preview response contains error');
     assert.ok(response.content, 'Expected preview content');
   });
+
+  test('evaluate expression returns result', async function() {
+    this.timeout(20000);
+    const result = await client.sendRequest('workspace/executeCommand', {
+      command: 'poml.evaluateExpression',
+      arguments: [0, '<p>{{1+2}}</p>']
+    });
+    assert.strictEqual(result, 3, 'Evaluation result mismatch');
+  });
 });
 
