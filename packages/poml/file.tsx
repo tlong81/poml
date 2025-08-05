@@ -796,16 +796,17 @@ export class PomlFile {
       if (range) {
         this.recordEvaluation(range, result);
       }
+      return result;
     } catch (e) {
       const errMessage = e !== undefined && (e as Error).message
-      ? (e as Error).message
-      : `Error evaluating expression: ${expression}`;
+        ? (e as Error).message
+        : `Error evaluating expression: ${expression}`;
       if (range) {
         this.recordEvaluation(range, errMessage);
       }
       this.reportError(errMessage, range, e);
-      return '';
     }
+    return '';
   }
 
   /**

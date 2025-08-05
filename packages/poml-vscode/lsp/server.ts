@@ -201,7 +201,7 @@ class PomlLspServer {
         titleExpr = `${titleExpr.slice(0, 10)}...${titleExpr.slice(-10)}`;
       }
       const command: Command = {
-        title: `Evaluate ${titleExpr}`,
+        title: `▶️ Evaluate ${titleExpr}`,
         command: 'poml.evaluateExpression',
         arguments: [params.textDocument.uri, text, token.range.start, token.range.end]
       };
