@@ -6,7 +6,7 @@ import {
   PreviewParams,
   PreviewResponse
 } from '../panel/types';
-import { LanguageClient } from 'vscode-languageclient/node';
+import { LanguageClient, State } from 'vscode-languageclient/node';
 
 suite('LSP Server', () => {
   let client: LanguageClient;
@@ -15,11 +15,21 @@ suite('LSP Server', () => {
     this.timeout(20000);
     const ext = vscode.extensions.getExtension('poml-team.poml');
     await ext?.activate();
-    const extPath = path.resolve(__dirname, '../../../dist/extension.js');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const extensionApi = require(extPath);
+    const extensionApi = ext?.exports as { getClient: () => LanguageClient } | undefined;
+    assert.ok(extensionApi, 'Extension API not available');
     client = extensionApi.getClient();
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise<void>(resolve => {
+      if (client.state === State.Running) {
+        resolve();
+      } else {
+        const disposable = client.onDidChangeState(e => {
+          if (e.newState === State.Running) {
+            disposable.dispose();
+            resolve();
+          }
+        });
+      }
+    });
   });
 
   teardown(async () => {

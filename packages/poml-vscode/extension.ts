@@ -63,6 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
   commandManager.register(new command.TelemetryCompletionAcceptanceCommand(webviewManager));
 
   activateClient(context, getTelemetryReporter());
+  return { getClient };
 }
 
 // This method is called when your extension is deactivated
