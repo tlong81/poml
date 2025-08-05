@@ -18,7 +18,7 @@ import { Code, Text, Inline } from 'poml/essentials';
 import { HtmlWriter, MarkdownWriter } from 'poml/writer';
 import { read, write } from 'poml';
 import { ErrorCollection } from 'poml/base';
-import { readFileSync } from 'fs';
+import { readFileSync } from '../util/fs';
 
 describe('other formats', () => {
   test('csv', () => {
