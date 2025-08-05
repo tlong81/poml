@@ -805,8 +805,8 @@ export class PomlFile {
         this.recordEvaluation(range, errMessage);
       }
       this.reportError(errMessage, range, e);
+      return '';
     }
-    return '';
   }
 
   /**
