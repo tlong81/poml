@@ -330,6 +330,22 @@ export class PomlFile {
         if (!attr.value) {
           continue;
         }
+        if (attr.key?.toLowerCase() === 'if' || attr.key?.toLowerCase() === 'for') {
+          tokens.push({
+            type: 'expression',
+            range: this.xmlAttributeValueRange(attr),
+            expression: attr.value
+          });
+          continue;
+        }
+        if (element.name?.toLowerCase() === 'let' && attr.key?.toLowerCase() === 'value') {
+          tokens.push({
+            type: 'expression',
+            range: this.xmlAttributeValueRange(attr),
+            expression: attr.value
+          });
+          continue;
+        }
         const range = this.xmlAttributeValueRange(attr);
         regex.lastIndex = 0;
         let match: RegExpExecArray | null;
@@ -372,23 +388,16 @@ export class PomlFile {
     return tokens;
   }
 
-  public getExpressionEvaluations(index: number): any[] {
-    const token = this.expressionTokens[index];
-    if (!token) {
-      return [];
-    }
-    const key = `${token.range.start}:${token.range.end}`;
+  public getExpressionEvaluations(range: Range): any[] {
+    const key = `${range.start}:${range.end}`;
     return this.expressionEvaluations.get(key) ?? [];
   }
 
-  private recordEvaluation(range: Range | undefined, output: any) {
-    if (!range) {
-      return;
-    }
+  private recordEvaluation(range: Range, output: any) {
     const key = `${range.start}:${range.end}`;
-    const list = this.expressionEvaluations.get(key) ?? [];
-    list.push(output);
-    this.expressionEvaluations.set(key, list);
+    const evaluationList = this.expressionEvaluations.get(key) ?? [];
+    evaluationList.push(output);
+    this.expressionEvaluations.set(key, evaluationList);
   }
 
   private formatError(msg: string, range?: Range, cause?: any): ReadError {
@@ -770,39 +779,31 @@ export class PomlFile {
     return results;
   };
 
-  public evaluateExpression(
+  private evaluateExpression(
     expression: string,
     context: { [key: string]: any },
     range?: Range,
     stripCurlyBrackets: boolean = false
   ) {
-    if (stripCurlyBrackets) {
-      const curlyMatch = expression.match(/^\s*{{\s*(.+?)\s*}}\s*$/m);
-      if (curlyMatch) {
-        expression = curlyMatch[1];
-      }
-    }
-
-    if (range) {
-      const exists = this.expressionTokens.some(
-        t => t.range.start === range.start && t.range.end === range.end
-      );
-      if (!exists) {
-        this.expressionTokens.push({ type: 'expression', range, expression });
-      }
-    }
-
     try {
+      if (stripCurlyBrackets) {
+        const curlyMatch = expression.match(/^\s*{{\s*(.+?)\s*}}\s*$/m);
+        if (curlyMatch) {
+          expression = curlyMatch[1];
+        }
+      }
       const result = evalWithVariables(expression, context || {});
-      this.recordEvaluation(range, result);
-      return result;
+      if (range) {
+        this.recordEvaluation(range, result);
+      }
     } catch (e) {
-      const message =
-        e !== undefined && (e as Error).message
-          ? (e as Error).message
-          : `Error evaluating expression: ${expression}`;
-      this.recordEvaluation(range, message);
-      this.reportError(message, range, e);
+      const errMessage = e !== undefined && (e as Error).message
+      ? (e as Error).message
+      : `Error evaluating expression: ${expression}`;
+      if (range) {
+        this.recordEvaluation(range, errMessage);
+      }
+      this.reportError(errMessage, range, e);
       return '';
     }
   }

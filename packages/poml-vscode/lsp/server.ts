@@ -19,8 +19,12 @@ import {
   RelatedFullDocumentDiagnosticReport,
   TelemetryEventNotification,
   FullDocumentDiagnosticReport,
-  UnchangedDocumentDiagnosticReport
-  , CodeLens, CodeLensParams, Command, ExecuteCommandParams, Range
+  UnchangedDocumentDiagnosticReport,
+  CodeLens,
+  CodeLensParams,
+  Command,
+  ExecuteCommandParams,
+  Range
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -191,9 +195,6 @@ class PomlLspServer {
       if (token.expression === undefined) {
         continue;
       }
-      const start = document.positionAt(token.range.start);
-      const end = document.positionAt(token.range.end + 1);
-      const range: Range = { start, end };
       const expr = token.expression;
       let titleExpr = expr;
       if (titleExpr.length > 20) {
@@ -202,9 +203,13 @@ class PomlLspServer {
       const command: Command = {
         title: `Evaluate ${titleExpr}`,
         command: 'poml.evaluateExpression',
-        arguments: [i, text]
+        arguments: [params.textDocument.uri, text, token.range.start, token.range.end]
       };
-      lenses.push({ range, command });
+      const vscodeRange: Range = {
+        start: document.positionAt(token.range.start),
+        end: document.positionAt(token.range.end + 1)
+      }
+      lenses.push({ range: vscodeRange, command });
     }
     return lenses;
   }
@@ -213,27 +218,52 @@ class PomlLspServer {
     if (params.command !== 'poml.evaluateExpression') {
       return;
     }
-    const index = Number(params.arguments?.[0] ?? -1);
-    const text = String(params.arguments?.[1] ?? '');
-    const file = new PomlFile(text);
+    const uri = params.arguments?.[0] as string | undefined;
+    const text = params.arguments?.[1] as string | undefined;
+    const rangeStart = params.arguments?.[2] as number | undefined;
+    const rangeEnd = params.arguments?.[3] as number | undefined;
+    if (!uri || !text || rangeStart === undefined || rangeEnd === undefined) {
+      this.connection.console.error(`${new Date().toLocaleString()} Invalid arguments for poml.evaluateExpression command`);
+      return;
+    }
+    const expression = text.slice(rangeStart, rangeEnd + 1);
     ErrorCollection.clear();
-    file.react({});
-    const tokens = file.getExpressionTokens();
-    const token = tokens[index];
-    if (!token) {
-      return '';
+    const file = new PomlFile(text, undefined, fileURLToPath(uri));
+
+    const options = this.associatedOptions.get(uri);
+    let context: any = {};
+    if (options) {
+      for (const c of options.contexts ?? []) {
+        try {
+          context = { ...context, ...parseJsonWithBuffers(await readFile(c, 'utf-8')) };
+        } catch (e) {
+          console.error(`Failed to parse context file ${c}: ${e}`);
+        }
+      }
     }
-    const evaluations = file.getExpressionEvaluations(index);
-    let output: any = evaluations.length > 0 ? evaluations[evaluations.length - 1] : '';
-    for (const ev of evaluations) {
-      this.connection.console.log(`Eval: ${token.expression} => ${ev}`);
-    }
+
+    file.react(context);
+
     if (!ErrorCollection.empty()) {
       const err = ErrorCollection.first()?.toString() ?? 'Unknown error';
-      this.connection.console.error(`Eval error: ${token.expression} => ${err}`);
-      output = err;
+      this.connection.console.error(`${new Date().toLocaleString()} Error during evaluation: ${expression} => ${err}`);
     }
-    return output;
+
+    const evaluations = file.getExpressionEvaluations({ start: rangeStart, end: rangeEnd });
+    if (evaluations.length === 0) {
+      this.connection.console.warn(`${new Date().toLocaleString()} No evaluations found for expression: ${expression} (${rangeStart}-${rangeEnd})`);
+      return;
+    }
+    for (let i = 0; i < evaluations.length; i++) {
+      let result = evaluations[i];
+      if (typeof result === 'object') {
+        result = JSON.stringify(result, null, 2);
+      }
+      if (result.length > 1024) {
+        result = `${result.slice(0, 1024)} ...[truncated]`;
+      }
+      this.connection.console.log(`${new Date().toLocaleString()} [Eval ${i + 1}] ${expression} => ${result}`);
+    }
   }
 
   private getModelEncoding(model: string): Tiktoken {

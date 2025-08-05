@@ -253,7 +253,8 @@ describe('expressionEvaluation', () => {
     file.react();
     const tokens = file.getExpressionTokens();
     expect(tokens.length).toBe(2);
-    expect(file.getExpressionEvaluations(1)).toStrictEqual([1, 2]);
+    const position = text.indexOf('{{i}}');
+    expect(file.getExpressionEvaluations({ start: position, end: position + 4 })).toStrictEqual([1, 2]);
     expect(ErrorCollection.empty()).toBe(true);
   });
 
@@ -264,8 +265,8 @@ describe('expressionEvaluation', () => {
     file.react();
     const tokens = file.getExpressionTokens();
     expect(tokens.length).toBe(2);
-    expect(file.getExpressionEvaluations(0)).toStrictEqual([3]);
-    expect(file.getExpressionEvaluations(1)).toStrictEqual([3]);
+    expect(file.getExpressionEvaluations({ start: tokens[0].range.start, end: tokens[0].range.end })).toStrictEqual([3]);
+    expect(file.getExpressionEvaluations({ start: tokens[1].range.start, end: tokens[1].range.end })).toStrictEqual([3]);
   });
 });
 
