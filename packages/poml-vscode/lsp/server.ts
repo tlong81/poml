@@ -257,7 +257,7 @@ class PomlLspServer {
     ErrorCollection.clear();
     const file = new PomlFile(text, undefined, fileURLToPath(uri));
 
-    const options = this.associatedOptions.get(uri);
+    const options = this.getAssociatedOptions(uri);
     let context: any = {};
     if (options) {
       for (const c of options.contexts ?? []) {
