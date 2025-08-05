@@ -664,54 +664,149 @@ const App: React.FC = () => {
     try {
       showLoading();
       
-      if (!navigator.clipboard) {
-        throw new Error('Clipboard API not available');
-      }
-
-      // Try to read clipboard items (supports both text and files)
-      const clipboardItems = await navigator.clipboard.read();
+      // Create a hidden input element to capture paste events
+      const pasteInput = document.createElement('input');
+      pasteInput.style.position = 'absolute';
+      pasteInput.style.left = '-9999px';
+      pasteInput.style.opacity = '0';
+      document.body.appendChild(pasteInput);
+      
+      // Focus the input to make it the target for paste
+      pasteInput.focus();
       
       let hasProcessedContent = false;
       
-      for (const item of clipboardItems) {
-        // Check for files first
-        for (const type of item.types) {
-          console.log('Clipboard item:', item);
-          console.log(`Item type: ${type}`);
-          if (type.startsWith('image/') || type.startsWith('application/') || type.startsWith('text/') && type !== 'text/plain') {
-            try {
-              const blob = await item.getType(type);
-              const file = new File([blob], `clipboard-${Date.now()}.${getFileExtensionFromType(type)}`, { type });
-              await handleDropFile(file);
-              hasProcessedContent = true;
-              break;
-            } catch (error) {
-              console.warn('Failed to read clipboard file:', error);
+      // Add paste event listener
+      const handlePasteEvent = async (event: ClipboardEvent) => {
+        try {
+          event.preventDefault();
+          console.log('Paste event triggered in sidebar');
+          
+          const clipboardData = event.clipboardData;
+          if (!clipboardData) {
+            throw new Error('No clipboard data available');
+          }
+          
+          const items = clipboardData.items;
+          console.log('Clipboard items count:', items.length);
+          
+          // Process files first
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            console.log(`Item ${i}: type=${item.type}, kind=${item.kind}`);
+            
+            if (item.kind === 'file') {
+              const file = item.getAsFile();
+              if (file) {
+                console.log('Processing file:', file.name, 'type:', file.type, 'size:', file.size);
+                await handleDropFile(file);
+                hasProcessedContent = true;
+              }
             }
           }
-        }
-        
-        if (hasProcessedContent) break;
-        
-        // Fall back to text content
-        if (item.types.includes('text/plain')) {
-          try {
-            const text = await navigator.clipboard.readText();
-            if (text.trim()) {
-              createCardFromContent('Pasted Text', text.trim());
-              hasProcessedContent = true;
+          
+          // Fall back to text if no files found
+          if (!hasProcessedContent) {
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              if (item.type === 'text/plain') {
+                const text = await new Promise<string>((resolve) => {
+                  item.getAsString(resolve);
+                });
+                if (text.trim()) {
+                  createCardFromContent('Pasted Text', text.trim());
+                  hasProcessedContent = true;
+                  break;
+                }
+              }
             }
-          } catch (error) {
-            console.warn('Failed to read clipboard text:', error);
           }
+          
+          if (!hasProcessedContent) {
+            throw new Error('No readable content found in clipboard');
+          }
+          
+          setLoading(false);
+        } catch (error) {
+          console.error('Paste event failed:', error);
+          showError(`Failed to paste from clipboard: ${(error as Error).message}`);
+        } finally {
+          // Clean up
+          pasteInput.removeEventListener('paste', handlePasteEvent);
+          document.body.removeChild(pasteInput);
         }
+      };
+      
+      // Add the event listener
+      pasteInput.addEventListener('paste', handlePasteEvent);
+      
+      // Try to trigger paste programmatically
+      try {
+        const success = document.execCommand('paste');
+        console.log('execCommand paste result:', success);
+        
+        // If execCommand didn't work, try the Clipboard API as fallback
+        if (!success) {
+          console.log('execCommand failed, trying Clipboard API fallback');
+          
+          if (!navigator.clipboard) {
+            throw new Error('Clipboard API not available');
+          }
+
+          // Try to read clipboard items (supports both text and files)
+          const clipboardItems = await navigator.clipboard.read();
+          
+          for (const item of clipboardItems) {
+            // Check for files first
+            for (const type of item.types) {
+              console.log('Clipboard item:', item);
+              console.log(`Item type: ${type}`);
+              if (type.startsWith('image/') || type.startsWith('application/') || type.startsWith('text/') && type !== 'text/plain') {
+                try {
+                  const blob = await item.getType(type);
+                  const file = new File([blob], `clipboard-${Date.now()}.${getFileExtensionFromType(type)}`, { type });
+                  await handleDropFile(file);
+                  hasProcessedContent = true;
+                  break;
+                } catch (error) {
+                  console.warn('Failed to read clipboard file:', error);
+                }
+              }
+            }
+            
+            if (hasProcessedContent) break;
+            
+            // Fall back to text content
+            if (item.types.includes('text/plain')) {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text.trim()) {
+                  createCardFromContent('Pasted Text', text.trim());
+                  hasProcessedContent = true;
+                }
+              } catch (error) {
+                console.warn('Failed to read clipboard text:', error);
+              }
+            }
+          }
+          
+          if (!hasProcessedContent) {
+            throw new Error('No readable content found in clipboard');
+          }
+          
+          setLoading(false);
+          
+          // Clean up fallback
+          pasteInput.removeEventListener('paste', handlePasteEvent);
+          document.body.removeChild(pasteInput);
+        }
+      } catch (error) {
+        // Clean up on error
+        pasteInput.removeEventListener('paste', handlePasteEvent);
+        document.body.removeChild(pasteInput);
+        throw error;
       }
       
-      if (!hasProcessedContent) {
-        throw new Error('No readable content found in clipboard');
-      }
-      
-      setLoading(false);
     } catch (error) {
       console.error('Paste failed:', error);
       showError(`Failed to paste from clipboard: ${(error as Error).message}`);
