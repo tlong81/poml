@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createTheme, MantineProvider, Stack, Button, Group, Alert } from '@mantine/core';
-import { useListState } from '@mantine/hooks';
+import { createTheme, MantineProvider, Stack, Button, Group, Alert, MantineColorsTuple } from '@mantine/core';
+import { useListState, useColorScheme } from '@mantine/hooks';
 import { IconClipboard } from '@tabler/icons-react';
 import CardList from './components/CardList';
 import CardModal from './components/CardModal';
@@ -8,11 +8,60 @@ import { ExtractedContent } from './types';
 
 import '@mantine/core/styles.css';
 
-const theme = createTheme({
-  /** Put your mantine theme override here */
+// Custom font family
+const customFontFamily = 'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"';
+
+// Custom color schemes for black/white buttons
+const whiteColors: MantineColorsTuple = [
+  '#ffffff',
+  '#f8f9fa', 
+  '#f1f3f5',
+  '#e9ecef',
+  '#dee2e6',
+  '#ced4da',
+  '#adb5bd',
+  '#868e96',
+  '#495057',
+  '#212529'
+];
+
+const blackColors: MantineColorsTuple = [
+  '#f8f9fa',
+  '#e9ecef',
+  '#dee2e6', 
+  '#ced4da',
+  '#adb5bd',
+  '#6c757d',
+  '#495057',
+  '#343a40',
+  '#212529',
+  '#000000'
+];
+
+const createCustomTheme = (colorScheme: 'light' | 'dark') => createTheme({
+  fontFamily: customFontFamily,
+  headings: {
+    fontFamily: customFontFamily,
+  },
+  colors: {
+    primary: colorScheme === 'dark' ? whiteColors : blackColors,
+  },
+  primaryColor: 'primary',
+  white: colorScheme === 'dark' ? '#ffffff' : '#ffffff',
+  black: colorScheme === 'dark' ? '#000000' : '#000000',
 });
 
 const App: React.FC = () => {
+  // Use manual dark mode detection instead of useColorScheme hook
+  // const [colorScheme, setColorScheme] = useState<'light' | 'dark'>(() => {
+  //   // Check system preference using media query
+  //   if (typeof window !== 'undefined' && window.matchMedia) {
+  //     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  //   }
+  //   return 'light';
+  // });
+  
+  const colorScheme = useColorScheme(); // Use Mantine's hook for color scheme detection
   const [loading, setLoading] = useState(false);
   const [topError, setTopError] = useState(''); // For edit errors
   const [bottomError, setBottomError] = useState(''); // For command errors
@@ -24,6 +73,9 @@ const App: React.FC = () => {
   const [modalOpened, setModalOpened] = useState(false);
   const preloadedFilesRef = useRef<File[] | null>(null);
   const accessTokenRef = useRef<string | null>(null);
+  
+  // Create theme based on color scheme
+  const theme = createCustomTheme(colorScheme);
 
   useEffect(() => {
     updateButtonStates();
@@ -324,23 +376,17 @@ const App: React.FC = () => {
   };
 
   const createFilesArray = async (): Promise<File[]> => {
-    return await Promise.all([
-      createFileFromPath('test.pdf', 'application/pdf'),
-      createFileFromPath('test.png', 'image/png')
-    ]);
+    // Return empty array since test files don't exist
+    return [];
   };
 
-  const createFileFromPath = async (filename: string, mimeType: string): Promise<File> => {
-    const response = await fetch(filename);
-    const content = await response.bytes();
-    const blob = new Blob([content], { type: mimeType });
-    return new File([blob], filename, { type: mimeType });
-  };
 
   const preloadDragFiles = async () => {
     try {
       preloadedFilesRef.current = await createFilesArray();
-      console.log('Files preloaded for drag operations:', preloadedFilesRef.current.map(f => ({ name: f.name, type: f.type, size: f.size })));
+      if (preloadedFilesRef.current.length > 0) {
+        console.log('Files preloaded for drag operations:', preloadedFilesRef.current.map(f => ({ name: f.name, type: f.type, size: f.size })));
+      }
     } catch (error) {
       console.error('Error preloading files:', error);
     }
@@ -830,7 +876,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <MantineProvider theme={theme}>
+    <MantineProvider theme={theme} forceColorScheme={colorScheme}>
       <Stack gap="lg" p="md">
         {topError && (
           <Alert variant="light" color="red" title="Edit Error" withCloseButton onClose={() => setTopError('')}>
@@ -841,6 +887,7 @@ const App: React.FC = () => {
         <Group>
           <Button
             variant="filled"
+            color="primary"
             disabled={!gdocsEnabled}
             loading={loading}
             onClick={handleFetchGdocs}
@@ -850,6 +897,7 @@ const App: React.FC = () => {
           
           <Button
             variant="filled"
+            color="primary"
             disabled={!msWordEnabled}
             loading={loading}
             onClick={handleFetchMsWord}
@@ -859,6 +907,7 @@ const App: React.FC = () => {
           
           <Button
             variant="filled"
+            color="primary"
             loading={loading}
             onClick={handleExtractContent}
           >
@@ -867,6 +916,7 @@ const App: React.FC = () => {
           
           <Button
             variant="outline"
+            color="primary"
             loading={loading}
             onClick={handleTestChatGPT}
           >
@@ -875,6 +925,7 @@ const App: React.FC = () => {
           
           <Button
             variant="outline"
+            color="primary"
             leftSection={<IconClipboard size={16} />}
             loading={loading}
             onClick={handlePasteFromClipboard}
@@ -896,8 +947,8 @@ const App: React.FC = () => {
         {extractedContents.length > 0 && (
           <Group justify="center">
             <Button
-              variant="gradient"
-              gradient={{ from: 'blue', to: 'cyan', deg: 45 }}
+              variant="filled"
+              color="primary"
               size="lg"
               onClick={handleCopyAllCards}
             >

@@ -98,7 +98,7 @@ const InteractiveDivider = ({
             border: isDragOver ? '1px solid #2196f3' : '1px solid #e9ecef'
           }}
         >
-          {isDragOver ? '📁' : '+'}
+          {isDragOver ? '📁✨' : '+'}
         </Text>
         <Divider
           style={{ flex: 1, maxWidth: '100px' }}
@@ -203,6 +203,7 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
   const handleFileDragOver = (e: React.DragEvent, index?: number) => {
     e.preventDefault();
     e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
     if (index !== undefined) {
       setDragOverIndex(index);
       setIsDragOverEnd(false);
@@ -232,19 +233,19 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
     setIsDragOverEnd(false);
     
     const files = Array.from(e.dataTransfer.files);
+    const htmlData = e.dataTransfer.getData('text/html');
+    const textData = e.dataTransfer.getData('text/plain');
+    
     if (files.length > 0) {
-      // For now, handle only the first file
+      // Handle file drops
       onDropFile(files[0], index);
+    } else if (htmlData || textData) {
+      // Handle HTML/text content drops
+      const content = htmlData || textData;
+      if (content.trim()) {
+        onAddContent(content.trim(), index || 0);
+      }
     }
-  };
-
-  const readFileContent = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string || '');
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsText(file);
-    });
   };
 
   if (contents.length === 0) {
@@ -275,7 +276,7 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
           onDrop={(e) => handleFileDrop(e)}
         >
           <Text c={isDragOverEnd ? "blue.6" : "dimmed"} size="sm">
-            {isDragOverEnd ? "📁 Drop files here to create cards" : "No extracted content yet. Click \"Extract Page Content\" or use the divider above to add cards."}
+            {isDragOverEnd ? "📁 Drop files or text here to create cards" : "No extracted content yet. Click \"Extract Page Content\", use the divider above, or drag text/files here to add cards."}
           </Text>
         </Card>
       </Stack>
@@ -331,7 +332,7 @@ export const CardList: React.FC<CardListProps> = ({ contents, onReorder, onAddCo
                   onDrop={(e) => handleFileDrop(e)}
                 >
                   <Text c="blue.6" size="sm">
-                    📁 Drop files here to add to the end
+                    📁 Drop files or text here to add to the end
                   </Text>
                 </Card>
               )}
