@@ -11,6 +11,11 @@ export default [
     output: {
       dir: 'dist/ui',
       format: 'iife',
+      sourcemap: true,
+    },
+    watch: {
+      include: 'ui/**',
+      exclude: 'node_modules/**'
     },
     onwarn(warning, warn) {
       // https://github.com/TanStack/query/issues/5175
@@ -54,6 +59,11 @@ export default [
     output: {
       file: 'dist/background.js',
       format: 'es',
+      sourcemap: true,
+    },
+    watch: {
+      include: 'background/**',
+      exclude: 'node_modules/**'
     },
     plugins: [
       typescript({
@@ -81,6 +91,11 @@ export default [
     output: {
       file: 'dist/contentScript.js',
       format: 'iife',
+      sourcemap: true,
+    },
+    watch: {
+      include: 'contentScript/**',
+      exclude: 'node_modules/**'
     },
     plugins: [
       typescript({

@@ -2,3 +2,5 @@ dist
 node_modules
 *.swp
 /*.zip
+.rollup.cache
+tsconfig.tsbuildinfo
