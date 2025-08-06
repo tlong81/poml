@@ -5,51 +5,7 @@ import { IconClipboard } from '@tabler/icons-react';
 import CardList from './components/CardList';
 import CardModal from './components/CardModal';
 import { ExtractedContent } from './types';
-
-import '@mantine/core/styles.css';
-
-// Custom font family
-const customFontFamily = 'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"';
-
-// Custom color schemes for black/white buttons
-const whiteColors: MantineColorsTuple = [
-  '#ffffff',
-  '#f8f9fa', 
-  '#f1f3f5',
-  '#e9ecef',
-  '#dee2e6',
-  '#ced4da',
-  '#adb5bd',
-  '#868e96',
-  '#495057',
-  '#212529'
-];
-
-const blackColors: MantineColorsTuple = [
-  '#f8f9fa',
-  '#e9ecef',
-  '#dee2e6', 
-  '#ced4da',
-  '#adb5bd',
-  '#6c757d',
-  '#495057',
-  '#343a40',
-  '#212529',
-  '#000000'
-];
-
-const createCustomTheme = (colorScheme: 'light' | 'dark') => createTheme({
-  fontFamily: customFontFamily,
-  headings: {
-    fontFamily: customFontFamily,
-  },
-  colors: {
-    primary: colorScheme === 'dark' ? whiteColors : blackColors,
-  },
-  primaryColor: 'primary',
-  white: colorScheme === 'dark' ? '#ffffff' : '#ffffff',
-  black: colorScheme === 'dark' ? '#000000' : '#000000',
-});
+import { shadcnTheme } from './themes/zinc';
 
 const App: React.FC = () => {
   // Use manual dark mode detection instead of useColorScheme hook
@@ -75,7 +31,7 @@ const App: React.FC = () => {
   const accessTokenRef = useRef<string | null>(null);
   
   // Create theme based on color scheme
-  const theme = createCustomTheme(colorScheme);
+  const theme = shadcnTheme;
 
   useEffect(() => {
     updateButtonStates();
