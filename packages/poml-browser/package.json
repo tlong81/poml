@@ -1,14 +1,14 @@
 {
-  "name": "POML Browser Extension",
-  "version": "0.1.0",
-  "description": "",
+  "name": "poml-browser",
+  "version": "0.0.7",
+  "description": "POML Browser Extension",
   "main": "background.js",
   "scripts": {
     "build": "rollup -c rollup.config.mjs",
     "zip": "cd dist && zip -r ../poml-browser.zip ."
   },
   "keywords": [],
-  "license": "Apache 2.0",
+  "license": "MIT",
   "devDependencies": {
     "@rollup/plugin-commonjs": "26.0.1",
     "@rollup/plugin-node-resolve": "15.2.3",
