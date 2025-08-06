@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createTheme, MantineProvider, Stack, Button, Group, Alert, MantineColorsTuple } from '@mantine/core';
-import { useListState, useColorScheme } from '@mantine/hooks';
+import { MantineProvider, Stack, Button, Group, Alert } from '@mantine/core';
+import { useListState } from '@mantine/hooks';
 import { IconClipboard } from '@tabler/icons-react';
 import CardList from './components/CardList';
 import CardModal from './components/CardModal';
@@ -8,16 +8,6 @@ import { ExtractedContent } from './types';
 import { shadcnTheme } from './themes/zinc';
 
 const App: React.FC = () => {
-  // Use manual dark mode detection instead of useColorScheme hook
-  // const [colorScheme, setColorScheme] = useState<'light' | 'dark'>(() => {
-  //   // Check system preference using media query
-  //   if (typeof window !== 'undefined' && window.matchMedia) {
-  //     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  //   }
-  //   return 'light';
-  // });
-  
-  const colorScheme = useColorScheme(); // Use Mantine's hook for color scheme detection
   const [loading, setLoading] = useState(false);
   const [topError, setTopError] = useState(''); // For edit errors
   const [bottomError, setBottomError] = useState(''); // For command errors
@@ -30,8 +20,6 @@ const App: React.FC = () => {
   const preloadedFilesRef = useRef<File[] | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   
-  // Create theme based on color scheme
-  const theme = shadcnTheme;
 
   useEffect(() => {
     updateButtonStates();
@@ -832,7 +820,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <MantineProvider theme={theme} forceColorScheme={colorScheme}>
+    <MantineProvider theme={shadcnTheme}>
       <Stack gap="lg" p="md">
         {topError && (
           <Alert variant="light" color="red" title="Edit Error" withCloseButton onClose={() => setTopError('')}>
