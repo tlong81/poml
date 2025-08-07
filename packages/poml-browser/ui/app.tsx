@@ -19,9 +19,9 @@ import {
 } from '@functions/clipboard';
 import { extractPageContent } from '@functions/html';
 
-import { poml } from 'poml';
-
 import '@mantine/core/styles.css';
+import pomlHelper from '@functions/pomlHelper';
+import { Paragraph } from 'poml/essentials';
 
 const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -156,7 +156,8 @@ const App: React.FC = () => {
       // Copy to clipboard
       await navigator.clipboard.writeText(allContent);
       setCopySuccess(true);
-      const pomlContent = await poml("hello world");
+      const pomlContent = await pomlHelper();
+      console.log('POML content:', pomlContent);
       setBottomError(pomlContent.toString());
     } catch (error) {
       console.error('Copy failed:', error);
@@ -429,6 +430,8 @@ const App: React.FC = () => {
             {bottomError}
           </Alert>
         )}
+
+        <Paragraph>This is a test POML paragraph.</Paragraph>
 
         <CardModal
           content={selectedCard}

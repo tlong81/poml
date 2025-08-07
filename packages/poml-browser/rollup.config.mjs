@@ -32,7 +32,7 @@ export default [
       sourcemap: true
     },
     watch: {
-      include: 'ui/**',
+      include: ['ui/**', 'functions/**', '../poml/**'],
       exclude: 'node_modules/**'
     },
     onwarn(warning, warn) {
@@ -64,7 +64,7 @@ export default [
       json(),
       replace({
         // https://stackoverflow.com/questions/70368760/react-uncaught-referenceerror-process-is-not-defined
-        'process.env.NODE_ENV': JSON.stringify('production'),
+        'process.env.NODE_ENV': JSON.stringify('development'),
         preventAssignment: true
       }),
       postcss({
@@ -76,10 +76,11 @@ export default [
         // exclude: /node_modules/
       }),
       nodeResolve({
-        jsnext: true,
-        main: true,
         browser: true,
-        preferBuiltins: false
+        preferBuiltins: false,
+        rootDir: __dirname,
+        modulePaths: [path.resolve(__dirname, 'node_modules')],
+        moduleDirectories: [],
       }),
       commonjs({
         transformMixedEsModules: true
