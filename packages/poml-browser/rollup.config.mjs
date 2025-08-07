@@ -71,7 +71,10 @@ export default [
         extract: true,
         minimize: true
       }),
-      nodePolyfills(),
+      nodePolyfills({
+        include: ['stubs/**/*', '../poml/**/*'],
+        // exclude: /node_modules/
+      }),
       nodeResolve({
         jsnext: true,
         main: true,
@@ -89,12 +92,12 @@ export default [
           'poml-browser/stubs/**/*',
           'poml/**/*'
         ],
-        exclude: ['poml/node_modules/**/*', 'poml/tests/**/*']
+        exclude: ['poml/node_modules/**/*', 'poml/tests/**/*', 'poml-browser/ui/custom.js']
       }),
       copy({
         targets: [
           {
-            src: ['ui/*.html', 'ui/custom.css'],
+            src: ['ui/*.html', 'ui/custom.css', 'ui/custom.js'],
             dest: 'dist/ui'
           }
         ]
