@@ -6,6 +6,7 @@ import replace from '@rollup/plugin-replace';
 import postcss from 'rollup-plugin-postcss';
 import alias from '@rollup/plugin-alias';
 import json from '@rollup/plugin-json';
+import nodePolyfills from 'rollup-plugin-polyfill-node';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -18,6 +19,7 @@ const aliasEntries = [
   { find: '@background', replacement: path.resolve(__dirname, 'background') },
   { find: '@contentScript', replacement: path.resolve(__dirname, 'contentScript') },
   { find: 'poml', replacement: path.resolve(__dirname, '../poml') },
+  { find: 'fs', replacement: path.resolve(__dirname, 'stubs/fs.js') }
 ];
 
 export default [
@@ -26,7 +28,13 @@ export default [
     output: {
       dir: 'dist/ui',
       format: 'iife',
-      sourcemap: true
+      sourcemap: true,
+      globals: {
+        fs: 'fs',
+        path: 'path',
+        sharp: 'sharp',
+        stream: 'stream'
+      }
     },
     watch: {
       include: 'ui/**',
@@ -37,13 +45,33 @@ export default [
       if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
         return;
       }
+      // Suppress circular dependency warnings from chevrotain
+      if (
+        warning.code === 'CIRCULAR_DEPENDENCY' &&
+        (warning.message.includes('chevrotain') || warning.message.includes('xmlbuilder'))
+      ) {
+        return;
+      }
+      // Suppress this rewriting warnings
+      if (warning.code === 'THIS_IS_UNDEFINED') {
+        return;
+      }
+      // Suppress eval warnings
+      if (warning.code === 'EVAL') {
+        return;
+      }
       warn(warning);
     },
     external: ['sharp'],
     plugins: [
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['poml-browser/ui/**/*', 'poml-browser/functions/**/*', 'poml/**/*'],
+        include: [
+          'poml-browser/ui/**/*',
+          'poml-browser/functions/**/*',
+          'poml-browser/stubs/**/*',
+          'poml/**/*'
+        ],
         exclude: ['poml/node_modules/**/*', 'poml/tests/**/*']
       }),
       alias({
@@ -59,10 +87,12 @@ export default [
         extract: true,
         minimize: true
       }),
+      nodePolyfills(),
       nodeResolve({
         jsnext: true,
         main: true,
-        browser: true
+        browser: true,
+        preferBuiltins: false
       }),
       commonjs(),
       copy({
