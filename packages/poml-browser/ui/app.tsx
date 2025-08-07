@@ -21,7 +21,6 @@ import { extractPageContent } from '@functions/html';
 
 import '@mantine/core/styles.css';
 import pomlHelper from '@functions/pomlHelper';
-import { Paragraph } from 'poml/essentials';
 
 const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -156,8 +155,12 @@ const App: React.FC = () => {
       // Copy to clipboard
       await navigator.clipboard.writeText(allContent);
       setCopySuccess(true);
+
+      // Wait for pomlHelper to complete before updating state to avoid concurrent rendering
       const pomlContent = await pomlHelper();
       console.log('POML content:', pomlContent);
+
+      // Set error state after server-side rendering is complete
       setBottomError(pomlContent.toString());
     } catch (error) {
       console.error('Copy failed:', error);
@@ -430,8 +433,6 @@ const App: React.FC = () => {
             {bottomError}
           </Alert>
         )}
-
-        <Paragraph>This is a test POML paragraph.</Paragraph>
 
         <CardModal
           content={selectedCard}
