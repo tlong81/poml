@@ -11,7 +11,14 @@
     "forceConsistentCasingInFileNames": true,
     "rootDir": ".",
     "jsx": "react-jsx",
-    "types": ["chrome-types"]
+    "types": ["chrome-types"],
+    "baseUrl": ".",
+    "paths": {
+      "@functions/*": ["functions/*"],
+      "@ui/*": ["ui/*"],
+      "@background/*": ["background/*"],
+      "@contentScript/*": ["contentScript/*"]
+    }
   },
   "exclude": [
     "node_modules",

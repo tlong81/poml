@@ -4,6 +4,19 @@ import typescript from '@rollup/plugin-typescript';
 import copy from 'rollup-plugin-copy';
 import replace from '@rollup/plugin-replace';
 import postcss from 'rollup-plugin-postcss';
+import alias from '@rollup/plugin-alias';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const aliasEntries = [
+  { find: '@functions', replacement: path.resolve(__dirname, 'functions') },
+  { find: '@ui', replacement: path.resolve(__dirname, 'ui') },
+  { find: '@background', replacement: path.resolve(__dirname, 'background') },
+  { find: '@contentScript', replacement: path.resolve(__dirname, 'contentScript') }
+];
 
 export default [
   {
@@ -25,6 +38,13 @@ export default [
       warn(warning)
     },
     plugins: [
+      typescript({
+        tsconfig: './tsconfig.json',
+        include: ['ui/**/*', 'functions/**/*', 'background/**/*', 'contentScript/**/*']
+      }),
+      alias({
+        entries: aliasEntries
+      }),
       replace({
         // https://stackoverflow.com/questions/70368760/react-uncaught-referenceerror-process-is-not-defined
         'process.env.NODE_ENV': JSON.stringify('production'),
@@ -33,10 +53,6 @@ export default [
       postcss({
         extract: true,
         minimize: true
-      }),
-      typescript({
-        tsconfig: './tsconfig.json',
-        include: ['ui/**/*']
       }),
       nodeResolve({
         jsnext: true,
@@ -68,7 +84,10 @@ export default [
     plugins: [
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['background/**/*']
+        include: ['background/**/*', 'functions/**/*']
+      }),
+      alias({
+        entries: aliasEntries
       }),
       nodeResolve({
         jsnext: true,
@@ -100,7 +119,10 @@ export default [
     plugins: [
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['contentScript/**/*']
+        include: ['contentScript/**/*', 'functions/**/*']
+      }),
+      alias({
+        entries: aliasEntries
       }),
       nodeResolve({
         jsnext: true,
