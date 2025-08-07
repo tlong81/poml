@@ -5,6 +5,7 @@ import copy from 'rollup-plugin-copy';
 import replace from '@rollup/plugin-replace';
 import postcss from 'rollup-plugin-postcss';
 import alias from '@rollup/plugin-alias';
+import json from '@rollup/plugin-json';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -15,7 +16,8 @@ const aliasEntries = [
   { find: '@functions', replacement: path.resolve(__dirname, 'functions') },
   { find: '@ui', replacement: path.resolve(__dirname, 'ui') },
   { find: '@background', replacement: path.resolve(__dirname, 'background') },
-  { find: '@contentScript', replacement: path.resolve(__dirname, 'contentScript') }
+  { find: '@contentScript', replacement: path.resolve(__dirname, 'contentScript') },
+  { find: 'poml', replacement: path.resolve(__dirname, '../poml') },
 ];
 
 export default [
@@ -24,7 +26,7 @@ export default [
     output: {
       dir: 'dist/ui',
       format: 'iife',
-      sourcemap: true,
+      sourcemap: true
     },
     watch: {
       include: 'ui/**',
@@ -33,18 +35,21 @@ export default [
     onwarn(warning, warn) {
       // https://github.com/TanStack/query/issues/5175
       if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
-        return
+        return;
       }
-      warn(warning)
+      warn(warning);
     },
+    external: ['sharp'],
     plugins: [
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['ui/**/*', 'functions/**/*', 'background/**/*', 'contentScript/**/*']
+        include: ['poml-browser/ui/**/*', 'poml-browser/functions/**/*', 'poml/**/*'],
+        exclude: ['poml/node_modules/**/*', 'poml/tests/**/*']
       }),
       alias({
         entries: aliasEntries
       }),
+      json(),
       replace({
         // https://stackoverflow.com/questions/70368760/react-uncaught-referenceerror-process-is-not-defined
         'process.env.NODE_ENV': JSON.stringify('production'),
@@ -75,7 +80,7 @@ export default [
     output: {
       file: 'dist/background.js',
       format: 'es',
-      sourcemap: true,
+      sourcemap: true
     },
     watch: {
       include: 'background/**',
@@ -84,7 +89,7 @@ export default [
     plugins: [
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['background/**/*', 'functions/**/*']
+        include: ['poml-browser/background/**/*', 'poml-browser/functions/**/*']
       }),
       alias({
         entries: aliasEntries
@@ -110,7 +115,7 @@ export default [
     output: {
       file: 'dist/contentScript.js',
       format: 'iife',
-      sourcemap: true,
+      sourcemap: true
     },
     watch: {
       include: 'contentScript/**',
@@ -119,7 +124,7 @@ export default [
     plugins: [
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['contentScript/**/*', 'functions/**/*']
+        include: ['poml-browser/contentScript/**/*', 'poml-browser/functions/**/*']
       }),
       alias({
         entries: aliasEntries

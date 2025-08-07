@@ -19,6 +19,8 @@ import {
 } from '@functions/clipboard';
 import { extractPageContent } from '@functions/html';
 
+import { poml } from 'poml';
+
 import '@mantine/core/styles.css';
 
 const App: React.FC = () => {
@@ -154,7 +156,8 @@ const App: React.FC = () => {
       // Copy to clipboard
       await navigator.clipboard.writeText(allContent);
       setCopySuccess(true);
-      setBottomError('');
+      const pomlContent = await poml("hello world");
+      setBottomError(pomlContent.toString());
     } catch (error) {
       console.error('Copy failed:', error);
       setBottomError('Failed to copy cards to clipboard');
