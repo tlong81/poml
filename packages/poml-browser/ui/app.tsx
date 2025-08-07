@@ -4,7 +4,7 @@ import { useListState } from '@mantine/hooks';
 import { IconClipboard } from '@tabler/icons-react';
 import CardList from './components/CardList';
 import CardModal from './components/CardModal';
-import { ExtractedContent } from './types';
+import { ExtractedContent } from '@functions/types';
 import { shadcnTheme } from './themes/zinc';
 import { googleDocsManager } from '@functions/gdoc';
 import { msWordManager } from '@functions/msword';

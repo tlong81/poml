@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Textarea, Button, Group, Text, Badge, Stack } from '@mantine/core';
-import { ExtractedContent } from '../types';
+import { ExtractedContent } from '@functions/types';
 
 interface CardModalProps {
   content: ExtractedContent | null;

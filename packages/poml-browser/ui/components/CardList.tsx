@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, Text, Group, Badge, Stack, Box, Center, Divider, ActionIcon } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { ExtractedContent } from '../types';
+import { ExtractedContent } from '@functions/types';
 import InlineEditor from './InlineEditor';
 
 interface CardListProps {
