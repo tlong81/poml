@@ -19,7 +19,8 @@ const aliasEntries = [
   { find: '@background', replacement: path.resolve(__dirname, 'background') },
   { find: '@contentScript', replacement: path.resolve(__dirname, 'contentScript') },
   { find: 'poml', replacement: path.resolve(__dirname, '../poml') },
-  { find: 'fs', replacement: path.resolve(__dirname, 'stubs/fs.js') }
+  { find: 'fs', replacement: path.resolve(__dirname, 'stubs/fs.ts') },
+  { find: 'sharp', replacement: path.resolve(__dirname, 'stubs/sharp.ts') }
 ];
 
 export default [
@@ -28,13 +29,7 @@ export default [
     output: {
       dir: 'dist/ui',
       format: 'iife',
-      sourcemap: true,
-      globals: {
-        fs: 'fs',
-        path: 'path',
-        sharp: 'sharp',
-        stream: 'stream'
-      }
+      sourcemap: true
     },
     watch: {
       include: 'ui/**',
@@ -46,34 +41,23 @@ export default [
         return;
       }
       // Suppress circular dependency warnings from chevrotain
-      if (
-        warning.code === 'CIRCULAR_DEPENDENCY' &&
-        (warning.message.includes('chevrotain') || warning.message.includes('xmlbuilder'))
-      ) {
-        return;
-      }
-      // Suppress this rewriting warnings
-      if (warning.code === 'THIS_IS_UNDEFINED') {
-        return;
-      }
-      // Suppress eval warnings
-      if (warning.code === 'EVAL') {
-        return;
-      }
+      // if (
+      //   warning.code === 'CIRCULAR_DEPENDENCY' &&
+      //   (warning.message.includes('chevrotain') || warning.message.includes('xmlbuilder'))
+      // ) {
+      //   return;
+      // }
+      // // Suppress this rewriting warnings
+      // if (warning.code === 'THIS_IS_UNDEFINED') {
+      //   return;
+      // }
+      // // Suppress eval warnings
+      // if (warning.code === 'EVAL') {
+      //   return;
+      // }
       warn(warning);
     },
-    external: ['sharp'],
     plugins: [
-      typescript({
-        tsconfig: './tsconfig.json',
-        include: [
-          'poml-browser/ui/**/*',
-          'poml-browser/functions/**/*',
-          'poml-browser/stubs/**/*',
-          'poml/**/*'
-        ],
-        exclude: ['poml/node_modules/**/*', 'poml/tests/**/*']
-      }),
       alias({
         entries: aliasEntries
       }),
@@ -94,7 +78,19 @@ export default [
         browser: true,
         preferBuiltins: false
       }),
-      commonjs(),
+      commonjs({
+        transformMixedEsModules: true
+      }),
+      typescript({
+        tsconfig: './tsconfig.json',
+        include: [
+          'poml-browser/ui/**/*',
+          'poml-browser/functions/**/*',
+          'poml-browser/stubs/**/*',
+          'poml/**/*'
+        ],
+        exclude: ['poml/node_modules/**/*', 'poml/tests/**/*']
+      }),
       copy({
         targets: [
           {
