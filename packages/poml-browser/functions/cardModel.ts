@@ -99,6 +99,7 @@ export interface CardMetadata {
   url?: string;
   excerpt?: string;
   tags?: string[];
+  fileName?: string;
   customData?: Record<string, any>;
   debug?: string;
 }

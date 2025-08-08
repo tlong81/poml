@@ -1,21 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MantineProvider, Stack, Button, Group, Alert } from '@mantine/core';
 import { useListState } from '@mantine/hooks';
 import { IconClipboard } from '@tabler/icons-react';
-import CardList from './components/CardList';
+import EditableCardList from './components/EditableCardList';
 import CardModal from './components/CardModal';
 import { ExtractedContent } from '@functions/types';
+import { CardModel, generateId, isTextContent } from '@functions/cardModel';
 import { shadcnTheme } from './themes/zinc';
 import { googleDocsManager } from '@functions/gdoc';
 import { msWordManager } from '@functions/msword';
 import {
   readFileContent,
   useGlobalPasteListener,
-  getFileExtensionFromType,
-  arrayBufferToDataUrl,
-  pastedFileToFile,
-  PastedPayload,
-  handlePasteEvent
+  arrayBufferToDataUrl
 } from '@functions/clipboard';
 import { extractPageContent } from '@functions/html';
 
@@ -27,7 +24,7 @@ const App: React.FC = () => {
   const [topError, setTopError] = useState(''); // For edit errors
   const [bottomError, setBottomError] = useState(''); // For command errors
   const [copySuccess, setCopySuccess] = useState(false);
-  const [extractedContents, extractedContentsHandlers] = useListState<ExtractedContent>([]);
+  const [cards, cardsHandlers] = useListState<CardModel>([]);
   const [selectedCard, setSelectedCard] = useState<ExtractedContent | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
 
@@ -99,17 +96,20 @@ const App: React.FC = () => {
         const excerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '');
 
         // Create new content card
-        const newContent: ExtractedContent = {
-          id: Date.now().toString(),
+        const newCard: CardModel = {
+          id: generateId(),
           title,
-          content,
-          excerpt,
-          url: currentUrl,
+          content: { type: 'text', value: content },
+          metadata: {
+            source: 'web',
+            excerpt,
+            url: currentUrl
+          },
           timestamp: new Date()
         };
 
         // Add to card list
-        extractedContentsHandlers.append(newContent);
+        cardsHandlers.append(newCard);
         setLoading(false);
       } else {
         throw new Error('No readable content found');
@@ -119,260 +119,172 @@ const App: React.FC = () => {
     }
   };
 
-  const handleReorderContents = (from: number, to: number) => {
-    extractedContentsHandlers.reorder({ from, to });
-  };
-
-  const handleAddContent = (content: string, insertIndex: number) => {
-    try {
-      const newContent: ExtractedContent = {
-        id: Date.now().toString(),
-        title: content.split('\n')[0]?.substring(0, 100) || 'Manual Entry',
-        content,
-        excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-        timestamp: new Date(),
-        isManual: true
-      };
-
-      extractedContentsHandlers.insert(insertIndex, newContent);
-      setTopError(''); // Clear any previous errors
-    } catch (error) {
-      console.error('Failed to add content:', error);
-      setTopError('Failed to add content to card list');
-    }
+  const handleCardsChange = (newCards: CardModel[]) => {
+    cardsHandlers.setState(newCards);
   };
 
   const handleCopyAllCards = async () => {
     try {
-      if (extractedContents.length === 0) {
+      if (cards.length === 0) {
         setBottomError('No cards to copy');
         return;
       }
 
-      // Concatenate all card contents
-      const allContent = extractedContents.map(card => card.content).join('\n\n---\n\n');
-
-      // Copy to clipboard
-      await navigator.clipboard.writeText(allContent);
-      setCopySuccess(true);
-
-      // Wait for pomlHelper to complete before updating state to avoid concurrent rendering
-      const pomlContent = await pomlHelper();
+      // Use pomlHelper to convert cards to POML format
+      const pomlContent = await pomlHelper(cards);
       console.log('POML content:', pomlContent);
 
-      // Set error state after server-side rendering is complete
-      setBottomError(pomlContent.toString());
+      // Copy to clipboard
+      await navigator.clipboard.writeText(pomlContent);
+      setCopySuccess(true);
+      setBottomError(pomlContent);
     } catch (error) {
-      console.error('Copy failed:', error);
-      setBottomError('Failed to copy cards to clipboard');
+      showError(`Failed to copy cards: ${(error as Error).message}`);
     }
   };
 
-  const handleCardClick = (content: ExtractedContent) => {
-    setSelectedCard(content);
+  const handleCardClick = (card: CardModel) => {
+    // Convert CardModel back to ExtractedContent for modal compatibility
+    const extractedContent: ExtractedContent = {
+      id: card.id,
+      title: card.title || '',
+      content: isTextContent(card.content) ? card.content.value : '',
+      excerpt: card.metadata?.excerpt || '',
+      url: card.metadata?.url,
+      timestamp: card.timestamp || new Date(),
+      isManual: card.metadata?.source === 'manual',
+      debug: card.metadata?.debug
+    };
+    
+    setSelectedCard(extractedContent);
     setModalOpened(true);
   };
 
-  const handleModalClose = () => {
-    setModalOpened(false);
-    setSelectedCard(null);
-  };
-
   const handleSaveCard = (id: string, newContent: string) => {
-    const index = extractedContents.findIndex(card => card.id === id);
+    const index = cards.findIndex(card => card.id === id);
     if (index !== -1) {
-      const updatedCard = {
-        ...extractedContents[index],
-        content: newContent,
-        // Update excerpt when content changes
-        excerpt: newContent.substring(0, 200) + (newContent.length > 200 ? '...' : ''),
-        // Update title if it's a manual card or if the first line changed
-        title:
-          extractedContents[index].isManual || !extractedContents[index].title
-            ? newContent.split('\n')[0]?.substring(0, 100) || 'Updated Content'
-            : extractedContents[index].title
+      const updatedCard: CardModel = {
+        ...cards[index],
+        content: { type: 'text', value: newContent }
       };
-      extractedContentsHandlers.setItem(index, updatedCard);
+      cardsHandlers.setItem(index, updatedCard);
     }
   };
 
   const handleDeleteCard = (id: string) => {
-    const index = extractedContents.findIndex(card => card.id === id);
+    const index = cards.findIndex(card => card.id === id);
     if (index !== -1) {
-      extractedContentsHandlers.remove(index);
-      // Close modal if the deleted card was being viewed
-      if (selectedCard?.id === id) {
-        setModalOpened(false);
-        setSelectedCard(null);
+      cardsHandlers.remove(index);
+    }
+  };
+
+  const handlePastedContent = async (textContent: string, files: File[]) => {
+    try {
+      if (!textContent && (!files || files.length === 0)) {
+        return;
       }
-    }
-  };
 
-  const handlePastedContent = (textContent: string, files: File[]) => {
-    if (files.length > 0) {
-      files.forEach(file => handleDropFile(file));
-    } else if (textContent.trim()) {
-      createCardFromContent('Pasted Text', textContent.trim());
-    }
-  };
+      const createCard = (title: string, content: string, metadata: any = {}): CardModel => ({
+        id: generateId(),
+        title,
+        content: { type: 'text', value: content },
+        metadata: {
+          source: 'clipboard',
+          excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+          ...metadata
+        },
+        timestamp: new Date()
+      });
 
-  const createCardFromContent = (title: string, content: string, insertIndex?: number) => {
-    const newContent: ExtractedContent = {
-      id: Date.now().toString(),
-      title,
-      content,
-      excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-      timestamp: new Date(),
-      isManual: false
-    };
+      // Handle text content
+      if (textContent) {
+        const lines = textContent.split('\n').filter(line => line.trim());
+        const title = lines[0]?.substring(0, 100) || 'Pasted Content';
+        cardsHandlers.append(createCard(title, textContent));
+      }
 
-    // Insert at specified index or append to end
-    if (insertIndex !== undefined) {
-      extractedContentsHandlers.insert(insertIndex, newContent);
-    } else {
-      extractedContentsHandlers.append(newContent);
+      // Handle files
+      if (files && files.length > 0) {
+        for (const file of files) {
+          try {
+            if (file.type.startsWith('image/')) {
+              const dataUrl = await arrayBufferToDataUrl(await file.arrayBuffer(), file.type);
+              const card: CardModel = {
+                id: generateId(),
+                title: file.name,
+                content: { 
+                  type: 'binary', 
+                  value: dataUrl.split(',')[1], // Remove data:image/...;base64, prefix
+                  mimeType: file.type,
+                  encoding: 'base64'
+                },
+                componentType: 'Image',
+                metadata: {
+                  source: 'clipboard'
+                },
+                timestamp: new Date()
+              };
+              cardsHandlers.append(card);
+            } else {
+              const content = await readFileContent(file);
+              const title = file.name || 'Pasted File';
+              cardsHandlers.append(createCard(title, content, { fileName: file.name }));
+            }
+          } catch (error) {
+            console.error('Failed to process file:', error);
+            setTopError(`Failed to process file: ${file.name}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to handle pasted content:', error);
+      setTopError('Failed to process pasted content');
     }
   };
 
   const handleDropFile = async (file: File, insertIndex?: number) => {
     try {
-      let content: string;
-      let title: string = file.name;
-
-      // Handle images specially
-      if (file.type.startsWith('image/')) {
-        const arrayBuffer = await file.arrayBuffer();
-        const dataUrl = arrayBufferToDataUrl(arrayBuffer, file.type);
-        content = `![${file.name}](${dataUrl})`;
-        title = `Image: ${file.name}`;
-      } else {
-        // Read file content for text files
-        content = await readFileContent(file);
-      }
-
-      createCardFromContent(title, content, insertIndex);
-      setTopError(''); // Clear any previous errors
-    } catch (error) {
-      console.error('Failed to read file:', error);
-      setTopError(`Failed to read file: ${file.name}`);
-    }
-  };
-
-  const handlePasteFromClipboard = async () => {
-    try {
-      showLoading();
-
-      // Create a hidden input element to capture paste events
-      const pasteInput = document.createElement('input');
-      pasteInput.style.position = 'absolute';
-      pasteInput.style.left = '-9999px';
-      pasteInput.style.opacity = '0';
-      document.body.appendChild(pasteInput);
-
-      // Focus the input to make it the target for paste
-      pasteInput.focus();
-
-      let hasProcessedContent = false;
-
-      const handlePaste = async (event: ClipboardEvent) => {
-        try {
-          event.preventDefault();
-          const payload = await handlePasteEvent(event);
-
-          if (payload.files.length > 0) {
-            // Convert PastedFiles to Files and handle them
-            for (const pastedFile of payload.files) {
-              const file = pastedFileToFile(pastedFile);
-              await handleDropFile(file);
-            }
-            hasProcessedContent = true;
-          } else if (payload.plainText) {
-            createCardFromContent('Pasted Text', payload.plainText);
-            hasProcessedContent = true;
-          }
-
-          if (!hasProcessedContent) {
-            throw new Error('No readable content found in clipboard');
-          }
-
-          setLoading(false);
-        } catch (error) {
-          console.error('Paste event failed:', error);
-          showError(`Failed to paste from clipboard: ${(error as Error).message}`);
-        } finally {
-          // Clean up
-          pasteInput.removeEventListener('paste', handlePaste);
-          document.body.removeChild(pasteInput);
-        }
+      const content = await readFileContent(file);
+      const title = file.name || 'Dropped File';
+      const newCard: CardModel = {
+        id: generateId(),
+        title,
+        content: { type: 'text', value: content },
+        metadata: {
+          source: 'file',
+          fileName: file.name,
+          excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : '')
+        },
+        timestamp: new Date()
       };
 
-      // Add the event listener
-      pasteInput.addEventListener('paste', handlePaste);
-
-      // Try to trigger paste programmatically
-      const success = document.execCommand('paste');
-      if (!success) {
-        // Fallback to Clipboard API
-        try {
-          const clipboardItems = await navigator.clipboard.read();
-          const files: File[] = [];
-          let textContent = '';
-
-          for (const item of clipboardItems) {
-            // Check for files first (including images)
-            for (const type of item.types) {
-              if (
-                type.startsWith('image/') ||
-                type.startsWith('application/') ||
-                type !== 'text/plain'
-              ) {
-                try {
-                  const blob = await item.getType(type);
-                  const file = new File(
-                    [blob],
-                    `clipboard-${Date.now()}.${getFileExtensionFromType(type)}`,
-                    { type }
-                  );
-                  files.push(file);
-                } catch (error) {
-                  console.warn('Failed to read clipboard file:', error);
-                }
-              }
-            }
-
-            if (files.length === 0 && item.types.includes('text/plain')) {
-              try {
-                textContent = await navigator.clipboard.readText();
-              } catch (error) {
-                console.warn('Failed to read clipboard text:', error);
-              }
-            }
-          }
-
-          handlePastedContent(textContent, files);
-          setLoading(false);
-        } catch (error) {
-          throw new Error('Clipboard API failed and execCommand paste also failed');
-        }
-
-        // Clean up fallback
-        pasteInput.removeEventListener('paste', handlePaste);
-        document.body.removeChild(pasteInput);
+      if (insertIndex !== undefined) {
+        cardsHandlers.insert(insertIndex, newCard);
+      } else {
+        cardsHandlers.append(newCard);
       }
     } catch (error) {
-      console.error('Paste failed:', error);
-      showError(`Failed to paste from clipboard: ${(error as Error).message}`);
+      console.error('Failed to handle dropped file:', error);
+      setTopError(`Failed to process dropped file: ${file.name}`);
     }
   };
 
   return (
-    <MantineProvider theme={shadcnTheme}>
-      <Stack gap="md" p="md">
+    <MantineProvider theme={shadcnTheme} defaultColorScheme="light">
+      <Stack
+        style={{
+          width: '400px',
+          maxHeight: '600px',
+          padding: '16px',
+          overflow: 'hidden'
+        }}
+      >
+        {/* Top error alert */}
         {topError && (
           <Alert
             variant="light"
             color="red"
-            title="Edit Error"
+            title="Error"
             withCloseButton
             onClose={() => setTopError('')}
           >
@@ -380,13 +292,13 @@ const App: React.FC = () => {
           </Alert>
         )}
 
-        <CardList
-          contents={extractedContents}
-          onReorder={handleReorderContents}
-          onAddContent={handleAddContent}
+        <EditableCardList
+          cards={cards}
+          onChange={handleCardsChange}
           onCardClick={handleCardClick}
-          onDeleteCard={handleDeleteCard}
-          onDropFile={handleDropFile}
+          editable={true}
+          nestingLevel={0}
+          maxNestingLevel={3}
         />
 
         <Group>
@@ -403,44 +315,41 @@ const App: React.FC = () => {
             fullWidth
             variant="filled"
             color="primary"
+            leftSection={<IconClipboard size={16} />}
+            disabled={cards.length === 0}
             onClick={handleCopyAllCards}
-            disabled={extractedContents.length === 0}
           >
-            Copy All Cards ({extractedContents.length})
+            Copy All Cards ({cards.length})
           </Button>
         </Group>
 
+        {/* Bottom alerts */}
         {copySuccess && (
-          <Alert
-            variant="light"
-            color="green"
-            title="Success"
-            withCloseButton
-            onClose={() => setCopySuccess(false)}
-          >
-            All cards copied to clipboard successfully!
+          <Alert variant="light" color="green" title="Success">
+            All cards copied to clipboard!
           </Alert>
         )}
 
-        {bottomError && !loading && (
+        {bottomError && (
           <Alert
             variant="light"
             color="red"
-            title="Command Error"
+            title="Error"
             withCloseButton
             onClose={() => setBottomError('')}
           >
             {bottomError}
           </Alert>
         )}
-
-        <CardModal
-          content={selectedCard}
-          opened={modalOpened}
-          onClose={handleModalClose}
-          onSave={handleSaveCard}
-        />
       </Stack>
+
+      {/* Card Modal */}
+      <CardModal
+        opened={modalOpened}
+        onClose={() => setModalOpened(false)}
+        content={selectedCard}
+        onSave={handleSaveCard}
+      />
     </MantineProvider>
   );
 };

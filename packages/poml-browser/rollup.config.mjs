@@ -18,9 +18,15 @@ const aliasEntries = [
   { find: '@ui', replacement: path.resolve(__dirname, 'ui') },
   { find: '@background', replacement: path.resolve(__dirname, 'background') },
   { find: '@contentScript', replacement: path.resolve(__dirname, 'contentScript') },
+];
+
+const pomlAliasEntries = [
   { find: 'poml', replacement: path.resolve(__dirname, '../poml') },
   { find: 'fs', replacement: path.resolve(__dirname, 'stubs/fs.ts') },
-  { find: 'sharp', replacement: path.resolve(__dirname, 'stubs/sharp.ts') }
+  { find: 'sharp', replacement: path.resolve(__dirname, 'stubs/sharp.ts') },
+  // More specific alias for the exact import path used in pdf.ts
+  { find: /^pdfjs-dist\/legacy\/build\/pdf\.js$/, replacement: path.resolve(__dirname, 'stubs/pdfjs-dist.ts') },
+  { find: 'pdfjs-dist', replacement: path.resolve(__dirname, 'stubs/pdfjs-dist.ts') },
 ];
 
 export default [
@@ -59,7 +65,17 @@ export default [
     },
     plugins: [
       alias({
-        entries: aliasEntries
+        entries: [...aliasEntries, ...pomlAliasEntries]
+      }),
+      typescript({
+        tsconfig: './tsconfig.json',
+        include: [
+          'poml-browser/ui/**/*',
+          'poml-browser/functions/**/*',
+          'poml-browser/stubs/**/*',
+          'poml/**/*'
+        ],
+        exclude: ['poml/node_modules/**/*', 'poml/tests/**/*', 'poml-browser/ui/custom.js']
       }),
       json(),
       replace({
@@ -81,19 +97,10 @@ export default [
         rootDir: __dirname,
         modulePaths: [path.resolve(__dirname, 'node_modules')],
         moduleDirectories: [],
+        // dedupe: ['entities']
       }),
       commonjs({
         transformMixedEsModules: true
-      }),
-      typescript({
-        tsconfig: './tsconfig.json',
-        include: [
-          'poml-browser/ui/**/*',
-          'poml-browser/functions/**/*',
-          'poml-browser/stubs/**/*',
-          'poml/**/*'
-        ],
-        exclude: ['poml/node_modules/**/*', 'poml/tests/**/*', 'poml-browser/ui/custom.js']
       }),
       copy({
         targets: [
@@ -117,12 +124,12 @@ export default [
       exclude: 'node_modules/**'
     },
     plugins: [
+      alias({
+        entries: [...aliasEntries]
+      }),
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['poml-browser/background/**/*', 'poml-browser/functions/**/*']
-      }),
-      alias({
-        entries: aliasEntries
+        include: ['poml-browser/background/**/*', 'poml-browser/functions/**/*', 'poml-browser/stubs/**/*', 'poml/**/*']
       }),
       nodeResolve({
         jsnext: true,
@@ -152,12 +159,12 @@ export default [
       exclude: 'node_modules/**'
     },
     plugins: [
+      alias({
+        entries: [...aliasEntries]
+      }),
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['poml-browser/contentScript/**/*', 'poml-browser/functions/**/*']
-      }),
-      alias({
-        entries: aliasEntries
+        include: ['poml-browser/contentScript/**/*']
       }),
       nodeResolve({
         jsnext: true,
