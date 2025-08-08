@@ -8,15 +8,17 @@ async function HiddenPomlIR() {
   // wait 1000ms
   await new Promise(resolve => setTimeout(resolve, 1000));
 
-  return <Markup.Paragraph>
-    This is a hidden Poml IR component. It is used to ensure that the Poml IR is correctly parsed
-    and rendered in the browser.
-  </Markup.Paragraph>
+  return (
+    <Markup.Paragraph>
+      This is a hidden Poml IR component. It is used to ensure that the Poml IR is correctly parsed
+      and rendered in the browser.
+    </Markup.Paragraph>
+  );
   // return irElement('env', {}, 'This is a hidden Poml IR component. It is used to ensure that the Poml IR is correctly parsed and rendered in the browser.');
   // return React.createElement(
-    // Paragraph,
-    // null,
-    // 'This is a hidden Poml IR component. It is used to ensure that the Poml IR is correctly parsed and rendered in the browser.'
+  // Paragraph,
+  // null,
+  // 'This is a hidden Poml IR component. It is used to ensure that the Poml IR is correctly parsed and rendered in the browser.'
   // );
   // This is a hidden Poml IR component. It is used to ensure that the Poml IR is correctly parsed
   // and rendered in the browser.
@@ -70,7 +72,9 @@ export default async function pomlHelper(): Promise<string> {
 
       while (true) {
         const { done, value } = await pomlReader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
         pomlResult += pomlDecoder.decode(value, { stream: true });
       }
 
