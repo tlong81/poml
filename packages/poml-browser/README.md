@@ -1,57 +1,64 @@
-# On-device AI with Gemini Nano
+# Prompt Scratchpad (POML browser extension)
 
-This sample demonstrates how to use the Gemini Nano prompt API in Chrome Extensions. To learn more about the API, head over to [Built-in AI on developer.chrome.com](https://developer.chrome.com/docs/extensions/ai/prompt-api).
+## One-liner
 
-## Overview
+A WYSIWYG "prompt workspace" in your browser sidebar where you drag in webpages, docs, code, and media, arrange and annotate them, then one-click copy the rendered prompt into ChatGPT, Gemini, etc. Powered by POML under the hood -- no tags required.
 
-The extension provides a chat interface using the Prompt API with Chrome's built-in Gemini Nano model. It also includes functionality to fetch content from Google Docs and Microsoft Word Online documents.
+## Who it’s for
 
-## Features
+* **Heavy LLM users** who assemble long, multi-source prompts (researchers, writers, students).
+* **Agent/prompt tinkerers** who want reusable blocks and quick A/B tests across models.
+* **Coders** who need to ask about *just the selected files* without the model drifting.
 
-- **AI Chat Interface**: Interact with Gemini Nano for on-device AI assistance
-- **Google Docs Integration**: Fetch content directly from Google Docs documents
-- **Microsoft Word Online Integration**: Extract content from Word documents in Office 365/OneDrive
-- **Page Content Extraction**: Extract readable content from any web page
-- **Drag & Drop Support**: Drag text content into the prompt area
+## Core jobs
 
-## Running this extension
+* **Collect**: Pull materials (tabs, selections, files) into one place without losing structure.
+* **Compose**: Edit instructions + snippets with precise ordering and clear provenance.
+* **Preserve**: Keep tables/code formatting intact.
+* **Reuse/Share**: Save drafts, version them, share or remix.
+* **Dispatch**: Copy the final render into any LLM quickly for A/B testing.
 
-1. Clone this repository.
-1. Run `npm install` in the project directory.
-1. Run `npm run build` in the project directory to build the extension.
-1. Load the newly created `dist` directory in Chrome as an [unpacked extension](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked).
-1. Click the extension icon.
-1. Interact with the Prompt API in the sidebar.
+## Why now / Problem
 
-## Microsoft Word Integration Setup
+Chat windows are bad editors; docs are decent editors but awkward to paste from; VS Code extensions are for coders and are NOT great for UI-first assembly. Current "prompt galleries" don’t fit one-off, context-heavy tasks. Users want a **chatting scratchpad** that respects structure and sources.
 
-To use the Microsoft Word Online integration, you need to set up Microsoft Graph API access:
+## What it is (at a glance)
 
-1. **Register your application in Azure AD:**
-   - Go to the [Azure Portal](https://portal.azure.com/)
-   - Navigate to "Azure Active Directory" > "App registrations"
-   - Click "New registration"
-   - Enter a name for your application
-   - For "Redirect URI", select "Single-page application (SPA)" and enter your extension's redirect URI (usually `chrome-extension://[extension-id]/`)
+A **browser sidebar extension** (Chrome/Edge) that opens a **Prompt Drafting Canvas**. Each canvas holds **blocks** you can reorder:
 
-2. **Configure API permissions:**
-   - In your app registration, go to "API permissions"
-   - Click "Add a permission" > "Microsoft Graph" > "Delegated permissions"
-   - Add the following permissions:
-     - `Files.Read` - to read Word documents
-     - `Files.Read.All` - to read shared documents (optional)
+* **Instruction** (freeform text, with variants)
+* **Web capture** (full page, selection, or “clean reader”)
+* **Code snippet** (language-aware, keep line numbers; “ask about selected lines only”)
+* **Table** (kept as Markdown table or image fallback if needed)
+* **Attachment badge** (reference to local file with metadata)
+* **Note** (quick bullets, todos)
 
-3. **Update the extension:**
-   - In `sidepanel/index.ts`, replace `'your-microsoft-app-id'` with your actual Application (client) ID from Azure
-   - Update the manifest.json with any additional permissions if needed
+Under the hood, blocks map to POML elements; users never need to write tags.
 
-4. **Grant admin consent** (if required by your organization)
+### Key benefits
 
-### Note on Microsoft Graph API
+* Drag-and-drop **web pages, Google Docs, Word/PDF, files, code, media** into a single canvas.
+* **WYSIWYG editing**: POML is optional/hidden. (Advanced users can peek, most won’t.)
+* **One-click copy** to clipboard; paste into ChatGPT/Gemini/Claude for fast A/B tests.
+* **Saves, versions, shares** prompt drafts; keep a personal library of reusable blocks.
+* **Formatting fidelity** for **tables and code**; cite exact snippets and preserve source links.
+* **Block reordering** on one screen; no more scrolling a long chat to tweak an instruction.
 
-The Microsoft Word integration uses two approaches:
+### Non-goals / Constraints (current)
 
-1. **Content Script Extraction** (Primary): Attempts to extract content directly from the Word Online interface
-2. **Microsoft Graph API** (Fallback): Uses the Graph API to download document content
+* Won’t manipulate ChatGPT’s page or auto-send messages.
+* Clipboard: text and **PNG images** only (no arbitrary files).
 
-The content script approach works without additional setup, while the Graph API approach requires the Azure AD configuration above.
+### Scenarios
+
+* **Research dump**: Drag 5 tabs + a Google Doc excerpt + your notes → reorder → copy to ChatGPT → test versions A/B.
+* **Paper writing**: Keep reusable prompt fragments (literature review tone, citation style) + per-paper sources.
+* **Code Q\&A**: Select 12 lines in IDE → send selection block → add tight instruction → paste to model with guaranteed scope.
+* **Table-heavy asks**: Paste messy spreadsheet → it stays a table (or image fallback) so formatting doesn’t explode.
+
+### Differentiation
+
+* Purpose-built **editor for prompts** (not a chat app, not a code IDE).
+* **Structure-aware blocks** with source citations and scoped querying.
+* **POML-powered** but **zero-markup authoring**.
+* Real-world **fidelity** for tables/code, solves a daily pain users called out.
