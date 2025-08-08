@@ -273,10 +273,11 @@ const App: React.FC = () => {
     <MantineProvider theme={shadcnTheme} defaultColorScheme="light">
       <Stack
         style={{
-          width: '400px',
-          maxHeight: '600px',
+          width: '100%',
+          minWidth: '600px',
+          height: '100vh',
           padding: '16px',
-          overflow: 'hidden'
+          overflow: 'auto'
         }}
       >
         {/* Top error alert */}
