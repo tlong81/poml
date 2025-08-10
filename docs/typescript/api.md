@@ -9,7 +9,6 @@ This documentation is auto-generated from the TypeScript source code using TypeD
 - **[cli](cli.md)** - Command-line interface
 - **[essentials](essentials.md)** - Essential POML components (Text, Image, List, etc.)
 - **[file](file.md)** - File handling and inclusion components
-- **[presentation](presentation.md)** - Presentation and formatting utilities
 - **[writer](writer.md)** - POML writer and serialization utilities
 - **[components](components.md)** - Complete component index
 

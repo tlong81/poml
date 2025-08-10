@@ -3,13 +3,20 @@
 ## poml module
 
 ::: poml
+    options:
+      show_source: false
+      show_root_heading: false
 
 ## poml.prompt module
 
 ::: poml.prompt
+    options:
+      show_source: false
+      show_root_heading: false
 
 ## poml.api module
 
 ::: poml.api
-
-<!-- This page is auto-generated from Python docstrings -->
+    options:
+      show_source: false
+      show_root_heading: false

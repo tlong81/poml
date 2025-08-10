@@ -70,10 +70,11 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             # Tagged release - deploy as versioned docs
             VERSION="${{ steps.version.outputs.VERSION }}"
-            mike deploy --push --update-aliases $VERSION latest
+            mike deploy --push --update-aliases $VERSION stable
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             # Main branch - deploy as dev docs
-            mike deploy --push dev
+            mike deploy --push latest
+            mike set-default --push latest
           else
             # PR or other branch - just build without deploying
             mkdocs build

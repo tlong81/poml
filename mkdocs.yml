@@ -42,6 +42,9 @@ plugins:
             separate_signature: true
             show_signature_annotations: true
             docstring_style: google
+      custom_templates: templates
+      default_handler: python
+      enable_inventory: false
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -72,7 +75,15 @@ nav:
     - Features: vscode/features.md
     - Configuration: vscode/configuration.md
   - TypeScript:
-    - API Reference: typescript/api.md
+    - Overview: typescript/api.md
+    - Modules:
+      - index: typescript/index.md
+      - base: typescript/base.md
+      - cli: typescript/cli.md
+      - essentials: typescript/essentials.md
+      - file: typescript/file.md
+      - writer: typescript/writer.md
+      - components: typescript/components.md
   - Python:
     - API Reference: python/api.md
 

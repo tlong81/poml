@@ -1,11 +1,10 @@
 {
   "entryPoints": [
     "packages/poml/index.ts",
-    "packages/poml/base.tsx",
+    "packages/poml/base.tsx", 
     "packages/poml/cli.ts",
     "packages/poml/essentials.tsx",
     "packages/poml/file.tsx",
-    "packages/poml/presentation.tsx",
     "packages/poml/writer.ts",
     "packages/poml/components/index.ts"
   ],
@@ -18,15 +17,16 @@
   "excludeInternal": true,
   "disableSources": false,
   "includeVersion": false,
-  "categorizeByGroup": true,
-  "navigationLinks": {
-    "Documentation": "/",
-    "GitHub": "https://github.com/microsoft/poml"
-  },
+  "categorizeByGroup": false,
   "tsconfig": "tsconfig.json",
   "name": "POML TypeScript API",
-  "hideBreadcrumbs": false,
+  "hideBreadcrumbs": true,
   "hidePageTitle": false,
-  "cleanOutputDir": true,
-  "outputFileStrategy": "modules"
+  "cleanOutputDir": false,
+  "outputFileStrategy": "modules",
+  "mergeReadme": false,
+  "indexFormat": "table",
+  "excludeReferences": true,
+  "skipErrorChecking": true,
+  "treatWarningsAsErrors": false
 }
