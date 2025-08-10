@@ -1,0 +1,82 @@
+site_name: POML Documentation
+site_url: https://microsoft.github.io/poml
+repo_url: https://github.com/microsoft/poml
+repo_name: microsoft/poml
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          options:
+            show_root_heading: true
+            show_source: false
+            heading_level: 2
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            docstring_style: google
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Language:
+    - Getting Started: index.md
+    - Installation: language/installation.md
+    - Quick Start: language/quickstart.md
+    - POML Syntax: language/syntax.md
+    - Components: language/components.md
+    - IR Specification: language/ir.md
+    - Standalone Usage: language/standalone.md
+    - Proposals:
+      - Extended POML: language/proposals/poml_extended.md
+  - VS Code:
+    - Extension Overview: vscode/overview.md
+    - Features: vscode/features.md
+    - Configuration: vscode/configuration.md
+  - TypeScript:
+    - API Reference: typescript/api.md
+  - Python:
+    - API Reference: python/api.md
+
+extra:
+  version:
+    provider: mike
+    default: latest
