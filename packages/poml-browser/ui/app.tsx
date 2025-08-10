@@ -274,7 +274,7 @@ const App: React.FC = () => {
       <Stack
         style={{
           width: '100%',
-          minWidth: '600px',
+          minWidth: '200px',
           height: '100vh',
           padding: '16px',
           overflow: 'auto'
