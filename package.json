@@ -357,9 +357,8 @@
     "lint": "eslint packages",
     "test": "jest",
     "test-vscode": "vscode-test",
-    "docs:serve": "mkdocs serve",
+    "docs:serve": "npm run generate-component-spec && npm run docs:typedoc && mkdocs serve",
     "docs:build": "npm run generate-component-spec && npm run docs:typedoc && mkdocs build",
-    "docs:deploy": "npm run generate-component-spec && npm run docs:typedoc && mike deploy --push --update-aliases $(node -p \"require('./package.json').version\") latest",
     "docs:typedoc": "npx typedoc"
   },
   "devDependencies": {

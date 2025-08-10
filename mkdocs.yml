@@ -42,9 +42,6 @@ plugins:
             separate_signature: true
             show_signature_annotations: true
             docstring_style: google
-      custom_templates: templates
-      default_handler: python
-      enable_inventory: false
 
 markdown_extensions:
   - pymdownx.highlight:

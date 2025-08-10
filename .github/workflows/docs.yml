@@ -6,13 +6,10 @@ on:
       - main
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -21,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,37 +62,14 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Documentation version: $VERSION"
 
-      - name: Build documentation
+      - name: Deploy documentation with Mike
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             # Tagged release - deploy as versioned docs
             VERSION="${{ steps.version.outputs.VERSION }}"
             mike deploy --push --update-aliases $VERSION stable
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            # Main branch - deploy as dev docs
+            # Main branch - deploy as latest docs
             mike deploy --push latest
             mike set-default --push latest
-          else
-            # PR or other branch - just build without deploying
-            mkdocs build
           fi
-
-  deploy:
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
