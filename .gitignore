@@ -17,3 +17,5 @@ poml-*.tgz
 /mlruns
 /mlartifacts
 /site
+/docs/typescript/*.md
+!/docs/typescript/api.md

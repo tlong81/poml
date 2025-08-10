@@ -67,7 +67,7 @@ nav:
     - Standalone Usage: language/standalone.md
     - Proposals:
       - Extended POML: language/proposals/poml_extended.md
-  - VS Code:
+  - Visual Studio Code:
     - Extension Overview: vscode/overview.md
     - Features: vscode/features.md
     - Configuration: vscode/configuration.md

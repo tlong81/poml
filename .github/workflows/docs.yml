@@ -50,6 +50,9 @@ jobs:
       - name: Generate component documentation
         run: npm run generate-component-spec
 
+      - name: Generate TypeScript API documentation
+        run: npx typedoc
+
       - name: Configure Git for Mike
         run: |
           git config --global user.name "github-actions[bot]"
