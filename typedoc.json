@@ -21,7 +21,7 @@
   "tsconfig": "tsconfig.json",
   "name": "POML TypeScript API",
   "hideBreadcrumbs": true,
-  "hidePageTitle": false,
+  "hidePageTitle": true,
   "cleanOutputDir": false,
   "outputFileStrategy": "modules",
   "mergeReadme": false,

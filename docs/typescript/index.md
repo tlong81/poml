@@ -2,6 +2,14 @@
 
 This documentation is auto-generated from the TypeScript source code using TypeDoc.
 
+## Installation
+
+To use the POML TypeScript API, install the package via npm:
+
+```bash
+npm install pomljs
+```
+
 ## Quick Start
 
 ```tsx

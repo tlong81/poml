@@ -61,16 +61,16 @@ markdown_extensions:
 nav:
   - Language:
     - Getting Started: index.md
-    - Installation: language/installation.md
     - Quick Start: language/quickstart.md
-    - POML Syntax: language/syntax.md
-    - Components: language/components.md
-    - IR Specification: language/ir.md
-    - Standalone Usage: language/standalone.md
+    - Write .poml Files: language/standalone.md
+    - References:
+      - Components: language/components.md
+    - Deep Dive:
+      - IR Specification: language/ir.md
     - Proposals:
       - Extended POML: language/proposals/poml_extended.md
   - Visual Studio Code:
-    - Extension Overview: vscode/overview.md
+    - Extension Overview: vscode/index.md
     - Features: vscode/features.md
     - Configuration: vscode/configuration.md
   - TypeScript:
@@ -84,6 +84,7 @@ nav:
       - writer: typescript/reference/writer.md
       - components: typescript/reference/components.md
   - Python:
+    - Overview: python/index.md
     - References:
       - Core: python/core.md
       - Integration: python/integration.md

@@ -2,61 +2,23 @@
 
 Welcome to the Prompt Orchestration Markup Language (POML) documentation.
 
-## What is POML?
+**POML (Prompt Orchestration Markup Language)** is a novel markup language designed to bring structure, maintainability, and versatility to advanced prompt engineering for Large Language Models (LLMs). It addresses common challenges in prompt development, such as lack of structure, complex data integration, format sensitivity, and inadequate tooling. POML provides a systematic way to organize prompt components, integrate diverse data types seamlessly, and manage presentation variations, empowering developers to create more sophisticated and reliable LLM applications.
 
-POML is a markup language designed for orchestrating prompts in AI applications. It provides a structured way to define and manage prompts for language models.
 
-## Quick Links
+## Key Features
 
-- [Installation](language/installation.md) - Get started with POML
-- [VS Code Extension](vscode/overview.md) - Use POML in Visual Studio Code
-- [TypeScript API](typescript/api.md) - TypeScript reference documentation
-- [Python API](python/api.md) - Python reference documentation
+* **Structured Prompting Markup**: Employs an HTML-like syntax with semantic components such as `<role>`, `<task>`, and `<example>` to encourage modular design, enhancing prompt readability, reusability, and maintainability.
+* **Comprehensive Data Handling**: Incorporates specialized data components (e.g., `<document>`, `<table>`, `<img>`) that seamlessly embed or reference external data sources like text files, spreadsheets, and images, with customizable formatting options.
+* **Decoupled Presentation Styling**: Features a CSS-like styling system that separates content from presentation. This allows developers to modify styling (e.g., verbosity, syntax format) via `<stylesheet>` definitions or inline attributes without altering core prompt logic, mitigating LLM format sensitivity.
+* **Integrated Templating Engine**: Includes a built-in templating engine with support for variables (`{{ }}`), loops (`for`), conditionals (`if`), and variable definitions (`<let>`) for dynamically generating complex, data-driven prompts.
+* **Rich Development Toolkit**:
+  * **IDE Extension (Visual Studio Code)**: Provides essential development aids like syntax highlighting, context-aware auto-completion, hover documentation, real-time previews, inline diagnostics for error checking, and integrated interactive testing.
+  * **Software Development Kits (SDKs)**: Offers SDKs for Node.js (JavaScript/TypeScript) and Python for seamless integration into various application workflows and popular LLM frameworks.
 
-## Features
+## Sitemap
 
-- **Structured Prompts**: Define prompts with clear structure and organization
-- **VS Code Integration**: Full IDE support with syntax highlighting and IntelliSense
-- **Multi-language Support**: Use POML with TypeScript and Python
-- **Model Provider Support**: Works with OpenAI, Azure OpenAI, Anthropic, and Google GenAI
-
-## Development
-
-### Prerequisites
-- Python 3.9+
-- Node.js 18+
-
-### Setup
-```bash
-# Install Python dependencies for documentation
-pip install -e ".[dev]"
-
-# Install Node dependencies
-npm install
-```
-
-### Build Documentation
-```bash
-# Generate component specs and build site
-npm run docs:build
-```
-
-### Serve Locally
-```bash
-npm run docs:serve
-# Documentation available at http://localhost:8000
-```
-
-## Documentation Structure
-
-- `language/` - POML language specification, syntax, and components
-- `vscode/` - VS Code extension documentation
-- `typescript/` - TypeScript API reference
-- `python/` - Python API reference
-
-## Contributing
-
-The documentation is designed to be minimal and low-maintenance:
-- API references are auto-generated from source code
-- Deployment is fully automated via GitHub Actions
-- Documentation versions correspond to package versions
+- [Language Basics](./language/quickstart.md): Get started with POML syntax and structure.
+- [Write .poml Files](./language/standalone.md): Learn how to create
+- [VS Code Extension](./vscode/index.md): Enhance your development experience with the POML Visual Studio Code extension.
+- [TypeScript SDK](./typescript/index.md): Use the POML TypeScript API for building applications.
+- [Python SDK](./python/index.md): Integrate POML into your Python projects.
