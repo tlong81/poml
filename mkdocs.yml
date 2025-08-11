@@ -35,13 +35,12 @@ plugins:
         python:
           paths: [python]
           options:
+            show_source: true
             show_root_heading: true
-            show_source: false
-            heading_level: 2
-            members_order: source
-            separate_signature: true
-            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
             docstring_style: google
+            heading_level: 2
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -72,17 +71,19 @@ nav:
     - Features: vscode/features.md
     - Configuration: vscode/configuration.md
   - TypeScript:
-    - Overview: typescript/api.md
+    - Overview: typescript/index.md
     - Modules:
-      - index: typescript/index.md
-      - base: typescript/base.md
-      - cli: typescript/cli.md
-      - essentials: typescript/essentials.md
-      - file: typescript/file.md
-      - writer: typescript/writer.md
-      - components: typescript/components.md
+      - index: typescript/reference/index.md
+      - base: typescript/reference/base.md
+      - cli: typescript/reference/cli.md
+      - essentials: typescript/reference/essentials.md
+      - file: typescript/reference/file.md
+      - writer: typescript/reference/writer.md
+      - components: typescript/reference/components.md
   - Python:
-    - API Reference: python/api.md
+    - References:
+      - Core: python/core.md
+      - Integration: python/integration.md
 
 extra:
   version:

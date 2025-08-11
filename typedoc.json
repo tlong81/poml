@@ -8,7 +8,7 @@
     "packages/poml/writer.ts",
     "packages/poml/components/index.ts"
   ],
-  "out": "docs/typescript",
+  "out": "docs/typescript/reference",
   "plugin": ["typedoc-plugin-markdown"],
   "readme": "none",
   "githubPages": false,
