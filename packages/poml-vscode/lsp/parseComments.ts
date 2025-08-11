@@ -288,6 +288,6 @@ class _TagLib:
 const allDocs = scanComponentDocs('packages/poml');
 const pythonCode = generatePythonFile(allDocs);
 writeFileSync('packages/poml/assets/componentDocs.json', JSON.stringify(allDocs, null, 2));
-writeFileSync('docs/components.md', docsToMarkdown(allDocs));
+writeFileSync('docs/language/components.md', docsToMarkdown(allDocs));
 writeFileSync('python/poml/_tags.py', pythonCode);
 console.log('Component documentation generated successfully!');

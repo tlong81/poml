@@ -6,33 +6,30 @@ import {
   PreviewParams,
   PreviewResponse
 } from '../panel/types';
-import {
-  LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
-  TransportKind
-} from 'vscode-languageclient/node';
+import { LanguageClient, State } from 'vscode-languageclient/node';
 
 suite('LSP Server', () => {
   let client: LanguageClient;
 
   suiteSetup(async function() {
     this.timeout(20000);
-    const serverModule = path.resolve(__dirname, '../../../dist/server.js');
-    const serverOptions: ServerOptions = {
-      run: { module: serverModule, transport: TransportKind.ipc },
-      debug: { module: serverModule, transport: TransportKind.ipc }
-    };
-    const clientOptions: LanguageClientOptions = {
-      documentSelector: [{ scheme: 'file', language: 'poml' }]
-    };
-    client = new LanguageClient('poml-test', 'POML Language Server', serverOptions, clientOptions);
-    await client.start();
-    await new Promise(resolve => setTimeout(resolve, 3000));
-  });
-
-  suiteTeardown(async () => {
-    await client.stop();
+    const ext = vscode.extensions.getExtension('poml-team.poml');
+    await ext?.activate();
+    const extensionApi = ext?.exports as { getClient: () => LanguageClient } | undefined;
+    assert.ok(extensionApi, 'Extension API not available');
+    client = extensionApi.getClient();
+    await new Promise<void>(resolve => {
+      if (client.state === State.Running) {
+        resolve();
+      } else {
+        const disposable = client.onDidChangeState(e => {
+          if (e.newState === State.Running) {
+            disposable.dispose();
+            resolve();
+          }
+        });
+      }
+    });
   });
 
   teardown(async () => {
@@ -116,6 +113,19 @@ suite('LSP Server', () => {
     const response: PreviewResponse = await client.sendRequest(PreviewMethodName, params);
     assert.strictEqual(response.error, undefined, 'Preview response contains error');
     assert.ok(response.content, 'Expected preview content');
+  });
+
+  test('evaluate expression returns result', async function() {
+    this.timeout(20000);
+    const docPath = path.resolve(
+      __dirname,
+      '../../../packages/poml-vscode/test-fixtures/test.poml'
+    );
+    const result = await client.sendRequest('workspace/executeCommand', {
+      command: 'poml.evaluateExpression',
+      arguments: [vscode.Uri.file(docPath).toString(), '<p>{{1+2}}</p>', 4, 10]
+    });
+    assert.strictEqual(result, null, 'Evaluation result mismatch');
   });
 });
 

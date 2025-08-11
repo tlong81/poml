@@ -13,6 +13,35 @@ def poml_formatter(markup: Union[str, Path], speaker_mode: bool, context: dict |
 
 
 class LangchainPomlTemplate(PromptTemplate):
+    """A LangChain-compatible prompt template that uses POML (Prompt Markup Language) for formatting.
+
+    This class extends LangChain's PromptTemplate to support POML markup, enabling rich prompt
+    formatting with speaker modes and structured content. It can load templates from files or
+    strings and format them into either ChatPromptValue or StringPromptValue objects.
+
+    Attributes:
+        template_file (Union[str, Path, None]): Path to the POML template file, if loaded from file.
+        speaker_mode (bool): Whether to format output as chat messages (True) or plain text (False).
+            Defaults to True.
+
+    Examples:
+        Create from a template string:
+        >>> template = LangchainPomlTemplate.from_template(
+        ...     "Hello {{name}}!", speaker_mode=True
+        ... )
+        >>> result = template.format(name="Alice")
+
+        Load from a POML file:
+        >>> template = LangchainPomlTemplate.from_file(
+        ...     "path/to/template.poml", speaker_mode=False
+        ... )
+        >>> result = template.format(user_input="What is AI?")
+
+    Note:
+        - In speaker_mode=True, returns ChatPromptValue with structured messages
+        - In speaker_mode=False, returns StringPromptValue with plain text
+        - The from_examples() method is not supported and will raise NotImplementedError
+    """
 
     template_file: Union[str, Path, None] = None
     speaker_mode: bool = True

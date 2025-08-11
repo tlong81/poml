@@ -51,10 +51,10 @@ Before testing prompts with the POML toolkit, make sure you have configured your
 - Set your model provider (e.g., OpenAI, Azure, Google), API key, and endpoint URL in the POML section.
 - Alternatively, you can add these settings directly to your `settings.json` file.
 
-### Node.js (via npm, coming soon)
+### Node.js (via npm)
 
 ```bash
-npm install poml
+npm install pomljs
 ```
 
 ### Python (via pip)

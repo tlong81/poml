@@ -25,6 +25,9 @@ const SPECIAL_CHARACTER = 'À';
 // Index indicates the place it's currently at, which must be a special character.
 type PositionalContentMultiMedia = ContentMultiMedia & { position: Position; index: number };
 
+// This is a workaround with tsdoc
+type StringTableRow = string[];
+
 interface MappingNode {
   originalStart?: number;  // Original start index in the input source code
   originalEnd?: number;  // Original end index in the input source code
@@ -1041,7 +1044,7 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
     return this.handleParagraph(this.concatMarkdownBoxes(items, listSelf), listSelf);
   }
 
-  protected processMultipleTableRows(elements: cheerio.Cheerio<any>, $: cheerio.CheerioAPI) {
+  protected processMultipleTableRows(elements: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): StringTableRow[] {
     const escapeInTable = (text: string) => {
       return text.replace(/\|/g, '\\|');
     };

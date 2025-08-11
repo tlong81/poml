@@ -19,7 +19,12 @@ import {
   RelatedFullDocumentDiagnosticReport,
   TelemetryEventNotification,
   FullDocumentDiagnosticReport,
-  UnchangedDocumentDiagnosticReport
+  UnchangedDocumentDiagnosticReport,
+  CodeLens,
+  CodeLensParams,
+  Command,
+  ExecuteCommandParams,
+  Range
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -153,7 +158,9 @@ class PomlLspServer {
             interFileDependencies: false,
             workspaceDiagnostics: false
           },
-          hoverProvider: true
+          hoverProvider: true,
+          codeLensProvider: { resolveProvider: false },
+          executeCommandProvider: { commands: ['poml.evaluateExpression'] }
         }
       };
     });
@@ -164,6 +171,8 @@ class PomlLspServer {
     this.connection.languages.diagnostics.on(this.onDiagnostic.bind(this));
 
     this.connection.onRequest(PreviewMethodName, this.onPreview.bind(this));
+    this.connection.onCodeLens(this.onCodeLens.bind(this));
+    this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
 
     // Provide a way to force the diagnostics to be reset.
     this.documents.onDidSave(change => {
@@ -196,6 +205,91 @@ class PomlLspServer {
     );
     if (reported) {
       this.statistics = {};
+    }
+  }
+
+  private onCodeLens(params: CodeLensParams): CodeLens[] {
+    const document = this.documents.get(params.textDocument.uri);
+    if (!document) {
+      return [];
+    }
+    const text = document.getText();
+    const pomlFile = new PomlFile(text);
+    const tokens = pomlFile.getExpressionTokens();
+    const lenses: CodeLens[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token.expression === undefined) {
+        continue;
+      }
+      const expr = token.expression;
+      let titleExpr = expr;
+      if (titleExpr.length > 20) {
+        titleExpr = `${titleExpr.slice(0, 10)}...${titleExpr.slice(-10)}`;
+      }
+      const command: Command = {
+        title: `▶️ Evaluate ${titleExpr}`,
+        command: 'poml.evaluateExpression',
+        arguments: [params.textDocument.uri, text, token.range.start, token.range.end]
+      };
+      const vscodeRange: Range = {
+        start: document.positionAt(token.range.start),
+        end: document.positionAt(token.range.end + 1)
+      }
+      lenses.push({ range: vscodeRange, command });
+    }
+    return lenses;
+  }
+
+  private async onExecuteCommand(params: ExecuteCommandParams): Promise<any> {
+    if (params.command !== 'poml.evaluateExpression') {
+      return;
+    }
+    const uri = params.arguments?.[0] as string | undefined;
+    const text = params.arguments?.[1] as string | undefined;
+    const rangeStart = params.arguments?.[2] as number | undefined;
+    const rangeEnd = params.arguments?.[3] as number | undefined;
+    if (!uri || !text || rangeStart === undefined || rangeEnd === undefined) {
+      this.connection.console.error(`${new Date().toLocaleString()} Invalid arguments for poml.evaluateExpression command`);
+      return;
+    }
+    const expression = text.slice(rangeStart, rangeEnd + 1);
+    ErrorCollection.clear();
+    const file = new PomlFile(text, undefined, fileURLToPath(uri));
+
+    const options = this.getAssociatedOptions(uri);
+    let context: any = {};
+    if (options) {
+      for (const c of options.contexts ?? []) {
+        try {
+          context = { ...context, ...parseJsonWithBuffers(await readFile(c, 'utf-8')) };
+        } catch (e) {
+          console.error(`Failed to parse context file ${c}: ${e}`);
+        }
+      }
+    }
+
+    file.react(context);
+
+    if (!ErrorCollection.empty()) {
+      const err = ErrorCollection.first()?.toString() ?? 'Unknown error';
+      this.connection.console.error(`${new Date().toLocaleString()} Error during evaluation: ${expression} => ${err}`);
+    }
+
+    const evaluations = file.getExpressionEvaluations({ start: rangeStart, end: rangeEnd });
+    if (evaluations.length === 0) {
+      this.connection.console.warn(`${new Date().toLocaleString()} No evaluations found for expression: ${expression} (${rangeStart}-${rangeEnd})`);
+      return;
+    }
+    for (let i = 0; i < evaluations.length; i++) {
+      let result = evaluations[i];
+      if (typeof result === 'object') {
+        result = JSON.stringify(result, null, 2);
+      }
+      if (result.length > 1024) {
+        result = `${result.slice(0, 1024)} ...[truncated]`;
+      }
+      this.connection.console.log(`${new Date().toLocaleString()} [Eval ${i + 1}] ${expression} => ${result}`);
     }
   }
 
@@ -612,8 +706,8 @@ class PomlLspServer {
         kind: MarkupKind.Markdown,
         value:
           token.type !== 'element' && token.attribute
-            ? this.queryDocumentationForParameter(token.element, token.attribute)
-            : this.queryDocumentationForComponent(token.element)
+            ? this.queryDocumentationForParameter(token.element!, token.attribute)
+            : this.queryDocumentationForComponent(token.element!)
       };
       return {
         contents: markdown,
@@ -680,9 +774,9 @@ class PomlLspServer {
     const vscodeSuggestions = suggestions.map((suggestion): CompletionItem | undefined => {
       if (suggestion.type === 'element') {
         return {
-          label: suggestion.element,
+          label: suggestion.element!,
           kind: CompletionItemKind.Class,
-          textEdit: toTextEdit(suggestion, suggestion.element),
+          textEdit: toTextEdit(suggestion, suggestion.element!),
           data: suggestion,
           command
         };
@@ -718,19 +812,19 @@ class PomlLspServer {
     }
     const suggestion = item.data as PomlToken;
     if (suggestion.type === 'element') {
-      item.detail = suggestion.element + ' (Component)';
+      item.detail = suggestion.element! + ' (Component)';
       item.documentation = {
         kind: MarkupKind.Markdown,
-        value: this.queryDocumentationForComponent(suggestion.element)
+        value: this.queryDocumentationForComponent(suggestion.element!)
       };
     } else if (
       (suggestion.type === 'attribute' || suggestion.type === 'attributeValue') &&
       suggestion.attribute !== undefined
     ) {
-      item.detail = suggestion.attribute + ' (Parameter of ' + suggestion.element + ')';
+      item.detail = suggestion.attribute + ' (Parameter of ' + suggestion.element! + ')';
       item.documentation = {
         kind: MarkupKind.Markdown,
-        value: this.queryDocumentationForParameter(suggestion.element, suggestion.attribute)
+        value: this.queryDocumentationForParameter(suggestion.element!, suggestion.attribute)
       };
     }
     this.incrementStatistics('completionResolve');

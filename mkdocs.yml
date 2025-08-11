@@ -1,0 +1,95 @@
+site_name: POML Documentation
+site_url: https://microsoft.github.io/poml
+repo_url: https://github.com/microsoft/poml
+repo_name: microsoft/poml
+edit_uri: edit/main/docs/
+
+
+theme:
+  name: material
+  logo: media/logo-64-white.png
+  favicon: media/logo-16-purple.png
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            docstring_style: google
+            heading_level: 2
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Language:
+    - Getting Started: index.md
+    - Quick Start: language/quickstart.md
+    - Write .poml Files: language/standalone.md
+    - References:
+      - Components: language/components.md
+    - Deep Dive:
+      - IR Specification: language/ir.md
+    - Proposals:
+      - Extended POML: language/proposals/poml_extended.md
+  - Visual Studio Code:
+    - Extension Overview: vscode/index.md
+    - Features: vscode/features.md
+    - Configuration: vscode/configuration.md
+  - TypeScript:
+    - Overview: typescript/index.md
+    - Modules:
+      - index: typescript/reference/index.md
+      - base: typescript/reference/base.md
+      - cli: typescript/reference/cli.md
+      - essentials: typescript/reference/essentials.md
+      - file: typescript/reference/file.md
+      - writer: typescript/reference/writer.md
+      - components: typescript/reference/components.md
+  - Python:
+    - Overview: python/index.md
+    - References:
+      - Core: python/core.md
+      - Integration: python/integration.md
+
+extra:
+  version:
+    provider: mike
+    default: latest

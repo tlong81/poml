@@ -153,8 +153,7 @@
         "command": "poml.telemetry.completion",
         "title": "Telemetry: Completion",
         "category": "POML"
-      }
-      ,
+      },
       {
         "command": "poml.gallery.addPrompt",
         "title": "Add Prompt",
@@ -357,7 +356,10 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint packages",
     "test": "jest",
-    "test-vscode": "vscode-test"
+    "test-vscode": "vscode-test",
+    "typedoc": "typedoc",
+    "docs:serve": "npm run generate-component-spec && npm run typedoc && mkdocs serve",
+    "docs:build": "npm run generate-component-spec && npm run typedoc && mkdocs build"
   },
   "devDependencies": {
     "@accessibility-insights/eslint-plugin": "^1.3.2",
@@ -390,6 +392,8 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
+    "typedoc": "^0.28.9",
+    "typedoc-plugin-markdown": "^4.8.0",
     "typescript": "^5.8.3",
     "typescript-transform-paths": "^3.5.5",
     "webpack": "^5.93.0",

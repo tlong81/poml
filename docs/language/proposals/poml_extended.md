@@ -1,5 +1,7 @@
 # Extended POML File Format Design Specification
 
+> Status: Under implementation
+
 ## Overview
 
 This document describes the design for an extended POML file format that supports mixed content files - files that can contain both pure text (e.g., Markdown) and POML markup elements seamlessly integrated together.

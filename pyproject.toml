@@ -16,6 +16,10 @@ dev = [
   "flake8",
   "pytest",
   "hatch",
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+  "mike",
 ]
 
 [build-system]
