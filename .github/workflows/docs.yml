@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: 'pages'
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for versioning
+          fetch-depth: 0 # Fetch all history for versioning
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,6 +40,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Build cli
+        run: npm run build-cli
+
       - name: Install Python dependencies
         run: |
           pip install -e ".[dev]"  # Install poml with dev dependencies
@@ -48,7 +51,7 @@ jobs:
         run: npm run generate-component-spec
 
       - name: Generate TypeScript API documentation
-        run: npx typedoc
+        run: npm run typedoc
 
       - name: Configure Git for Mike
         run: |
