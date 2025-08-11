@@ -31,10 +31,9 @@ _trace_dir: Optional[Path] = None
 Backend = Literal["local", "weave", "agentops", "mlflow"]
 OutputFormat = Literal["raw", "dict", "openai_chat", "langchain", "pydantic"]
 
+
 def set_trace(
-    enabled: bool | List[Backend] | Backend = True,
-    /, *,
-    trace_dir: Optional[str | Path] = None
+    enabled: bool | List[Backend] | Backend = True, /, *, trace_dir: Optional[str | Path] = None
 ) -> Optional[Path]:
     """Enable or disable tracing of ``poml`` calls with optional backend integrations.
 
@@ -209,7 +208,7 @@ def _poml_response_to_openai_chat(messages: List[PomlMessage]) -> List[Dict[str,
         "assistant": "assistant",
         "system": "system",
     }
-    
+
     for msg in messages:
         if msg.speaker not in speaker_to_role:
             raise ValueError(f"Unknown speaker: {msg.speaker}")
@@ -223,16 +222,18 @@ def _poml_response_to_openai_chat(messages: List[PomlMessage]) -> List[Dict[str,
                 if isinstance(content_part, str):
                     contents.append({"type": "text", "text": content_part})
                 elif isinstance(content_part, ContentMultiMedia):
-                    contents.append({
-                        "type": "image_url",
-                        "image_url": {"url": f'data:{content_part.type};base64,{content_part.base64}'}
-                    })
+                    contents.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{content_part.type};base64,{content_part.base64}"},
+                        }
+                    )
                 else:
                     raise ValueError(f"Unexpected content part: {content_part}")
             openai_messages.append({"role": role, "content": contents})
         else:
             raise ValueError(f"Unexpected content type: {type(msg.content)}")
-    
+
     return openai_messages
 
 
@@ -241,28 +242,24 @@ def _poml_response_to_langchain(messages: List[PomlMessage]) -> List[Dict[str, A
     langchain_messages = []
     for msg in messages:
         if isinstance(msg.content, str):
-            langchain_messages.append({
-                "type": msg.speaker,
-                "data": {"content": msg.content}
-            })
+            langchain_messages.append({"type": msg.speaker, "data": {"content": msg.content}})
         elif isinstance(msg.content, list):
             content_parts = []
             for content_part in msg.content:
                 if isinstance(content_part, str):
                     content_parts.append({"type": "text", "text": content_part})
                 elif isinstance(content_part, ContentMultiMedia):
-                    content_parts.append({
-                        "type": "image",
-                        "source_type": "base64",
-                        "data": content_part.base64,
-                        "mime_type": content_part.type,
-                    })
+                    content_parts.append(
+                        {
+                            "type": "image",
+                            "source_type": "base64",
+                            "data": content_part.base64,
+                            "mime_type": content_part.type,
+                        }
+                    )
                 else:
                     raise ValueError(f"Unexpected content part: {content_part}")
-            langchain_messages.append({
-                "type": msg.speaker,
-                "data": {"content": content_parts}
-            })
+            langchain_messages.append({"type": msg.speaker, "data": {"content": content_parts}})
         else:
             raise ValueError(f"Unexpected content type: {type(msg.content)}")
     return langchain_messages
@@ -277,6 +274,70 @@ def poml(
     format: OutputFormat = "dict",
     extra_args: Optional[List[str]] = None,
 ) -> list | dict | str:
+    """Process POML markup and return the result in the specified format.
+
+    POML (Prompt Orchestration Markup Language) is a markup language for creating
+    structured prompts and conversations. This function processes POML markup
+    with optional context and styling, returning the result in various formats.
+
+    Args:
+        markup: POML markup content as a string, or path to a POML file.
+            If a string that looks like a file path but doesn't exist,
+            a warning is issued and it's treated as markup content.
+        context: Optional context data to inject into the POML template.
+            Can be a dictionary, JSON string, or path to a JSON file.
+        stylesheet: Optional stylesheet for customizing POML rendering.
+            Can be a dictionary, JSON string, or path to a JSON file.
+        chat: If True, process as a chat conversation (default).
+            If False, process as a single prompt.
+        output_file: Optional path to save the output. If not provided,
+            output is returned directly without saving to disk.
+        format: Output format for the result:
+            - "raw": Return raw string output from POML processor
+            - "dict": Return parsed JSON as Python dict/list (default)
+            - "openai_chat": Return OpenAI chat completion format
+            - "langchain": Return LangChain message format
+            - "pydantic": Return list of PomlMessage objects
+        extra_args: Additional command-line arguments to pass to the POML processor.
+
+    Returns:
+        The processed result in the specified format:
+        - str: When format="raw"
+        - dict/list: When format="dict"
+        - List[Dict[str, Any]]: When format="openai_chat" or "langchain"
+        - List[PomlMessage]: When format="pydantic"
+
+    Raises:
+        FileNotFoundError: When a specified file path doesn't exist.
+        RuntimeError: When the POML processor fails or backend tracing requirements aren't met.
+        ValueError: When an invalid output format is specified.
+
+    Examples:
+        Basic usage with markup string:
+        >>> result = poml("<p>Hello {{name}}!</p>", context={"name": "World"})
+
+        Load from file with context:
+        >>> result = poml("template.poml", context="context.json")
+
+        Get OpenAI chat format:
+        >>> messages = poml("chat.poml", format="openai_chat")
+
+        Use with custom stylesheet:
+        >>> result = poml(
+        ...     markup="template.poml",
+        ...     context={"user": "Alice"},
+        ...     stylesheet={"role": {"captionStyle": "bold"}},
+        ...     format="pydantic"
+        ... )
+
+        Save output to file:
+        >>> poml("template.poml", output_file="output.json", format="raw")
+
+    Note:
+        - When tracing is enabled via set_trace(), call details are automatically logged
+        - The function supports various backend integrations (Weave, AgentOps, MLflow)
+        - Multi-modal content (images, etc.) is supported in chat format
+    """
     temp_input_file = temp_context_file = temp_stylesheet_file = None
     trace_record: Dict[str, Any] | None = None
     try:
@@ -314,7 +375,9 @@ def poml(
             else:
                 # Test if the markup looks like a path.
                 if re.match(r"^[\w\-./]+$", markup):
-                    warnings.warn(f"The markup '{markup}' looks like a file path, but it does not exist. Assuming it is a POML string.")
+                    warnings.warn(
+                        f"The markup '{markup}' looks like a file path, but it does not exist. Assuming it is a POML string."
+                    )
 
                 temp_input_file = write_file(markup)
                 markup = Path(temp_input_file.name)
@@ -357,7 +420,9 @@ def poml(
                 args.extend(extra_args)
             process = run(*args)
             if process.returncode != 0:
-                raise RuntimeError(f"POML command failed with return code {process.returncode}. See the log for details.")
+                raise RuntimeError(
+                    f"POML command failed with return code {process.returncode}. See the log for details."
+                )
 
             if output_file_specified:
                 with open(output_file, "r") as output_file_handle:
@@ -389,6 +454,7 @@ def poml(
 
             if _weave_enabled:
                 from .integration import weave
+
                 trace_prefix = _latest_trace_prefix()
                 current_version = _current_trace_version()
                 if trace_prefix is None or current_version is None:
@@ -402,11 +468,12 @@ def poml(
                     poml_content or str(markup),
                     json.loads(context_content) if context_content else None,
                     json.loads(stylesheet_content) if stylesheet_content else None,
-                    result
+                    result,
                 )
 
             if _agentops_enabled:
                 from .integration import agentops
+
                 trace_prefix = _latest_trace_prefix()
                 current_version = _current_trace_version()
                 if trace_prefix is None or current_version is None:
@@ -419,11 +486,12 @@ def poml(
                     str(markup),
                     json.loads(context_content) if context_content else None,
                     json.loads(stylesheet_content) if stylesheet_content else None,
-                    result
+                    result,
                 )
 
             if _mlflow_enabled:
                 from .integration import mlflow
+
                 trace_prefix = _latest_trace_prefix()
                 current_version = _current_trace_version()
                 if trace_prefix is None or current_version is None:
@@ -436,7 +504,7 @@ def poml(
                     poml_content or str(markup),
                     json.loads(context_content) if context_content else None,
                     json.loads(stylesheet_content) if stylesheet_content else None,
-                    result
+                    result,
                 )
 
             if trace_record is not None:

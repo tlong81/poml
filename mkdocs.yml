@@ -4,8 +4,11 @@ repo_url: https://github.com/microsoft/poml
 repo_name: microsoft/poml
 edit_uri: edit/main/docs/
 
+
 theme:
   name: material
+  logo: media/logo-64-white.png
+  favicon: media/logo-16-purple.png
   features:
     - navigation.tabs
     - navigation.sections
