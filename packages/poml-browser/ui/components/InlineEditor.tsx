@@ -37,6 +37,7 @@ export const InlineEditor: React.FC<InlineEditorProps> = ({
         autosize
         mb="sm"
         autoFocus
+        style={{ maxHeight: '80vh' }}
       />
       <Group justify="flex-end">
         <Button variant="outline" color="primary" size="xs" onClick={handleCancel}>

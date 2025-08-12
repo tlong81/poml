@@ -270,11 +270,18 @@ function serializeContent(content: CardContentType): SerializedCardContent {
 
 // Deserialize card from storage
 export function deserializeCard(serialized: SerializedCardModel): CardModel {
-  return {
+  const card = {
     ...serialized,
     timestamp: serialized.timestamp ? new Date(serialized.timestamp) : undefined,
     content: deserializeContent(serialized.content)
   };
+  
+  // Ensure componentType is set for legacy cards
+  if (!card.componentType) {
+    card.componentType = getDefaultComponentType(card as CardModel);
+  }
+  
+  return card as CardModel;
 }
 
 function deserializeContent(content: SerializedCardContent): CardContentType {
@@ -356,6 +363,7 @@ export function createCard(options: {
     id: options.id || generateId(),
     title: options.title,
     content: options.content,
+    componentType: 'Text', // Temporary value, will be set correctly below
     parentId: options.parentId,
     timestamp: options.timestamp || new Date(),
     order: options.order,
