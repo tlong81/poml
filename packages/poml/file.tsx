@@ -66,6 +66,7 @@ export class PomlFile {
   private expressionEvaluations: Map<string, any[]> = new Map();
   private responseSchema: Schema | undefined;
   private toolsSchema: ToolsSchema | undefined;
+  private runtimeParameters: { [key: string]: any } = {};
 
   constructor(text: string, options?: PomlReaderOptions, sourcePath?: string) {
     this.config = {
@@ -255,6 +256,10 @@ export class PomlFile {
 
   public getToolsSchema(): ToolsSchema | undefined {
     return this.toolsSchema;
+  }
+
+  public getRuntimeParameters(): { [key: string]: any } {
+    return this.runtimeParameters;
   }
 
   public xmlRootElement(): XMLElement | undefined {
@@ -752,7 +757,7 @@ export class PomlFile {
       return true;
     }
 
-    if (metaType == 'tool') {
+    if (metaType === 'tool') {
       const name = xmlAttribute(element, 'name')?.value;
       if (!name) {
         throw new Error('name attribute is required for tool meta type');
@@ -774,6 +779,17 @@ export class PomlFile {
         }
       }
       return true;
+    }
+
+    if (metaType === 'runtime') {
+      // Extra runtime parameters sending to LLM.
+      const runtimeParams: any = {};
+      for (const attribute of element.attributes) {
+        if (attribute.key && attribute.value && attribute.key?.toLowerCase() !== 'type') {
+          runtimeParams[attribute.key] = attribute.value;
+        }
+      }
+      this.runtimeParameters = runtimeParams;
     }
 
     const minVersion = xmlAttribute(element, 'minVersion')?.value;

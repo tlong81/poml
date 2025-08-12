@@ -561,4 +561,19 @@ describe('meta elements', () => {
     expect(() => file.react()).toThrow('name attribute is required for tool meta type');
     ErrorCollection.clear();
   });
+
+  test('runtime meta parameters', () => {
+    const text = `<poml>
+      <meta type="runtime" temperature="0.7" max_tokens="1000" model="gpt-4">
+      </meta>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      temperature: "0.7",
+      max_tokens: "1000",
+      model: "gpt-4"
+    });
+  });
 });
