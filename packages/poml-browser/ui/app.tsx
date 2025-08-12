@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MantineProvider, Stack, Button, Group, Alert } from '@mantine/core';
+import { MantineProvider, Stack, Button, Group } from '@mantine/core';
 import { useListState } from '@mantine/hooks';
 import { IconClipboard } from '@tabler/icons-react';
 import EditableCardList from './components/EditableCardList';
@@ -15,18 +15,22 @@ import {
   arrayBufferToDataUrl
 } from '@functions/clipboard';
 import { extractPageContent } from '@functions/html';
+import { NotificationProvider, useNotifications } from './contexts/NotificationContext';
+import TopNotifications from './components/TopNotifications';
+import BottomNotifications from './components/BottomNotifications';
 
 import '@mantine/core/styles.css';
 import pomlHelper from '@functions/pomlHelper';
 
-const App: React.FC = () => {
+// Inner component that uses the notification system
+const AppContent: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [topError, setTopError] = useState(''); // For edit errors
-  const [bottomError, setBottomError] = useState(''); // For command errors
-  const [copySuccess, setCopySuccess] = useState(false);
   const [cards, cardsHandlers] = useListState<CardModel>([]);
   const [selectedCard, setSelectedCard] = useState<ExtractedContent | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
+  
+  // Use the notification system
+  const { showError, showSuccess, showWarning, showInfo } = useNotifications();
 
   // Add global paste listener
   useGlobalPasteListener((textContent, files) => {
@@ -35,36 +39,11 @@ const App: React.FC = () => {
 
   const showLoading = () => {
     setLoading(true);
-    setBottomError('');
-    setCopySuccess(false);
   };
 
-  const showError = (errorMsg: string) => {
-    setBottomError(errorMsg);
+  const hideLoading = () => {
     setLoading(false);
   };
-
-  // Auto-hide alerts after 5 seconds
-  useEffect(() => {
-    if (copySuccess) {
-      const timer = setTimeout(() => setCopySuccess(false), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [copySuccess]);
-
-  useEffect(() => {
-    if (bottomError) {
-      const timer = setTimeout(() => setBottomError(''), 8000);
-      return () => clearTimeout(timer);
-    }
-  }, [bottomError]);
-
-  useEffect(() => {
-    if (topError) {
-      const timer = setTimeout(() => setTopError(''), 8000);
-      return () => clearTimeout(timer);
-    }
-  }, [topError]);
 
   const handleExtractContent = async () => {
     try {
@@ -110,12 +89,14 @@ const App: React.FC = () => {
 
         // Add to card list
         cardsHandlers.append(newCard);
-        setLoading(false);
+        hideLoading();
+        showSuccess('Page content extracted successfully');
       } else {
         throw new Error('No readable content found');
       }
     } catch (error) {
-      showError((error as Error).message);
+      hideLoading();
+      showError((error as Error).message, 'Extract Content Failed');
     }
   };
 
@@ -126,7 +107,7 @@ const App: React.FC = () => {
   const handleCopyAllCards = async () => {
     try {
       if (cards.length === 0) {
-        setBottomError('No cards to copy');
+        showWarning('No cards to copy');
         return;
       }
 
@@ -136,10 +117,9 @@ const App: React.FC = () => {
 
       // Copy to clipboard
       await navigator.clipboard.writeText(pomlContent);
-      setCopySuccess(true);
-      setBottomError(pomlContent);
+      showSuccess(`Copied ${cards.length} cards to clipboard`, 'POML Content Copied', undefined, 'bottom');
     } catch (error) {
-      showError(`Failed to copy cards: ${(error as Error).message}`);
+      showError(`Failed to copy cards: ${(error as Error).message}`, 'Copy Failed');
     }
   };
 
@@ -232,13 +212,13 @@ const App: React.FC = () => {
             }
           } catch (error) {
             console.error('Failed to process file:', error);
-            setTopError(`Failed to process file: ${file.name}`);
+            showError(`Failed to process file: ${file.name}`, 'File Processing Error');
           }
         }
       }
     } catch (error) {
       console.error('Failed to handle pasted content:', error);
-      setTopError('Failed to process pasted content');
+      showError('Failed to process pasted content', 'Paste Error');
     }
   };
 
@@ -265,84 +245,50 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to handle dropped file:', error);
-      setTopError(`Failed to process dropped file: ${file.name}`);
+      showError(`Failed to process dropped file: ${file.name}`, 'Drop Error');
     }
   };
 
   return (
-    <MantineProvider theme={shadcnTheme} defaultColorScheme="light">
-      <Stack
-        style={{
-          width: '100%',
-          minWidth: '200px',
-          height: '100vh',
-          padding: '16px',
-          overflow: 'auto'
-        }}
-      >
-        {/* Top error alert */}
-        {topError && (
-          <Alert
-            variant="light"
-            color="red"
-            title="Error"
-            withCloseButton
-            onClose={() => setTopError('')}
-          >
-            {topError}
-          </Alert>
-        )}
+    <Stack
+      style={{
+        width: '100%',
+        minWidth: '200px',
+        height: '100vh',
+        padding: '16px',
+        overflow: 'auto'
+      }}
+    >
+      <EditableCardList
+        cards={cards}
+        onChange={handleCardsChange}
+        onCardClick={handleCardClick}
+        editable={true}
+        nestingLevel={0}
+        maxNestingLevel={3}
+      />
 
-        <EditableCardList
-          cards={cards}
-          onChange={handleCardsChange}
-          onCardClick={handleCardClick}
-          editable={true}
-          nestingLevel={0}
-          maxNestingLevel={3}
-        />
-
-        <Group>
-          <Button
-            fullWidth
-            variant="outline"
-            color="primary"
-            loading={loading}
-            onClick={handleExtractContent}
-          >
-            Extract Page Content
-          </Button>
-          <Button
-            fullWidth
-            variant="filled"
-            color="primary"
-            leftSection={<IconClipboard size={16} />}
-            disabled={cards.length === 0}
-            onClick={handleCopyAllCards}
-          >
-            Copy All Cards ({cards.length})
-          </Button>
-        </Group>
-
-        {/* Bottom alerts */}
-        {copySuccess && (
-          <Alert variant="light" color="green" title="Success">
-            All cards copied to clipboard!
-          </Alert>
-        )}
-
-        {bottomError && (
-          <Alert
-            variant="light"
-            color="red"
-            title="Error"
-            withCloseButton
-            onClose={() => setBottomError('')}
-          >
-            {bottomError}
-          </Alert>
-        )}
-      </Stack>
+      <Group>
+        <Button
+          fullWidth
+          variant="outline"
+          color="primary"
+          loading={loading}
+          onClick={handleExtractContent}
+        >
+          Extract Page Content
+        </Button>
+        <Button
+          fullWidth
+          variant="filled"
+          color="primary"
+          leftSection={<IconClipboard size={16} />}
+          disabled={cards.length === 0}
+          onClick={handleCopyAllCards}
+        >
+          Copy All Cards ({cards.length})
+        </Button>
+      </Group>
 
       {/* Card Modal */}
       <CardModal
@@ -351,6 +297,22 @@ const App: React.FC = () => {
         content={selectedCard}
         onSave={handleSaveCard}
       />
+
+      {/* Bottom notifications appended to content */}
+      <BottomNotifications />
+    </Stack>
+  );
+};
+
+// Main App component with providers
+const App: React.FC = () => {
+  return (
+    <MantineProvider theme={shadcnTheme} defaultColorScheme="light">
+      <NotificationProvider>
+        <AppContent />
+        {/* Top notifications overlay */}
+        <TopNotifications />
+      </NotificationProvider>
     </MantineProvider>
   );
 };

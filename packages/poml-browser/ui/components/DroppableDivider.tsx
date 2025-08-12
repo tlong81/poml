@@ -14,6 +14,7 @@ import {
 } from '@tabler/icons-react';
 import { handleDropEvent } from '@functions/clipboard';
 import { CardModel, generateId } from '@functions/cardModel';
+import { useNotifications } from '../contexts/NotificationContext';
 
 interface DroppableDividerProps {
   index: number;
@@ -32,6 +33,7 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
+  const { showError, showSuccess } = useNotifications();
   
   return (
     <Box
@@ -114,9 +116,11 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
           
           if (newCards.length > 0) {
             onDropContent(newCards, index);
+            showSuccess(`Added ${newCards.length} card${newCards.length > 1 ? 's' : ''} from drop`, 'Content Added', undefined, 'top');
           }
         } catch (error) {
           console.error('Failed to handle drop:', error);
+          showError('Failed to process dropped content', 'Drop Error');
           // Fall back to regular add card
           onAddCard(index);
         }

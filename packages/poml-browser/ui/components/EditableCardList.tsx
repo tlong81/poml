@@ -25,7 +25,6 @@ import { DroppableDivider } from './DroppableDivider';
 interface EditableCardListProps {
   cards: CardModel[];
   onChange: (cards: CardModel[]) => void;
-  onSave?: (cards: CardModel[]) => void;
   onCardClick?: (card: CardModel) => void;
   editable?: boolean;
   nestingLevel?: number;
@@ -35,7 +34,6 @@ interface EditableCardListProps {
 export const EditableCardList: React.FC<EditableCardListProps> = ({
   cards,
   onChange,
-  onSave,
   onCardClick,
   editable = true,
   nestingLevel = 0,
@@ -208,24 +206,7 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
           )}
         </Droppable>
       </DragDropContext>
-      
-      {editable && nestingLevel === 0 && (
-        <Group justify="space-between">
-          <Button
-            variant="light"
-            leftSection={<IconPlus size={16} />}
-            onClick={handleAddCard}
-          >
-            Add Card
-          </Button>
-          
-          {onSave && (
-            <Button onClick={() => onSave(cards)}>
-              Save Collection
-            </Button>
-          )}
-        </Group>
-      )}
+
     </Stack>
   );
 };
