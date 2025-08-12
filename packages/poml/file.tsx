@@ -21,6 +21,7 @@ import { getSuggestions } from './util/xmlContentAssist';
 import { existsSync, readFileSync } from './util/fs';
 import path from 'path';
 import { POML_VERSION } from './version';
+import { Schema, ToolsSchema } from './util/schema';
 
 export interface PomlReaderOptions {
   trim?: boolean;
@@ -62,6 +63,8 @@ export class PomlFile {
   private disabledComponents: Set<string> = new Set();
   private expressionTokens: PomlToken[] = [];
   private expressionEvaluations: Map<string, any[]> = new Map();
+  private responseSchema: Schema | undefined;
+  private toolsSchema: ToolsSchema | undefined;
 
   constructor(text: string, options?: PomlReaderOptions, sourcePath?: string) {
     this.config = {
