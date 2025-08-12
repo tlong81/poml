@@ -68,10 +68,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-      contents: read
-
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js 22.x
@@ -139,13 +135,28 @@ jobs:
           path: ${{ steps.rename-wheel.outputs.wheel-file }}
           compression-level: 0
 
-      - name: Publish to PyPI
+      - name: Publish to Test PyPI (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI (tag push)
+        if: startsWith(github.ref, 'refs/tags/')
         uses: pypa/gh-action-pypi-publish@release/v1
 
+      - name: Test installation from Test PyPI
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # Wait a bit for the package to be available
+          sleep 30
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
+          python -c "import poml; print('Package installed successfully from Test PyPI')"
+
       - name: Test installation from PyPI
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           # Wait a bit for the package to be available
           sleep 30
           pip install poml
-          python -c "import poml; print('Package installed successfully')"
-
+          python -c "import poml; print('Package installed successfully from PyPI')"
