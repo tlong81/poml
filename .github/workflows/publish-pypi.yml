@@ -67,6 +67,9 @@ jobs:
             wheel_platform: macosx_11_0_arm64
 
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      contents: read
 
     steps:
       - uses: actions/checkout@v4

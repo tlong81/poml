@@ -1,1 +1,83 @@
-# Publish to github actions
+name: NPM Nightly Build
+
+on:
+  schedule:
+    # Run daily at 10:00 PM UTC
+    - cron: '0 22 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  publish-npm-nightly:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # Required for GitHub Packages
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@microsoft'
+          cache: 'npm'
+
+      - name: Get current version
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./packages/poml-build/package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+
+      - name: Create nightly version
+        id: create_nightly
+        run: |
+          # Create a nightly version with timestamp
+          TIMESTAMP=$(date +%Y%m%d%H%M)
+          node bump-version.js ${{ steps.get_version.outputs.version }} "$TIMESTAMP"
+
+          VERSION=$(node -p "require('./packages/poml-build/package.json').version")
+          echo "Nightly version: $NIGHTLY_VERSION"
+          echo "nightly_version=$NIGHTLY_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build webview and CLI
+        run: |
+          npm run build-webview
+          npm run build-cli
+
+      - name: Build NPM package
+        run: |
+          cd packages/poml-build
+          npm pack
+          ls -la *.tgz
+
+      - name: Configure GitHub Packages authentication
+        run: |
+          echo "@microsoft:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+
+      - name: Publish to GitHub Packages
+        run: |
+          cd packages/poml-build
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify publication
+        run: |
+          # Wait a bit for the package to be available
+          sleep 10
+          npm view @microsoft/pomljs@${{ steps.create_nightly.outputs.nightly_version }} --registry https://npm.pkg.github.com
+          echo "✅ Nightly package successfully published to GitHub Packages!"
+
+      - name: Upload nightly package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-nightly-package
+          path: packages/poml-build/pomljs-*.tgz
+          compression-level: 0
