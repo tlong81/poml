@@ -110,12 +110,11 @@ const ComponentMap: Record<string, React.FC<any>> = {
  * Convert a CardModel to a POML React element
  */
 export function cardToPOMLElement(card: CardModel): React.ReactElement {
-  const componentType = card.componentType || getDefaultComponentType(card);
-  const Component = ComponentMap[componentType] || Text;
+  const Component = ComponentMap[card.componentType] || Text;
 
   const props = buildComponentProps(card);
   const children = buildComponentChildren(card);
-  console.log(componentType, props, children);
+  console.log(card.componentType, props, children);
 
   return React.createElement(Component, props, children);
 }

@@ -13,7 +13,7 @@ import {
   IconPlus
 } from '@tabler/icons-react';
 import { handleDropEvent } from '@functions/clipboard';
-import { CardModel, generateId } from '@functions/cardModel';
+import { CardModel, createCard } from '@functions/cardModel';
 import { useNotifications } from '../contexts/NotificationContext';
 
 interface DroppableDividerProps {
@@ -72,8 +72,7 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
           
           // Create cards for dropped files
           for (const file of dropData.files) {
-            const card: CardModel = {
-              id: generateId(),
+            const card = createCard({
               content: file.content instanceof ArrayBuffer 
                 ? {
                     type: 'binary',
@@ -86,31 +85,24 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
                     value: file.content as string
                   },
               title: file.name,
-              componentType: file.type.startsWith('image/') ? 'Image' 
-                            : file.type === 'application/pdf' ? 'Document'
-                            : 'Text',
-              timestamp: new Date(),
               metadata: {
                 source: 'file'
               }
-            };
+            });
             newCards.push(card);
           }
           
           // Create card for text content if no files
           if (dropData.files.length === 0 && dropData.plainText) {
-            const card: CardModel = {
-              id: generateId(),
+            const card = createCard({
               content: {
                 type: 'text',
                 value: dropData.plainText
               },
-              componentType: 'Text',
-              timestamp: new Date(),
               metadata: {
                 source: 'clipboard'
               }
-            };
+            });
             newCards.push(card);
           }
           

@@ -17,7 +17,7 @@ import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import {
   CardModel,
   isNestedContent,
-  generateId
+  createCard
 } from '@functions/cardModel';
 import { CardItem } from './CardItem';
 import { DroppableDivider } from './DroppableDivider';
@@ -70,22 +70,18 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
   }, [cards, onChange]);
   
   const handleAddCard = useCallback(() => {
-    const newCard: CardModel = {
-      id: generateId(),
+    const newCard = createCard({
       content: { type: 'text', value: '' },
-      timestamp: new Date(),
       order: cards.length
-    };
+    });
     onChange([...cards, newCard]);
   }, [cards, onChange]);
   
   const handleAddCardAtIndex = useCallback((index: number) => {
-    const newCard: CardModel = {
-      id: generateId(),
+    const newCard = createCard({
       content: { type: 'text', value: '' },
-      timestamp: new Date(),
       order: index
-    };
+    });
     const newCards = [...cards];
     newCards.splice(index, 0, newCard);
     

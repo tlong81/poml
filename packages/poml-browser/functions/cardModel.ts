@@ -82,7 +82,7 @@ export interface CardModel {
   id: string;
   title?: string;
   content: CardContentType;
-  componentType?: POMLComponentType;
+  componentType: POMLComponentType;
   metadata?: CardMetadata;
   timestamp?: Date;
   order?: number;
@@ -320,27 +320,52 @@ export function createCardCollection(cards: CardModel[] = []): CardCollection {
 
 // Helper to convert from old ExtractedContent to new CardModel
 export function fromExtractedContent(content: any): CardModel {
-  return {
-    id: content.id || generateId(),
+  return createCard({
+    id: content.id,
     title: content.title,
     content: {
       type: 'text',
       value: content.content || content.excerpt || ''
     },
-    componentType: content.title ? 'CaptionedParagraph' : 'Paragraph',
     metadata: {
       source: content.isManual ? 'manual' : 'web',
       url: content.url,
       excerpt: content.excerpt,
       debug: content.debug
     },
-    timestamp: content.timestamp || new Date()
-  };
+    timestamp: content.timestamp
+  });
 }
 
 // ID generation utility
 export function generateId(): string {
   return `card-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+}
+
+// Helper to create a new card with default component type set
+export function createCard(options: {
+  id?: string;
+  title?: string;
+  content: CardContentType;
+  parentId?: string | null;
+  timestamp?: Date;
+  order?: number;
+  metadata?: CardMetadata;
+}): CardModel {
+  const card: CardModel = {
+    id: options.id || generateId(),
+    title: options.title,
+    content: options.content,
+    parentId: options.parentId,
+    timestamp: options.timestamp || new Date(),
+    order: options.order,
+    metadata: options.metadata,
+  };
+  
+  // Set the default component type based on content
+  card.componentType = getDefaultComponentType(card);
+  
+  return card;
 }
 
 // Utility to check if binary content is an image

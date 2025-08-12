@@ -5,7 +5,7 @@ import { IconClipboard } from '@tabler/icons-react';
 import EditableCardList from './components/EditableCardList';
 import CardModal from './components/CardModal';
 import { ExtractedContent } from '@functions/types';
-import { CardModel, generateId, isTextContent } from '@functions/cardModel';
+import { CardModel, createCard, isTextContent } from '@functions/cardModel';
 import { shadcnTheme } from './themes/zinc';
 import { googleDocsManager } from '@functions/gdoc';
 import { msWordManager } from '@functions/msword';
@@ -75,17 +75,15 @@ const AppContent: React.FC = () => {
         const excerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '');
 
         // Create new content card
-        const newCard: CardModel = {
-          id: generateId(),
+        const newCard = createCard({
           title,
           content: { type: 'text', value: content },
           metadata: {
             source: 'web',
             excerpt,
             url: currentUrl
-          },
-          timestamp: new Date()
-        };
+          }
+        });
 
         // Add to card list
         cardsHandlers.append(newCard);
@@ -164,23 +162,22 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      const createCard = (title: string, content: string, metadata: any = {}): CardModel => ({
-        id: generateId(),
-        title,
-        content: { type: 'text', value: content },
-        metadata: {
-          source: 'clipboard',
-          excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-          ...metadata
-        },
-        timestamp: new Date()
-      });
+      const createCardHelper = (title: string, content: string, metadata: any = {}): CardModel => 
+        createCard({
+          title,
+          content: { type: 'text', value: content },
+          metadata: {
+            source: 'clipboard',
+            excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+            ...metadata
+          }
+        });
 
       // Handle text content
       if (textContent) {
         const lines = textContent.split('\n').filter(line => line.trim());
         const title = lines[0]?.substring(0, 100) || 'Pasted Content';
-        cardsHandlers.append(createCard(title, textContent));
+        cardsHandlers.append(createCardHelper(title, textContent));
       }
 
       // Handle files
@@ -189,8 +186,7 @@ const AppContent: React.FC = () => {
           try {
             if (file.type.startsWith('image/')) {
               const dataUrl = await arrayBufferToDataUrl(await file.arrayBuffer(), file.type);
-              const card: CardModel = {
-                id: generateId(),
+              const card = createCard({
                 title: file.name,
                 content: { 
                   type: 'binary', 
@@ -198,17 +194,15 @@ const AppContent: React.FC = () => {
                   mimeType: file.type,
                   encoding: 'base64'
                 },
-                componentType: 'Image',
                 metadata: {
                   source: 'clipboard'
-                },
-                timestamp: new Date()
-              };
+                }
+              });
               cardsHandlers.append(card);
             } else {
               const content = await readFileContent(file);
               const title = file.name || 'Pasted File';
-              cardsHandlers.append(createCard(title, content, { fileName: file.name }));
+              cardsHandlers.append(createCardHelper(title, content, { fileName: file.name }));
             }
           } catch (error) {
             console.error('Failed to process file:', error);
@@ -226,17 +220,15 @@ const AppContent: React.FC = () => {
     try {
       const content = await readFileContent(file);
       const title = file.name || 'Dropped File';
-      const newCard: CardModel = {
-        id: generateId(),
+      const newCard = createCard({
         title,
         content: { type: 'text', value: content },
         metadata: {
           source: 'file',
           fileName: file.name,
           excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : '')
-        },
-        timestamp: new Date()
-      };
+        }
+      });
 
       if (insertIndex !== undefined) {
         cardsHandlers.insert(insertIndex, newCard);

@@ -43,7 +43,7 @@ import {
   isNestedContent,
   getValidComponentTypes,
   getDefaultComponentType,
-  generateId,
+  createCard,
   isImageBinaryContent,
   getBinaryContentDataUrl
 } from '@functions/cardModel';
@@ -115,12 +115,10 @@ export const CardItem: React.FC<CardItemProps> = ({
   const handleAddNestedCard = useCallback(() => {
     if (!onAddChild || nestingLevel >= maxNestingLevel) return;
     
-    const newCard: CardModel = {
-      id: generateId(),
+    const newCard = createCard({
       content: { type: 'text', value: '' },
-      parentId: card.id,
-      timestamp: new Date()
-    };
+      parentId: card.id
+    });
     
     if (isNestedContent(card.content)) {
       onUpdate({
