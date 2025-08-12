@@ -113,7 +113,7 @@ jobs:
         run: |
           # Wait a bit for the package to be available
           sleep 30
-          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==${{ needs.check-version.outputs.pypi_version }}
           python -c "import poml; print('Package installed successfully from Test PyPI')"
 
       - name: Test installation from PyPI
@@ -121,5 +121,5 @@ jobs:
         run: |
           # Wait a bit for the package to be available
           sleep 30
-          pip install poml
+          pip install poml==${{ needs.check-version.outputs.pypi_version }}
           python -c "import poml; print('Package installed successfully from PyPI')"

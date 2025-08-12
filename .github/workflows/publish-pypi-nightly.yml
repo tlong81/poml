@@ -53,6 +53,7 @@ jobs:
           echo "Current version: $VERSION"
 
       - name: Create development version
+        id: create_nightly
         run: |
           # Create a dev version with timestamp
           TIMESTAMP=$(date +%Y%m%d%H%M)
@@ -118,6 +119,6 @@ jobs:
         run: |
           # Wait a bit for the package to be available
           sleep 30
-          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==@${{ steps.create_nightly.outputs.nightly_version }}
           python -c "import poml; print('Package installed successfully')"
 
