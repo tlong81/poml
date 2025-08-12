@@ -28,19 +28,30 @@ jobs:
       - name: Get tag version
         id: get_tag
         run: |
-          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # For workflow_dispatch, use the pyproject version
+            TAG_VERSION=${{ steps.get_version.outputs.version }}
+            echo "Warning: Not triggered by tag, using pyproject.toml version for testing"
+          fi
           echo "tag_version=$TAG_VERSION" >> $GITHUB_OUTPUT
           echo "Tag version: $TAG_VERSION"
 
       - name: Verify version matches tag
         run: |
-          if [ "${{ steps.get_version.outputs.version }}" != "${{ steps.get_tag.outputs.tag_version }}" ]; then
-            echo "Error: Version in pyproject.toml (${{ steps.get_version.outputs.version }}) does not match tag (${{ steps.get_tag.outputs.tag_version }})"
-            exit 1
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            if [ "${{ steps.get_version.outputs.version }}" != "${{ steps.get_tag.outputs.tag_version }}" ]; then
+              echo "Error: Version in pyproject.toml (${{ steps.get_version.outputs.version }}) does not match tag (${{ steps.get_tag.outputs.tag_version }})"
+              exit 1
+            fi
+            echo "Version check passed!"
+          else
+            echo "Skipping version check for workflow_dispatch"
           fi
-          echo "Version check passed!"
 
-  publish-to-test-pypi:
+  publish-to-pypi:
+    needs: check-version
     strategy:
       matrix:
         include:
@@ -135,5 +146,6 @@ jobs:
         run: |
           # Wait a bit for the package to be available
           sleep 30
-          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ agentlightning
+          pip install poml
           python -c "import poml; print('Package installed successfully')"
+
