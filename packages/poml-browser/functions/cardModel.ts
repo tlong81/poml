@@ -4,7 +4,7 @@
  */
 
 // POML Component Types based on docs/components.md
-export type POMLComponentType = 
+export type POMLComponentType =
   // Basic Components
   | 'Audio'
   | 'Bold'
@@ -49,11 +49,7 @@ export type POMLComponentType =
   | 'SystemMessage';
 
 // Content Types
-export type CardContentType = 
-  | TextContent
-  | BinaryContent
-  | FileContent
-  | NestedContent;
+export type CardContentType = TextContent | BinaryContent | FileContent | NestedContent;
 
 export interface TextContent {
   type: 'text';
@@ -122,10 +118,23 @@ export function getValidComponentTypes(content: CardContentType): POMLComponentT
   switch (content.type) {
     case 'text':
       return [
-        'Text', 'Paragraph', 'CaptionedParagraph', 'Code', 'Header',
-        'Bold', 'Italic', 'Underline', 'Strikethrough',
-        'Task', 'Question', 'Hint', 'Role', 'OutputFormat',
-        'StepwiseInstructions', 'ExampleInput', 'ExampleOutput'
+        'Text',
+        'Paragraph',
+        'CaptionedParagraph',
+        'Code',
+        'Header',
+        'Bold',
+        'Italic',
+        'Underline',
+        'Strikethrough',
+        'Task',
+        'Question',
+        'Hint',
+        'Role',
+        'OutputFormat',
+        'StepwiseInstructions',
+        'ExampleInput',
+        'ExampleOutput'
       ];
     case 'binary':
       return ['Image', 'Audio', 'Document'];
@@ -134,12 +143,30 @@ export function getValidComponentTypes(content: CardContentType): POMLComponentT
     case 'nested':
       // As you noted, all text-applicable components are also applicable to nested content
       return [
-        'Text', 'Paragraph', 'CaptionedParagraph', 'Code', 'Header',
-        'Bold', 'Italic', 'Underline', 'Strikethrough',
-        'Task', 'Question', 'Hint', 'Role', 'OutputFormat',
-        'StepwiseInstructions', 'ExampleInput', 'ExampleOutput',
-        'List', 'ExampleSet', 'Conversation', 'SubContent',
-        'Folder', 'Tree', 'Object'
+        'Text',
+        'Paragraph',
+        'CaptionedParagraph',
+        'Code',
+        'Header',
+        'Bold',
+        'Italic',
+        'Underline',
+        'Strikethrough',
+        'Task',
+        'Question',
+        'Hint',
+        'Role',
+        'OutputFormat',
+        'StepwiseInstructions',
+        'ExampleInput',
+        'ExampleOutput',
+        'List',
+        'ExampleSet',
+        'Conversation',
+        'SubContent',
+        'Folder',
+        'Tree',
+        'Object'
       ];
     default:
       return [];
@@ -152,7 +179,7 @@ export function getDefaultComponentType(card: CardModel): POMLComponentType {
   if (card.title && (isTextContent(card.content) || isNestedContent(card.content))) {
     return 'CaptionedParagraph';
   }
-  
+
   const validTypes = getValidComponentTypes(card.content);
   if (validTypes.length > 0) {
     // Return the most appropriate default for each content type
@@ -169,7 +196,7 @@ export function getDefaultComponentType(card: CardModel): POMLComponentType {
         return validTypes[0];
     }
   }
-  
+
   return 'Text';
 }
 
@@ -185,7 +212,7 @@ export interface SerializedCardModel {
   parentId?: string | null;
 }
 
-export type SerializedCardContent = 
+export type SerializedCardContent =
   | TextContent
   | SerializedBinaryContent
   | FileContent
@@ -314,4 +341,26 @@ export function fromExtractedContent(content: any): CardModel {
 // ID generation utility
 export function generateId(): string {
   return `card-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+}
+
+// Utility to check if binary content is an image
+export function isImageBinaryContent(content: BinaryContent): boolean {
+  if (!content.mimeType) {
+    return false;
+  }
+  return content.mimeType.startsWith('image/');
+}
+
+// Utility to get data URL for image binary content
+export function getBinaryContentDataUrl(content: BinaryContent): string | null {
+  if (!isImageBinaryContent(content)) {
+    return null;
+  }
+
+  const base64Value =
+    content.value instanceof ArrayBuffer
+      ? btoa(String.fromCharCode(...new Uint8Array(content.value)))
+      : content.value;
+
+  return `data:${content.mimeType};base64,${base64Value}`;
 }

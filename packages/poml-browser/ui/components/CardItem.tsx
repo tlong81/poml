@@ -16,7 +16,8 @@ import {
   Select,
   TextInput,
   Textarea,
-  Tooltip
+  Tooltip,
+  Image
 } from '@mantine/core';
 import {
   IconTrash,
@@ -42,7 +43,9 @@ import {
   isNestedContent,
   getValidComponentTypes,
   getDefaultComponentType,
-  generateId
+  generateId,
+  isImageBinaryContent,
+  getBinaryContentDataUrl
 } from '@functions/cardModel';
 
 export interface CardItemProps {
@@ -144,6 +147,9 @@ export const CardItem: React.FC<CardItemProps> = ({
     if (isTextContent(card.content)) {
       return card.content.value.substring(0, 100) + (card.content.value.length > 100 ? '...' : '');
     } else if (isBinaryContent(card.content)) {
+      if (isImageBinaryContent(card.content)) {
+        return `Image (${card.content.mimeType})`;
+      }
       return `Binary data (${card.content.mimeType || 'unknown type'})`;
     } else if (isFileContent(card.content)) {
       return `File: ${card.content.name || card.content.path || card.content.url || 'unknown'}`;
@@ -285,14 +291,34 @@ export const CardItem: React.FC<CardItemProps> = ({
                 </Group>
                 
                 {!isNestedContent(card.content) && (
-                  <Text 
-                    size="sm" 
-                    c="dimmed"
-                    style={{ cursor: onCardClick ? 'pointer' : 'default' }}
-                    onClick={() => onCardClick?.(card)}
-                  >
-                    {contentPreview}
-                  </Text>
+                  <>
+                    {isBinaryContent(card.content) && isImageBinaryContent(card.content) ? (
+                      <Box mt="xs">
+                        <Image
+                          src={getBinaryContentDataUrl(card.content)}
+                          alt={card.title || 'Card image'}
+                          fit="contain"
+                          h={200}
+                          w="100%"
+                          fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage%3C/text%3E%3C/svg%3E"
+                          style={{ cursor: onCardClick ? 'pointer' : 'default' }}
+                          onClick={() => onCardClick?.(card)}
+                        />
+                        <Text size="xs" c="dimmed" mt="xs">
+                          {contentPreview}
+                        </Text>
+                      </Box>
+                    ) : (
+                      <Text 
+                        size="sm" 
+                        c="dimmed"
+                        style={{ cursor: onCardClick ? 'pointer' : 'default' }}
+                        onClick={() => onCardClick?.(card)}
+                      >
+                        {contentPreview}
+                      </Text>
+                    )}
+                  </>
                 )}
                 
                 {isNestedContent(card.content) && isExpanded && EditableCardListComponent && (
