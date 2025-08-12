@@ -77,7 +77,7 @@ export class Schema {
  */
 interface ToolSchema {
   name: string;
-  description: string;
+  description: string | undefined;
   inputSchema: Schema;
 }
 
@@ -98,9 +98,11 @@ export class ToolsSchema {
    * @param description A description of what the tool does
    * @param zodSchema The Zod schema for the tool's input parameters
    */
-  public addZodTool(name: string, description: string, zodSchema: z.ZodTypeAny): void {
+  public addZodTool(name: string, description: string | undefined, zodSchema: z.ZodTypeAny): void {
     const schema = Schema.fromZod(zodSchema);
-    // TODO: check for duplicate tool names
+    if (this.tools.has(name)) {
+      throw new Error(`Tool with name "${name}" already exists`);
+    }
     this.tools.set(name, {
       name,
       description,
@@ -114,8 +116,28 @@ export class ToolsSchema {
    * @param description A description of what the tool does
    * @param openApiSchema The OpenAPI schema for the tool's input parameters
    */
-  public addOpenAPITool(name: string, description: string, openApiSchema: any): void {
+  public addOpenAPITool(name: string, description: string | undefined, openApiSchema: any): void {
     const schema = Schema.fromOpenAPI(openApiSchema);
+    if (this.tools.has(name)) {
+      throw new Error(`Tool with name "${name}" already exists`);
+    }
+    this.tools.set(name, {
+      name,
+      description,
+      inputSchema: schema
+    });
+  }
+
+  /**
+   * Add a tool with pre-parsed schema.
+   * @param name The name of the tool
+   * @param description A description of what the tool does
+   * @param schema The pre-parsed schema for the tool's input parameters
+   */
+  public addTool(name: string, description: string | undefined, schema: Schema): void {
+    if (this.tools.has(name)) {
+      throw new Error(`Tool with name "${name}" already exists`);
+    }
     this.tools.set(name, {
       name,
       description,
