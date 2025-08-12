@@ -3,15 +3,12 @@
  * Provides an editable, reorderable, nestable list of cards
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   Stack,
   Box,
   Button,
-  Group,
-  Paper,
-  Text,
-  Center
+  Group
 } from '@mantine/core';
 import {
   IconPlus
@@ -23,6 +20,7 @@ import {
   generateId
 } from '@functions/cardModel';
 import { CardItem } from './CardItem';
+import { DroppableDivider } from './DroppableDivider';
 
 interface EditableCardListProps {
   cards: CardModel[];
@@ -44,7 +42,9 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
   maxNestingLevel = 3
 }) => {
   const handleDragEnd = useCallback((result: DropResult) => {
-    if (!result.destination) return;
+    if (!result.destination) {
+      return;
+    }
     
     const newCards = Array.from(cards);
     const [reorderedItem] = newCards.splice(result.source.index, 1);
@@ -138,39 +138,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
     onChange(updateCardRecursive(cards));
   }, [cards, onChange]);
   
-  // DropZone component for adding cards at specific positions
-  const DropZone: React.FC<{ index: number; isVisible: boolean }> = ({ index, isVisible }) => {
-    const [isHovered, setIsHovered] = useState(false);
-    
-    return (
-      <Paper
-        p="xs"
-        withBorder
-        style={{
-          borderStyle: 'dashed',
-          borderColor: isHovered ? '#228be6' : '#e0e0e0',
-          backgroundColor: isHovered ? '#f0f8ff' : 'transparent',
-          cursor: 'pointer',
-          opacity: isVisible || isHovered ? 1 : 0,
-          height: isVisible || isHovered ? 'auto' : '4px',
-          transition: 'all 0.2s ease',
-          marginLeft: nestingLevel * 20
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onClick={() => handleAddCardAtIndex(index)}
-      >
-        {(isVisible || isHovered) && (
-          <Center>
-            <Text size="xs" c="dimmed">
-              <IconPlus size={14} style={{ display: 'inline', marginRight: 4 }} />
-              Click to add card here
-            </Text>
-          </Center>
-        )}
-      </Paper>
-    );
-  };
   
   return (
     <Stack gap="sm">
@@ -178,7 +145,14 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
         <Droppable droppableId={`cards-${nestingLevel}`}>
           {(provided) => (
             <div {...provided.droppableProps} ref={provided.innerRef}>
-              {editable && <DropZone index={0} isVisible={cards.length === 0} />}
+              {editable && (
+                <DroppableDivider 
+                  index={0} 
+                  isVisible={cards.length === 0}
+                  nestingLevel={nestingLevel}
+                  onAddCard={handleAddCardAtIndex}
+                />
+              )}
               
               {cards.map((card, index) => (
                 <React.Fragment key={card.id}>
@@ -198,7 +172,12 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
                   </Box>
                   
                   {editable && (
-                    <DropZone index={index + 1} isVisible={false} />
+                    <DroppableDivider 
+                      index={index + 1} 
+                      isVisible={false}
+                      nestingLevel={nestingLevel}
+                      onAddCard={handleAddCardAtIndex}
+                    />
                   )}
                 </React.Fragment>
               ))}
