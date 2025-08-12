@@ -66,7 +66,7 @@ export class PomlFile {
   private expressionEvaluations: Map<string, any[]> = new Map();
   private responseSchema: Schema | undefined;
   private toolsSchema: ToolsSchema | undefined;
-  private runtimeParameters: { [key: string]: any } = {};
+  private runtimeParameters: { [key: string]: any } | undefined;
 
   constructor(text: string, options?: PomlReaderOptions, sourcePath?: string) {
     this.config = {

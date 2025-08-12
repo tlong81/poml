@@ -107,6 +107,13 @@ interface CliArgs {
   traceDir?: string;
 }
 
+interface CliResult {
+  messages: Message[] | RichContent;
+  responseSchema?: { [key: string]: any };
+  tools?: { [key: string]: any }[];
+  runtime?: { [key: string]: any };
+}
+
 export async function commandLine(args: CliArgs) {
   const readOptions = {
     trim: args.trim,
@@ -163,14 +170,25 @@ export async function commandLine(args: CliArgs) {
   }
 
   ErrorCollection.clear();
+
+  const pomlFile = new PomlFile(input, readOptions, sourcePath);
+  let reactElement = pomlFile.react(context);
+  reactElement = React.createElement(StyleSheetProvider, { stylesheet }, reactElement);
+
   const ir = await read(input, readOptions, context, stylesheet, sourcePath);
 
   const speakerMode = args.speakerMode === true || args.speakerMode === undefined;
   const prettyPrint = args.prettyPrint === true;
-  let result = write(ir, { speaker: speakerMode });
+  let resultMessages = write(ir, { speaker: speakerMode });
   const prettyOutput = speakerMode
-    ? (result as Message[]).map((message) => `===== ${message.speaker} =====\n\n${renderContent(message.content)}`).join('\n\n')
-    : renderContent(result as RichContent);
+    ? (resultMessages as Message[]).map((message) => `===== ${message.speaker} =====\n\n${renderContent(message.content)}`).join('\n\n')
+    : renderContent(resultMessages as RichContent);
+  const result: CliResult = {
+    messages: resultMessages,
+    responseSchema: pomlFile.getResponseSchema()?.toOpenAPI(),
+    tools: pomlFile.getToolsSchema()?.toOpenAI(),
+    runtime: pomlFile.getRuntimeParameters(),
+  }
   const output = prettyPrint ? prettyOutput : JSON.stringify(result);
 
   if (isTracing()) {

@@ -65,7 +65,12 @@ export class Schema {
     if (this.openApiSchema) {
       return this.openApiSchema;
     } else if (this.zodSchema) {
-      return z.toJSONSchema(this.zodSchema);
+      const schema = z.toJSONSchema(this.zodSchema);
+      // pop the $schema property if it exists
+      if (schema.$schema) {
+        delete schema.$schema;
+      }
+      return schema;
     } else {
       throw new Error("No schema available");
     }
