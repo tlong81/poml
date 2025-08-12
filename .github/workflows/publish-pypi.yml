@@ -40,9 +40,23 @@ jobs:
           fi
           echo "Version check passed!"
 
-  publish-pypi:
-    needs: check-version
-    runs-on: ubuntu-latest
+  publish-to-test-pypi:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            wheel_platform: manylinux_2_17_x86_64
+          - os: ubuntu-24.04-arm
+            wheel_platform: manylinux_2_17_aarch64
+          - os: windows-latest
+            wheel_platform: win_amd64
+          - os: macos-13
+            wheel_platform: macosx_10_9_x86_64
+          - os: macos-latest
+            wheel_platform: macosx_11_0_arm64
+
+    runs-on: ${{ matrix.os }}
+
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
       contents: read
@@ -68,8 +82,51 @@ jobs:
 
       - name: Verify package contents
         run: |
-          python -m tarfile -l dist/*.tar.gz
           python -m zipfile -l dist/*.whl
+
+      - name: Rename wheel for platform
+        id: rename-wheel
+        shell: bash
+        run: |
+          WHEEL_FILE=$(find dist -name "*.whl" -type f | head -1)
+          if [ -z "$WHEEL_FILE" ]; then
+            echo "No wheel file found!"
+            exit 1
+          fi
+          echo "Original wheel: $WHEEL_FILE"
+          
+          # Parse the original wheel filename to extract components
+          WHEEL_NAME=$(basename "$WHEEL_FILE" .whl)
+          
+          # Split wheel name into components: name-version-python_tag-abi_tag-platform_tag
+          IFS='-' read -ra PARTS <<< "$WHEEL_NAME"
+          
+          if [ ${#PARTS[@]} -ge 5 ]; then
+            DIST_NAME="${PARTS[0]}"
+            VERSION="${PARTS[1]}"
+            PYTHON_TAG="${PARTS[2]}"
+            ABI_TAG="${PARTS[3]}"
+            # Join remaining parts as platform tag
+            PLATFORM_TAG=$(IFS='-'; echo "${PARTS[*]:4}")
+          else
+            echo "Warning: Unexpected wheel filename format: $WHEEL_NAME"
+            exit 1
+          fi
+          
+          # Create platform-specific wheel name
+          PLATFORM_WHEEL="${DIST_NAME}-${VERSION}-${PYTHON_TAG}-${ABI_TAG}-${{ matrix.wheel_platform }}.whl"
+          echo "Platform-specific wheel: $PLATFORM_WHEEL"
+          
+          # Rename the wheel file
+          mv "$WHEEL_FILE" "dist/$PLATFORM_WHEEL"
+          echo "wheel-file=dist/$PLATFORM_WHEEL" >> $GITHUB_OUTPUT
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.wheel_platform }}
+          path: ${{ steps.rename-wheel.outputs.wheel-file }}
+          compression-level: 0
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
