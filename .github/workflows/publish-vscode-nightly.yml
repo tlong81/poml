@@ -1,1 +1,102 @@
-# Publish to Cloudflare R2
+name: VSCode Extension Nightly Build
+
+on:
+  schedule:
+    # Run daily at 10:00 PM UTC
+    - cron: '0 22 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+          - os: windows-latest
+            platform: win32-x64
+          - os: macos-13
+            platform: darwin-x64
+          - os: macos-latest
+            platform: darwin-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+        cache: 'npm'
+    - name: Use Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - run: npm ci
+    - run: npm run build-webview
+    - run: npm run build-cli
+    
+    - name: Get current version
+      id: get_version
+      shell: bash
+      run: |
+        VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Current version: $VERSION"
+
+    - name: Create development version
+      run: |
+        # Create a dev version with timestamp
+        TIMESTAMP=$(date +%Y%m%d%H%M)
+        node bump-version.js ${{ steps.get_version.outputs.version }} "$TIMESTAMP"
+
+    - name: Package VSCode Extension for Windows
+      if: matrix.platform == 'win32-x64'
+      run: npm run package:win
+    - name: Package VSCode Extension for ${{ matrix.platform }}
+      if: matrix.platform != 'win32-x64'
+      run: npm run package -- --target ${{ matrix.platform }}
+    
+    # Find and prepare VSIX file
+    - name: Find VSIX file
+      id: find-vsix
+      shell: bash
+      run: |
+        VSIX_FILE=$(find . -name "*.vsix" -type f | head -1)
+        if [ -z "$VSIX_FILE" ]; then
+          echo "No VSIX file found!"
+          exit 1
+        fi
+        echo "vsix-file=$VSIX_FILE" >> $GITHUB_OUTPUT
+        # Extract base name and create platform-specific name
+        BASE_NAME=$(basename "$VSIX_FILE" .vsix)
+        PLATFORM_VSIX="${BASE_NAME}-${{ matrix.platform }}.vsix"
+        echo "platform-vsix-name=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
+        # Copy to platform-specific name
+        cp "$VSIX_FILE" "$PLATFORM_VSIX"
+        echo "platform-vsix-file=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
+    
+    # Upload to Cloudflare R2
+    - name: Configure AWS CLI for Cloudflare R2
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+        aws-region: auto
+    
+    - name: Upload VSIX to Cloudflare R2
+      run: |
+        aws s3 cp "${{ steps.find-vsix.outputs.platform-vsix-file }}" \
+          s3://${{ secrets.CLOUDFLARE_R2_BUCKET }}/vscode/${{ steps.find-vsix.outputs.platform-vsix-name }} \
+          --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
+    
+    # Also upload as artifact for backup
+    - name: Upload VSIX as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.find-vsix.outputs.platform-vsix-name }}
+        path: ${{ steps.find-vsix.outputs.platform-vsix-file }}
+        compression-level: 0

@@ -1,1 +1,74 @@
-# Upload to artifact (requires Azure pipeline to upload to official marketplace)
+name: VSCode Extension Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0, v1.2.3, etc.
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+          - os: windows-latest
+            platform: win32-x64
+          - os: macos-13
+            platform: darwin-x64
+          - os: macos-latest
+            platform: darwin-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+        cache: 'npm'
+    - name: Use Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - run: npm ci
+    - run: npm run build-webview
+    - run: npm run build-cli
+    
+    - name: Package VSCode Extension for Windows
+      if: matrix.platform == 'win32-x64'
+      run: npm run package:win
+    - name: Package VSCode Extension for ${{ matrix.platform }}
+      if: matrix.platform != 'win32-x64'
+      run: npm run package -- --target ${{ matrix.platform }}
+    
+    # Find and prepare VSIX file
+    - name: Find VSIX file
+      id: find-vsix
+      shell: bash
+      run: |
+        VSIX_FILE=$(find . -name "*.vsix" -type f | head -1)
+        if [ -z "$VSIX_FILE" ]; then
+          echo "No VSIX file found!"
+          exit 1
+        fi
+        echo "vsix-file=$VSIX_FILE" >> $GITHUB_OUTPUT
+        # Extract base name and create platform-specific name
+        BASE_NAME=$(basename "$VSIX_FILE" .vsix)
+        PLATFORM_VSIX="${BASE_NAME}-${{ matrix.platform }}.vsix"
+        echo "platform-vsix-name=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
+        # Copy to platform-specific name
+        cp "$VSIX_FILE" "$PLATFORM_VSIX"
+        echo "platform-vsix-file=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
+    
+    # Upload VSIX files as artifacts
+    - name: Upload VSIX for ${{ matrix.platform }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.find-vsix.outputs.platform-vsix-name }}
+        path: ${{ steps.find-vsix.outputs.platform-vsix-file }}
+        compression-level: 0
