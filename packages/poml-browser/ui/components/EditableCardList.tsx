@@ -99,6 +99,26 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
     
     onChange(updatedCards);
   }, [cards, onChange]);
+
+  const handleDropContent = useCallback((droppedCards: CardModel[], index: number) => {
+    const newCards = [...cards];
+    
+    // Insert all dropped cards at the specified index
+    const cardsWithOrder = droppedCards.map((card, idx) => ({
+      ...card,
+      order: index + idx
+    }));
+    
+    newCards.splice(index, 0, ...cardsWithOrder);
+    
+    // Update order property for all cards after insertion
+    const updatedCards = newCards.map((card, idx) => ({
+      ...card,
+      order: idx
+    }));
+    
+    onChange(updatedCards);
+  }, [cards, onChange]);
   
   const handleAddChild = useCallback((parentId: string, child: CardModel) => {
     const updateCardRecursive = (cardList: CardModel[]): CardModel[] => {
@@ -151,6 +171,7 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
                   isVisible={cards.length === 0}
                   nestingLevel={nestingLevel}
                   onAddCard={handleAddCardAtIndex}
+                  onDropContent={handleDropContent}
                 />
               )}
               
@@ -177,6 +198,7 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
                       isVisible={false}
                       nestingLevel={nestingLevel}
                       onAddCard={handleAddCardAtIndex}
+                      onDropContent={handleDropContent}
                     />
                   )}
                 </React.Fragment>

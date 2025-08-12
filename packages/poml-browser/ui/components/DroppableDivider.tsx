@@ -12,19 +12,23 @@ import {
 import {
   IconPlus
 } from '@tabler/icons-react';
+import { handleDropEvent } from '@functions/clipboard';
+import { CardModel, generateId } from '@functions/cardModel';
 
 interface DroppableDividerProps {
   index: number;
   isVisible: boolean;
   nestingLevel: number;
   onAddCard: (index: number) => void;
+  onDropContent: (cards: CardModel[], index: number) => void;
 }
 
 export const DroppableDivider: React.FC<DroppableDividerProps> = ({
   index,
   isVisible,
   nestingLevel,
-  onAddCard
+  onAddCard,
+  onDropContent
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -55,86 +59,141 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
         e.preventDefault();
         e.stopPropagation();
       }}
-      onDrop={(e) => {
+      onDrop={async (e) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragActive(false);
-        // Handle card drop here if needed
+        
+        try {
+          const dropData = await handleDropEvent(e.nativeEvent as DragEvent);
+          const newCards: CardModel[] = [];
+          
+          // Create cards for dropped files
+          for (const file of dropData.files) {
+            const card: CardModel = {
+              id: generateId(),
+              content: file.content instanceof ArrayBuffer 
+                ? {
+                    type: 'binary',
+                    value: file.content,
+                    mimeType: file.type,
+                    encoding: 'binary'
+                  }
+                : {
+                    type: 'text',
+                    value: file.content as string
+                  },
+              title: file.name,
+              componentType: file.type.startsWith('image/') ? 'Image' 
+                            : file.type === 'application/pdf' ? 'Document'
+                            : 'Text',
+              timestamp: new Date(),
+              metadata: {
+                source: 'file'
+              }
+            };
+            newCards.push(card);
+          }
+          
+          // Create card for text content if no files
+          if (dropData.files.length === 0 && dropData.plainText) {
+            const card: CardModel = {
+              id: generateId(),
+              content: {
+                type: 'text',
+                value: dropData.plainText
+              },
+              componentType: 'Text',
+              timestamp: new Date(),
+              metadata: {
+                source: 'clipboard'
+              }
+            };
+            newCards.push(card);
+          }
+          
+          if (newCards.length > 0) {
+            onDropContent(newCards, index);
+          }
+        } catch (error) {
+          console.error('Failed to handle drop:', error);
+          // Fall back to regular add card
+          onAddCard(index);
+        }
       }}
     >
-      {/* Single line when not active, double line with plus when active */}
-      {!isVisible && !isHovered && !isDragActive ? (
-        // Single line with very low opacity when inactive
-        <Box
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: 0,
-            right: 0,
-            transform: 'translateY(-50%)',
-            height: '1px',
-            backgroundColor: '#e0e0e0',
-            opacity: 0.3
-          }}
-        />
-      ) : (
-        // Double line divider with plus sign when active
-        <Box
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: 0,
-            right: 0,
-            transform: 'translateY(-50%)',
-            display: 'flex',
-            alignItems: 'center'
-          }}
-        >
-          {/* First line */}
-          <Box
-            style={{
-              flex: 1,
-              height: '1px',
-              backgroundColor: isDragActive ? '#228be6' : (isHovered ? '#666' : '#ddd'),
-              transition: 'background-color 0.2s ease'
-            }}
-          />
-          
-          {/* Plus sign */}
-          <Box
-            style={{
-              margin: '0 12px',
-              width: '20px',
-              height: '20px',
-              borderRadius: '50%',
-              backgroundColor: isDragActive ? '#228be6' : (isHovered ? '#666' : '#ddd'),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease',
-              transform: isDragActive ? 'scale(1.2)' : 'scale(1)'
-            }}
-          >
-            <IconPlus 
-              size={12} 
-              color="white"
+      {/* Single line when not active, double line with plus when active, hidden when drop area is visible */}
+      {!isDragActive && (
+        <>
+          {!isVisible && !isHovered ? (
+            // Single line with very low opacity when inactive
+            <Box
               style={{
-                transform: isDragActive ? 'rotate(45deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease'
+                position: 'absolute',
+                top: '50%',
+                left: 0,
+                right: 0,
+                transform: 'translateY(-50%)',
+                height: '1px',
+                backgroundColor: '#e0e0e0',
+                opacity: 0.3
               }}
             />
-          </Box>
-          
-          {/* Second line */}
-          <Box
-            style={{
-              flex: 1,
-              height: '1px',
-              backgroundColor: isDragActive ? '#228be6' : (isHovered ? '#666' : '#ddd'),
-              transition: 'background-color 0.2s ease'
-            }}
-          />
-        </Box>
+          ) : (
+            // Double line divider with plus sign when active
+            <Box
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: 0,
+                right: 0,
+                transform: 'translateY(-50%)',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              {/* First line */}
+              <Box
+                style={{
+                  flex: 1,
+                  height: '1px',
+                  backgroundColor: isHovered ? '#666' : '#ddd',
+                  transition: 'background-color 0.2s ease'
+                }}
+              />
+              
+              {/* Plus sign */}
+              <Box
+                style={{
+                  margin: '0 12px',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  backgroundColor: isHovered ? '#666' : '#ddd',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <IconPlus 
+                  size={12} 
+                  color="white"
+                />
+              </Box>
+              
+              {/* Second line */}
+              <Box
+                style={{
+                  flex: 1,
+                  height: '1px',
+                  backgroundColor: isHovered ? '#666' : '#ddd',
+                  transition: 'background-color 0.2s ease'
+                }}
+              />
+            </Box>
+          )}
+        </>
       )}
       
       {/* Droppable area overlay when dragging */}
