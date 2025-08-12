@@ -39,15 +39,12 @@
     "@mantine/hooks": "^8.2.2",
     "@mozilla/readability": "^0.6.0",
     "@tabler/icons-react": "^3.34.1",
-    "@xml-tools/ast": "^5.0.5",
-    "@xml-tools/content-assist": "^3.1.11",
-    "@xml-tools/parser": "^1.0.11",
     "cheerio": "^1.0.0",
     "closest-match": "^1.3.3",
     "d3-dsv": "~2.0.0",
+    "js-tiktoken": "^1.0.21",
     "js-yaml": "^4.1.0",
     "lodash.throttle": "^4.1.1",
-    "mammoth": "^1.9.0",
     "pdfjs-dist": "^5.4.54",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
@@ -55,10 +52,12 @@
     "react-keyed-flatten-children": "^5.0.0",
     "showdown": "^2.1.0",
     "xlsx": "^0.18.5",
-    "xmlbuilder2": "^3.1.1",
     "yargs": "^17.7.2"
   },
   "overrides": {
-    "entities": "^6.0.1"
+    "entities": "^6.0.1",
+    "css-select": "^5.2.2",
+    "domutils": "^3.2.2",
+    "css-what": "^6.2.2"
   }
 }

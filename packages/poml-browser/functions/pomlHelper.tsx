@@ -2,7 +2,7 @@ import React from 'react';
 import { Paragraph } from 'poml/essentials';
 import { Markup } from 'poml/presentation';
 import { renderToReadableStream } from 'react-dom/server';
-import { renderToString } from 'react-dom/server';
+import { RichContent, write } from 'poml';
 import {
   CardModel,
   isTextContent,
@@ -114,6 +114,7 @@ export function cardToPOMLElement(card: CardModel): React.ReactElement {
 
   const props = buildComponentProps(card);
   const children = buildComponentChildren(card);
+  console.log(Component, props, children);
 
   return React.createElement(Component, props, children);
 }
@@ -182,23 +183,7 @@ function buildComponentChildren(card: CardModel): React.ReactNode {
  * Convert multiple cards to a POML document
  */
 export function cardsToPOMLDocument(cards: CardModel[]): React.ReactElement {
-  return <SubContent>{cards.map(card => cardToPOMLElement(card))}</SubContent>;
-}
-
-async function HiddenPomlIR() {
-  // wait 1000ms
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  return (
-    <Markup.Paragraph>
-      This is a hidden Poml IR component. It is used to ensure that the Poml IR is correctly parsed
-      and rendered in the browser.
-    </Markup.Paragraph>
-  );
-}
-
-function SimpleTest() {
-  return <div>Simple test component</div>;
+  return <Text syntax="markdown">{cards.map(card => cardToPOMLElement(card))}</Text>;
 }
 
 /**
@@ -229,12 +214,32 @@ async function renderElementToString(element: React.ReactElement): Promise<strin
   return result;
 }
 
+export const richContentToString = (content: RichContent): string => {
+  // This is temporary and should be replaced with a proper display function
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  return content
+    .map(item => {
+      if (typeof item === 'string') {
+        return item;
+      } else if (item && item.type) {
+        return `<${item.type}>`;
+      }
+      return '<unknown>';
+    })
+    .join('\n\n');
+};
+
 /**
  * Convert a single card to POML string
  */
 export async function cardToPOMLString(card: CardModel): Promise<string> {
   const element = cardToPOMLElement(card);
-  return renderElementToString(element);
+  const ir = await renderElementToString(element);
+  const written = await write(ir, { speaker: false });
+  return richContentToString(written);
 }
 
 /**
@@ -242,7 +247,11 @@ export async function cardToPOMLString(card: CardModel): Promise<string> {
  */
 export async function cardsToPOMLString(cards: CardModel[]): Promise<string> {
   const document = cardsToPOMLDocument(cards);
-  return renderElementToString(document);
+  const ir = await renderElementToString(document);
+  console.log(ir);
+  const written = await write(ir, { speaker: false });
+  console.log(written);
+  return richContentToString(written);
 }
 
 /**
@@ -264,7 +273,7 @@ export default async function pomlHelper(cards?: CardModel[]): Promise<string> {
       console.log('Rendering cards to POML:', cards);
       return await cardsToPOMLString(cards);
     } else {
-      return "<div>No cards provided to render.</div>";
+      return '<div>No cards provided to render.</div>';
     }
   } catch (error) {
     console.error('Rendering error:', error);

@@ -24,10 +24,28 @@ const pomlAliasEntries = [
   { find: 'poml', replacement: path.resolve(__dirname, '../poml') },
   { find: 'fs', replacement: path.resolve(__dirname, 'stubs/fs.ts') },
   { find: 'sharp', replacement: path.resolve(__dirname, 'stubs/sharp.ts') },
+  { find: 'mammoth', replacement: path.resolve(__dirname, 'stubs/mammoth.ts') },
+  { find: 'xmlbuilder2', replacement: path.resolve(__dirname, 'stubs/xmlbuilder2.ts') },
+  { find: '@xml-tools/ast', replacement: path.resolve(__dirname, 'stubs/xml-tools-ast.ts') },
+  { find: '@xml-tools/parser', replacement: path.resolve(__dirname, 'stubs/xml-tools-parser.ts') },
+  // Replace xmlContentAssist.js with browser-safe stub
+  { find: /\.\/util\/xmlContentAssist$/, replacement: path.resolve(__dirname, 'stubs/xmlContentAssist.ts') },
   // More specific alias for the exact import path used in pdf.ts
   { find: /^pdfjs-dist\/legacy\/build\/pdf\.js$/, replacement: path.resolve(__dirname, 'stubs/pdfjs-dist.ts') },
   { find: 'pdfjs-dist', replacement: path.resolve(__dirname, 'stubs/pdfjs-dist.ts') },
 ];
+
+// For debugging purposes, you can uncomment the trace plugin to log the build process
+// const trace = (name) => ({
+//   name,
+//   buildStart() { console.log(`[${name}] buildStart`); },
+//   watchChange(id) { console.log(`[${name}] watchChange`, id); },
+//   resolveId(id) { console.log(`[${name}] resolveId`, id); },
+//   load(id) { console.log(`[${name}] load`, id); },
+//   transform(code, id) { console.log(`[${name}] transform`, id); },
+//   generateBundle() { console.log(`[${name}] generateBundle`); },
+//   writeBundle() { console.log(`[${name}] writeBundle`); }
+// });
 
 export default [
   {
@@ -38,7 +56,7 @@ export default [
       sourcemap: true
     },
     watch: {
-      include: ['ui/**', 'functions/**', '../poml/**'],
+      include: ['ui/**', 'functions/**', 'poml/**'],
       exclude: 'node_modules/**'
     },
     onwarn(warning, warn) {
@@ -64,6 +82,7 @@ export default [
       warn(warning);
     },
     plugins: [
+      // trace('trace'),
       alias({
         entries: [...aliasEntries, ...pomlAliasEntries]
       }),
