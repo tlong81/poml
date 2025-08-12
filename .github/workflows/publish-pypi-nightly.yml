@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: 22.x
           cache: 'npm'
-      - name: Use Python 3.11
+      - name: Use Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -39,7 +39,7 @@ jobs:
       - name: Create development version
         run: |
           # Create a dev version with timestamp
-          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          TIMESTAMP=$(date +%Y%m%d%H%M)
           node bump-version.js ${{ steps.get_version.outputs.version }} "$TIMESTAMP"
 
       - name: Build package
