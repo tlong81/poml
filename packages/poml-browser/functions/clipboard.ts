@@ -33,16 +33,35 @@ export const readFileContent = async (file: File): Promise<string> => {
 
 export const getFileExtensionFromType = (mimeType: string): string => {
   const typeMap: { [key: string]: string } = {
+    // Images
     'image/png': 'png',
     'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
     'image/gif': 'gif',
     'image/webp': 'webp',
     'image/svg+xml': 'svg',
+    'image/bmp': 'bmp',
+    'image/tiff': 'tiff',
+    'image/x-icon': 'ico',
+    // Documents
     'text/plain': 'txt',
     'text/html': 'html',
     'application/json': 'json',
     'application/pdf': 'pdf',
-    'application/zip': 'zip'
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    // Archives
+    'application/zip': 'zip',
+    'application/x-rar-compressed': 'rar',
+    'application/x-7z-compressed': '7z',
+    // Media
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/ogg': 'ogg'
   };
   return typeMap[mimeType] || 'bin';
 };
@@ -231,9 +250,46 @@ export const useGlobalPasteListener = (
       return;
     }
 
-    const handleKeyDown = async (e: KeyboardEvent) => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      // Only trigger if not focused on an input/textarea
+      const activeElement = document.activeElement;
+      if (
+        activeElement &&
+        (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          (activeElement as HTMLElement).contentEditable === 'true')
+      ) {
+        return; // Let browser handle normal paste
+      }
+
+      e.preventDefault();
+
+      try {
+        console.log('Global paste event triggered');
+        // Reuse the existing handlePasteEvent function
+        const pastedData = await handlePasteEvent(e);
+        
+        console.log('Processed paste data:', {
+          textLength: pastedData.plainText.length,
+          fileCount: pastedData.files.length
+        });
+
+        // Convert PastedFile[] to File[]
+        const files: File[] = pastedData.files.map(pf => pastedFileToFile(pf));
+        
+        if (files.length > 0 || pastedData.plainText.trim()) {
+          onPaste(pastedData.plainText, files);
+        } else {
+          console.warn('No clipboard content to paste');
+        }
+      } catch (error) {
+        console.error('Paste failed:', error);
+      }
+    };
+
+    // Add a keydown listener to ensure the document can receive paste events
+    const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && !e.shiftKey && !e.altKey) {
-        // Only trigger if not focused on an input/textarea
         const activeElement = document.activeElement;
         if (
           activeElement &&
@@ -241,56 +297,21 @@ export const useGlobalPasteListener = (
             activeElement.tagName === 'TEXTAREA' ||
             (activeElement as HTMLElement).contentEditable === 'true')
         ) {
-          return; // Let browser handle normal paste
+          return;
         }
-
-        e.preventDefault();
-
-        try {
-          const clipboardItems = await navigator.clipboard.read();
-          const files: File[] = [];
-          let textContent = '';
-
-          for (const item of clipboardItems) {
-            // Check for files first
-            for (const type of item.types) {
-              if (type.startsWith('image/') || type.startsWith('application/')) {
-                try {
-                  const blob = await item.getType(type);
-                  const file = new File(
-                    [blob],
-                    `clipboard-${Date.now()}.${getFileExtensionFromType(type)}`,
-                    { type }
-                  );
-                  files.push(file);
-                } catch (error) {
-                  console.warn('Failed to read clipboard file:', error);
-                }
-              }
-            }
-
-            // Fall back to text content
-            if (files.length === 0 && item.types.includes('text/plain')) {
-              try {
-                textContent = await navigator.clipboard.readText();
-              } catch (error) {
-                console.warn('Failed to read clipboard text:', error);
-              }
-            }
-          }
-
-          if (files.length > 0 || textContent.trim()) {
-            onPaste(textContent, files);
-          }
-        } catch (error) {
-          console.error('Paste failed:', error);
+        
+        // Make sure document.body has focus to receive paste events
+        if (document.activeElement !== document.body) {
+          document.body.focus();
         }
       }
     };
 
+    document.addEventListener('paste', handlePaste);
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      document.removeEventListener('paste', handlePaste);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [onPaste, enabled]);
