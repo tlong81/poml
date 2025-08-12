@@ -55,6 +55,7 @@ import {
   MessageContent,
   CaptionedParagraph
 } from 'poml/components';
+import { ErrorCollection } from 'poml/base';
 
 // Map component type strings to actual React components
 const ComponentMap: Record<string, React.FC<any>> = {
@@ -114,7 +115,7 @@ export function cardToPOMLElement(card: CardModel): React.ReactElement {
 
   const props = buildComponentProps(card);
   const children = buildComponentChildren(card);
-  console.log(Component, props, children);
+  console.log(componentType, props, children);
 
   return React.createElement(Component, props, children);
 }
@@ -190,6 +191,7 @@ export function cardsToPOMLDocument(cards: CardModel[]): React.ReactElement {
  * Render a React element to string using renderToReadableStream
  */
 async function renderElementToString(element: React.ReactElement): Promise<string> {
+  ErrorCollection.clear(); // Clear any previous errors
   const stream = await renderToReadableStream(element, {
     onError: error => {
       console.error('Error during rendering:', error);
@@ -207,6 +209,9 @@ async function renderElementToString(element: React.ReactElement): Promise<strin
       break;
     }
     result += decoder.decode(value, { stream: true });
+  }
+  if (!ErrorCollection.empty()) {
+    throw ErrorCollection.first();
   }
 
   // Final decode with stream: false to flush any remaining bytes
