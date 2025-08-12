@@ -258,7 +258,7 @@ export class PomlFile {
     return this.toolsSchema;
   }
 
-  public getRuntimeParameters(): { [key: string]: any } {
+  public getRuntimeParameters(): { [key: string]: any } | undefined {
     return this.runtimeParameters;
   }
 
