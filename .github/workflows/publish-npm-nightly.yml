@@ -38,7 +38,7 @@ jobs:
           TIMESTAMP=$(date +%Y%m%d%H%M)
           node bump-version.js ${{ steps.get_version.outputs.version }} "$TIMESTAMP"
 
-          VERSION=$(node -p "require('./packages/poml-build/package.json').version")
+          NIGHTLY_VERSION=$(node -p "require('./packages/poml-build/package.json').version")
           echo "Nightly version: $NIGHTLY_VERSION"
           echo "nightly_version=$NIGHTLY_VERSION" >> $GITHUB_OUTPUT
 
