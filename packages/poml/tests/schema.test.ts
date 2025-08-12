@@ -9,7 +9,7 @@ describe('Schema', () => {
         name: z.string(),
         age: z.number()
       });
-      
+
       const schema = Schema.fromZod(zodSchema);
       expect(schema).toBeDefined();
       expect(schema.toZod()).toBe(zodSchema);
@@ -26,7 +26,7 @@ describe('Schema', () => {
         },
         required: ['name']
       };
-      
+
       const schema = Schema.fromOpenAPI(openApiSchema);
       expect(schema).toBeDefined();
       expect(schema.toOpenAPI()).toBe(openApiSchema);
@@ -39,7 +39,7 @@ describe('Schema', () => {
         id: z.string(),
         count: z.number()
       });
-      
+
       const schema = Schema.fromZod(zodSchema);
       expect(schema.toZod()).toBe(zodSchema);
     });
@@ -53,17 +53,17 @@ describe('Schema', () => {
         },
         required: ['name']
       };
-      
+
       const schema = Schema.fromOpenAPI(openApiSchema);
       // Note: This uses Function constructor which is similar to eval
       const zodSchema = schema.toZod();
       expect(zodSchema).toBeDefined();
-      
+
       // Test that the converted schema can parse valid data
       const validData = { name: 'John', age: 30 };
       const parsed = zodSchema.parse(validData);
       expect(parsed).toEqual(validData);
-      
+
       // Test that required fields are enforced
       const invalidData = { age: 25 }; // missing required 'name'
       expect(() => zodSchema.parse(invalidData)).toThrow();
@@ -83,7 +83,7 @@ describe('Schema', () => {
           email: { type: 'string', format: 'email' }
         }
       };
-      
+
       const schema = Schema.fromOpenAPI(openApiSchema);
       expect(schema.toOpenAPI()).toBe(openApiSchema);
     });
@@ -94,10 +94,10 @@ describe('Schema', () => {
         age: z.number().optional(),
         tags: z.array(z.string())
       });
-      
+
       const schema = Schema.fromZod(zodSchema);
       const openApiSchema = schema.toOpenAPI();
-      
+
       expect(openApiSchema).toBeDefined();
       expect(openApiSchema.type).toBe('object');
       expect(openApiSchema.properties).toBeDefined();
@@ -122,25 +122,30 @@ describe('ToolsSchema', () => {
         sign: z.string().describe('An astrological sign like Taurus or Aquarius')
       });
 
-      toolsSchema.addZodTool('get_horoscope', 'Get today\'s horoscope for an astrological sign', zodSchema);
-      
+      toolsSchema.addZodTool(
+        'get_horoscope',
+        "Get today's horoscope for an astrological sign",
+        zodSchema
+      );
+
       expect(toolsSchema.size()).toBe(1);
       const tool = toolsSchema.getTool('get_horoscope');
       expect(tool).toBeDefined();
       expect(tool?.name).toBe('get_horoscope');
-      expect(tool?.description).toBe('Get today\'s horoscope for an astrological sign');
+      expect(tool?.description).toBe("Get today's horoscope for an astrological sign");
     });
 
-    test('should overwrite existing tool with same name', () => {
+    test('should throw existing tool with same name', () => {
       const zodSchema1 = z.object({ param1: z.string() });
       const zodSchema2 = z.object({ param2: z.number() });
 
       toolsSchema.addZodTool('my_tool', 'First description', zodSchema1);
-      toolsSchema.addZodTool('my_tool', 'Second description', zodSchema2);
-      
+      expect(() => toolsSchema.addZodTool('my_tool', 'Second description', zodSchema2)).toThrow(
+        'Tool with name "my_tool" already exists'
+      );
       expect(toolsSchema.size()).toBe(1);
       const tool = toolsSchema.getTool('my_tool');
-      expect(tool?.description).toBe('Second description');
+      expect(tool?.description).toBe('First description');
     });
   });
 
@@ -156,7 +161,7 @@ describe('ToolsSchema', () => {
       };
 
       toolsSchema.addOpenAPITool('get_weather', 'Get current weather for a city', openApiSchema);
-      
+
       expect(toolsSchema.size()).toBe(1);
       const tool = toolsSchema.getTool('get_weather');
       expect(tool).toBeDefined();
@@ -172,9 +177,9 @@ describe('ToolsSchema', () => {
       });
 
       toolsSchema.addZodTool('search', 'Search for information', zodSchema);
-      
+
       const vercelTools = toolsSchema.toVercel();
-      
+
       expect(vercelTools).toBeDefined();
       expect(vercelTools.search).toBeDefined();
       expect(vercelTools.search.description).toBe('Search for information');
@@ -184,9 +189,9 @@ describe('ToolsSchema', () => {
     test('should handle multiple tools', () => {
       toolsSchema.addZodTool('tool1', 'Description 1', z.object({ a: z.string() }));
       toolsSchema.addZodTool('tool2', 'Description 2', z.object({ b: z.number() }));
-      
+
       const vercelTools = toolsSchema.toVercel();
-      
+
       expect(Object.keys(vercelTools)).toHaveLength(2);
       expect(vercelTools.tool1).toBeDefined();
       expect(vercelTools.tool2).toBeDefined();
@@ -201,9 +206,9 @@ describe('ToolsSchema', () => {
       });
 
       toolsSchema.addZodTool('get_temperature', 'Get temperature for a location', zodSchema);
-      
+
       const openAITools = toolsSchema.toOpenAI();
-      
+
       expect(Array.isArray(openAITools)).toBe(true);
       expect(openAITools).toHaveLength(1);
       expect(openAITools[0].type).toBe('function');
@@ -217,9 +222,9 @@ describe('ToolsSchema', () => {
     test('should handle multiple tools', () => {
       toolsSchema.addZodTool('func1', 'Function 1', z.object({ x: z.string() }));
       toolsSchema.addZodTool('func2', 'Function 2', z.object({ y: z.number() }));
-      
+
       const openAITools = toolsSchema.toOpenAI();
-      
+
       expect(openAITools).toHaveLength(2);
       expect(openAITools[0].name).toBe('func1');
       expect(openAITools[1].name).toBe('func2');
@@ -235,9 +240,9 @@ describe('ToolsSchema', () => {
       };
 
       toolsSchema.addOpenAPITool('send_message', 'Send a message', openApiSchema);
-      
+
       const openAITools = toolsSchema.toOpenAI();
-      
+
       expect(openAITools).toHaveLength(1);
       expect(openAITools[0].parameters).toEqual(openApiSchema);
     });
@@ -246,7 +251,7 @@ describe('ToolsSchema', () => {
   describe('getTool', () => {
     test('should return tool if it exists', () => {
       toolsSchema.addZodTool('my_tool', 'My tool', z.object({ param: z.string() }));
-      
+
       const tool = toolsSchema.getTool('my_tool');
       expect(tool).toBeDefined();
       expect(tool?.name).toBe('my_tool');
@@ -262,9 +267,9 @@ describe('ToolsSchema', () => {
     test('should remove existing tool and return true', () => {
       toolsSchema.addZodTool('temp_tool', 'Temporary tool', z.object({ x: z.number() }));
       expect(toolsSchema.size()).toBe(1);
-      
+
       const removed = toolsSchema.removeTool('temp_tool');
-      
+
       expect(removed).toBe(true);
       expect(toolsSchema.size()).toBe(0);
       expect(toolsSchema.getTool('temp_tool')).toBeUndefined();
@@ -279,13 +284,13 @@ describe('ToolsSchema', () => {
   describe('size', () => {
     test('should return correct number of tools', () => {
       expect(toolsSchema.size()).toBe(0);
-      
+
       toolsSchema.addZodTool('tool1', 'Tool 1', z.object({ a: z.string() }));
       expect(toolsSchema.size()).toBe(1);
-      
+
       toolsSchema.addZodTool('tool2', 'Tool 2', z.object({ b: z.number() }));
       expect(toolsSchema.size()).toBe(2);
-      
+
       toolsSchema.removeTool('tool1');
       expect(toolsSchema.size()).toBe(1);
     });
@@ -296,11 +301,11 @@ describe('ToolsSchema', () => {
       toolsSchema.addZodTool('tool1', 'Tool 1', z.object({ a: z.string() }));
       toolsSchema.addZodTool('tool2', 'Tool 2', z.object({ b: z.number() }));
       toolsSchema.addZodTool('tool3', 'Tool 3', z.object({ c: z.boolean() }));
-      
+
       expect(toolsSchema.size()).toBe(3);
-      
+
       toolsSchema.clear();
-      
+
       expect(toolsSchema.size()).toBe(0);
       expect(toolsSchema.getTool('tool1')).toBeUndefined();
       expect(toolsSchema.getTool('tool2')).toBeUndefined();
