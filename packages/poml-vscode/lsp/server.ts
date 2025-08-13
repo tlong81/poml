@@ -547,6 +547,7 @@ class PomlLspServer {
       returnAllErrors: true,
       contexts: options.contexts,
       stylesheets: options.stylesheets,
+      returnTokenCounts: undefined
     });
     const errors = Array.isArray(response.error) ? response.error : response.error ? [response.error] : [];
 

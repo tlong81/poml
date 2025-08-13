@@ -17,6 +17,13 @@ const {
 // import { ChatAnthropic } from "@langchain/anthropic";
 const { AzureChatOpenAI, ChatOpenAI, AzureOpenAI, OpenAI } = require('@langchain/openai');  // eslint-disable-line
 const { ChatGoogleGenerativeAI, GoogleGenerativeAI } = require('@langchain/google-genai');  // eslint-disable-line
+
+import { createOpenAI } from '@ai-sdk/openai';
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createAzure } from '@ai-sdk/azure';
+import { ModelMessage, streamText } from 'ai';
+
 import ModelClient from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
 import { createSseStream } from '@azure/core-sse';
@@ -196,12 +203,33 @@ export class TestCommand implements Command {
 
   private async *routeStream(
     prompt: Message[] | RichContent,
-    settings: LanguageModelSetting
+    settings: LanguageModelSetting,
+    responseSchema?: { [key: string]: any },
+    tools?: { [key: string]: any },
+    runtimeParameters: any = {}
   ): AsyncGenerator<string> {
     if (settings.provider === 'microsoft' && settings.apiUrl?.includes('.models.ai.azure.com')) {
       yield* this.azureAiStream(prompt as Message[], settings);
     } else {
-      yield* this.langchainStream(prompt, settings);
+      const model = this.getActiveVercelModel(settings);
+      const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt as Message[]) : prompt as string;
+
+      const stream = streamText({
+        model: model,
+        prompt: vercelPrompt,
+        onError: ({ error }) => {
+          // Immediately throw the error
+          throw error;
+        },
+        maxRetries: 0,
+        temperature: settings.temperature,
+        maxOutputTokens: settings.maxTokens,
+        ...runtimeParameters,
+      });
+
+      for await (const chunk of stream.textStream) {
+        yield chunk;
+      }
     }
   }
 
@@ -277,9 +305,9 @@ export class TestCommand implements Command {
     const lm = this.getActiveLangchainModel(settings);
     const lcPrompt = this.isChatting
       ? this.toLangchainMessages(
-          prompt as Message[],
-          settings.provider === 'google' ? 'google' : 'openai'
-        )
+        prompt as Message[],
+        settings.provider === 'google' ? 'google' : 'openai'
+      )
       : this.toLangchainString(prompt as RichContent);
     GenerationController.abortAll();
     const stream = await lm.stream(lcPrompt, {
@@ -296,6 +324,36 @@ export class TestCommand implements Command {
         }
       }
     }
+  }
+
+  private getActiveVercelModelProvider(settings: LanguageModelSetting) {
+    switch (settings.provider) {
+      case 'anthropic':
+        return createAnthropic({
+          baseURL: settings.apiUrl,
+          apiKey: settings.apiKey,
+        });
+      case 'microsoft':
+        return createAzure({
+          baseURL: settings.apiUrl,
+          apiKey: settings.apiKey
+        });
+      case 'openai':
+        return createOpenAI({
+          baseURL: settings.apiUrl,
+          apiKey: settings.apiKey
+        });
+      case 'google':
+        return createGoogleGenerativeAI({
+          baseURL: settings.apiUrl,
+          apiKey: settings.apiKey
+        });
+    }
+  }
+
+  private getActiveVercelModel(settings: LanguageModelSetting) {
+    const provider = this.getActiveVercelModelProvider(settings);
+    return provider(settings.model);
   }
 
   private getActiveLangchainModel(settings: LanguageModelSetting) {
@@ -341,6 +399,38 @@ export class TestCommand implements Command {
       default:
         throw new Error(`Unsupported language model provider: ${settings.provider}`);
     }
+  }
+
+  private pomlMessagesToVercelMessage(messages: Message[]): ModelMessage[] {
+    const speakerToRole = {
+      ai: 'assistant',
+      human: 'user',
+      system: 'system'
+    }
+    const result: ModelMessage[] = [];
+    for (const msg of messages) {
+      if (!msg.speaker) {
+        throw new Error(`Message must have a speaker, found: ${JSON.stringify(msg)}`);
+      }
+      const role = speakerToRole[msg.speaker];
+      const contents = typeof msg.content === 'string' ? msg.content : msg.content.map(part => {
+        if (typeof part === 'string') {
+          return { type: 'text', text: part };
+        } else if (part.type.startsWith('image/')) {
+          if (!part.base64) {
+            throw new Error(`Image content must have base64 data, found: ${JSON.stringify(part)}`);
+          }
+          return { type: 'image', image: part.base64 };
+        } else {
+          throw new Error(`Unsupported content type: ${part.type}`);
+        }
+      });
+      result.push({
+        role: role as any,
+        content: contents as any
+      });
+    }
+    return result;
   }
 
   private toLangchainMessages(messages: Message[], style: 'openai' | 'google') {
@@ -468,7 +558,7 @@ export class TestRerunCommand implements Command {
 export class TestAbortCommand implements Command {
   public readonly id = 'poml.testAbort';
 
-  public constructor(private readonly previewManager: POMLWebviewPanelManager) {}
+  public constructor(private readonly previewManager: POMLWebviewPanelManager) { }
 
   public execute() {
     getTelemetryReporter()?.reportTelemetry(TelemetryEvent.PromptTestingAbort, {});
