@@ -12,7 +12,8 @@ import { msWordManager } from '@functions/msword';
 import {
   readFileContent,
   useGlobalPasteListener,
-  arrayBufferToDataUrl
+  arrayBufferToDataUrl,
+  writeRichContentToClipboard
 } from '@functions/clipboard';
 import { extractPageContent } from '@functions/html';
 import { NotificationProvider, useNotifications } from './contexts/NotificationContext';
@@ -109,12 +110,20 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      // Use pomlHelper to convert cards to POML format
-      const pomlContent = await pomlHelper(cards);
+      // Use pomlHelper to convert cards to POML format with callbacks
+      const pomlContent = await pomlHelper(cards, {
+        onWarning: (message) => showWarning(message),
+        onError: (message) => showError(message, 'POML Generation Error')
+      });
       console.log('POML content:', pomlContent);
 
-      // Copy to clipboard
-      await navigator.clipboard.writeText(pomlContent);
+      if (!pomlContent) {
+        showError('Failed to generate POML content', 'Copy Failed');
+        return;
+      }
+
+      // Copy to clipboard with support for images and text
+      await writeRichContentToClipboard(pomlContent);
       showSuccess(`Copied ${cards.length} cards to clipboard`, 'POML Content Copied', undefined, 'bottom');
     } catch (error) {
       showError(`Failed to copy cards: ${(error as Error).message}`, 'Copy Failed');

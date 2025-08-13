@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { arrayBufferToDataURL } from './utils';
+import { RichContent } from 'poml';
+import { arrayBufferToDataURL, base64ToUint8 } from './utils';
 
 export const readFileContent = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -504,3 +505,91 @@ export const pastedFileToFile = (pastedFile: PastedFile): File => {
     lastModified: pastedFile.lastModified
   });
 };
+
+/**
+ * Convert RichContent to string for text-only clipboard
+ */
+export function richContentToString(content: RichContent): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  return content
+    .map(item => {
+      if (typeof item === 'string') {
+        return item;
+      } else if (item && item.type) {
+        return `[Image: ${item.type}${item.alt ? ` - ${item.alt}` : ''}]`;
+      }
+      return '[Unknown media]';
+    })
+    .join('\n\n');
+}
+
+/**
+ * Write RichContent to clipboard with support for both text and images
+ */
+export async function writeRichContentToClipboard(content: RichContent): Promise<void> {
+  if (typeof content === 'string') {
+    // Simple string content
+    await navigator.clipboard.writeText(content);
+    return;
+  }
+
+  // RichContent with mixed text and media
+  const textParts: string[] = [];
+  const imageBlobs: Blob[] = [];
+
+  // Process content parts
+  for (const item of content) {
+    if (typeof item === 'string') {
+      textParts.push(item);
+    } else if (item && item.type && item.base64) {
+      // Handle images
+      if (item.type.startsWith('image/')) {
+        // Only accept PNG images
+        if (item.type !== 'image/png') {
+          console.warn(`Image type ${item.type} is not supported. Only PNG images are accepted.`);
+          textParts.push(`[Unsupported image type: ${item.type}. Only PNG images are supported.]`);
+        } else {
+          try {
+            const bytes = base64ToUint8(item.base64);
+            // Cast to ArrayBuffer to satisfy TypeScript
+            const blob = new Blob([bytes.buffer as ArrayBuffer], { type: item.type });
+            imageBlobs.push(blob);
+            
+            // Also add placeholder text for the image
+            textParts.push(item.alt ? `[Image: ${item.alt}]` : `[Image: ${item.type}]`);
+          } catch (error) {
+            console.warn('Failed to process image for clipboard:', error);
+            textParts.push(item.alt ? `[Image: ${item.alt}]` : `[Image: ${item.type}]`);
+          }
+        }
+      } else {
+        // Non-image media, add as text placeholder
+        textParts.push(item.alt ? `[Media: ${item.alt}]` : `[Media: ${item.type}]`);
+      }
+    }
+  }
+
+  // Create clipboard data
+  const clipboardData: Record<string, Blob> = {};
+  
+  // Always include text content
+  if (textParts.length > 0) {
+    const textContent = textParts.join('');
+    clipboardData['text/plain'] = new Blob([textContent], { type: 'text/plain' });
+  }
+
+  // Include images if present
+  if (imageBlobs.length > 0) {
+    // For now, just include the first image
+    // Multiple images in clipboard is complex and not well supported
+    const firstImage = imageBlobs[0];
+    clipboardData[firstImage.type] = firstImage;
+  }
+
+  // Write to clipboard
+  const clipboardItem = new ClipboardItem(clipboardData);
+  await navigator.clipboard.write([clipboardItem]);
+}
