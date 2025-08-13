@@ -12,13 +12,18 @@ The POML Visual Studio Code extension provides comprehensive support for working
 
 ## Installation
 
+### Stable Release
+
 Install from [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=poml-team.poml).
 
 You can also install the extension manually by downloading the `.vsix` file from our [GitHub releases page](https://github.com/microsoft/poml/releases) and installing it in VS Code via the Extensions view.
 
-Before testing prompts with the POML toolkit, make sure you have configured your preferred LLM model, API key, and endpoint. If these are not set, prompt testing will not work.
+### Nightly Build
 
-**To configure in Visual Studio Code:**
-- Open the extension settings (open "Settings" and search for "POML").
-- Set your model provider (e.g., OpenAI, Azure, Google), API key, and endpoint URL in the POML section.
-- Alternatively, you can add these settings directly to your `settings.json` file.
+Download the nightly build from this [index](https://poml-vscode-nightly.scottyugochang.workers.dev/)
+
+Install the downloaded `.vsix` file in VS Code via the Extensions view (thanks [stackoverflow](https://stackoverflow.com/questions/42017617/how-to-install-vs-code-extension-manually) for the image below).
+
+![Manual installation instructions](../media/vscode-manual-install.png)
+
+Before testing prompts with the POML toolkit, make sure you have configured your preferred LLM model, API key, and endpoint. If these are not set, prompt testing will not work. [Configuration instructions](./configuration.md).

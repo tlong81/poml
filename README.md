@@ -65,9 +65,11 @@ pip install poml
 
 For development or local installation, you might use `pip install -e .` from a cloned repository.
 
+**Refer to the [documentation](https://microsoft.github.io/poml) for more details on installing the nightly build.**
+
 ## Documentation
 
-For detailed information on POML syntax, components, styling, templating, SDKs, and the VS Code extension, please refer to our [documentation](docs).
+For detailed information on POML syntax, components, styling, templating, SDKs, and the VS Code extension, please refer to our [documentation](https://microsoft.github.io/poml).
 
 ## Learn More
 

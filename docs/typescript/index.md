@@ -4,10 +4,16 @@ This documentation is auto-generated from the TypeScript source code using TypeD
 
 ## Installation
 
+### Stable Release
 To use the POML TypeScript API, install the package via npm:
 
 ```bash
 npm install pomljs
+```
+
+### Nightly Build
+```bash
+npm install pomljs@nightly
 ```
 
 ## Quick Start
