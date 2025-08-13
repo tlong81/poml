@@ -165,6 +165,7 @@ jobs:
 
       - name: Test installation from Test PyPI (nightly)
         if: needs.generate-timestamp.outputs.build_type == 'nightly'
+        shell: bash
         run: |
           pip uninstall -y poml
           # Retry installation up to 5 times with 60-second delays
@@ -185,6 +186,7 @@ jobs:
 
       - name: Test installation from PyPI (production)
         if: needs.generate-timestamp.outputs.build_type == 'production'
+        shell: bash
         run: |
           pip uninstall -y poml
           # Retry installation up to 5 times with 60-second delays
