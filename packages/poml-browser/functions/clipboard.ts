@@ -624,5 +624,35 @@ export async function writeRichContentToClipboard(content: RichContent): Promise
   }
 
   // Write to clipboard
-  await navigator.clipboard.write(clipboardItems);
+  try {
+    await navigator.clipboard.write(clipboardItems);
+  } catch (error) {
+    // If writing multiple items fails, fall back to writing just the first text and image
+    if (clipboardItems.length > 1) {
+      console.warn('Failed to write multiple clipboard items, falling back to single item:', error);
+      
+      // Create fallback with first text and first image only
+      const fallbackData: Record<string, Blob> = {};
+      
+      // Add text if available
+      if (textParts.length > 0) {
+        const textContent = textParts.join('');
+        fallbackData['text/plain'] = new Blob([textContent], { type: 'text/plain' });
+      }
+      
+      // Add first image if available
+      if (imageBlobs.length > 0) {
+        fallbackData['image/png'] = imageBlobs[0];
+      }
+      
+      if (Object.keys(fallbackData).length > 0) {
+        const fallbackItem = new ClipboardItem(fallbackData);
+        await navigator.clipboard.write([fallbackItem]);
+      } else {
+        throw error; // Re-throw if no fallback content available
+      }
+    } else {
+      throw error; // Re-throw if it's not a multiple items issue
+    }
+  }
 }
