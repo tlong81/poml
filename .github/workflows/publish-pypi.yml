@@ -105,6 +105,7 @@ jobs:
         run: hatch build -t wheel
 
       - name: Verify package contents
+        shell: bash
         run: |
           python -m zipfile -l dist/*.whl
 
@@ -167,7 +168,7 @@ jobs:
         run: |
           pip uninstall -y poml
           # Wait a bit for the package to be available
-          sleep 30
+          sleep 60
           pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==${{ steps.create_nightly.outputs.nightly_version }}
           python -c "import poml; print('Nightly package installed successfully from Test PyPI')"
 
@@ -176,6 +177,6 @@ jobs:
         run: |
           pip uninstall -y poml
           # Wait a bit for the package to be available
-          sleep 30
+          sleep 60
           pip install poml==${{ needs.check-version.outputs.pypi_version }}
           python -c "import poml; print('Package installed successfully from PyPI')"

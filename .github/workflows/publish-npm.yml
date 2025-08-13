@@ -114,3 +114,116 @@ jobs:
           sleep 30
           npm view pomljs@${{ needs.check-version.outputs.npm_version }}
           echo "✅ Package successfully published to npm!"
+
+  debug-npm-trusted-publish:
+    name: Debug npm Trusted Publishing
+    runs-on: ubuntu-latest
+    # OIDC token access is required to reproduce npm's trust handshake
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print GitHub context
+        run: |
+          echo "=== GitHub Context ==="
+          echo "REPO=$GITHUB_REPOSITORY"
+          echo "REF=$GITHUB_REF"
+          echo "EVENT=$GITHUB_EVENT_NAME"
+          echo "WORKFLOW_NAME=$GITHUB_WORKFLOW"
+          echo "WORKFLOW_REF=$GITHUB_WORKFLOW_REF"   # <org/repo>/<workflow_file>@<ref>
+          echo "RUNNER_ENV=github-hosted"
+          echo "IS_FORK=${{ github.event.pull_request.head.repo.fork || 'false' }}"
+          echo
+
+      - name: Resolve workflow filename actually used
+        id: wf_file
+        shell: bash
+        run: |
+          # GITHUB_WORKFLOW_REF looks like: org/repo/.github/workflows/publish-npm.yml@refs/heads/main
+          WF_FILE=$(echo "$GITHUB_WORKFLOW_REF" | awk -F'[@]' '{print $1}' | sed -E 's#^[^/]*/[^/]*/##')
+          echo "file=$WF_FILE" >> "$GITHUB_OUTPUT"
+          echo "Workflow file (from GITHUB_WORKFLOW_REF): $WF_FILE"
+          echo
+
+      - name: Fetch OIDC token (audience=sigstore) and decode claims
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Request an OIDC token like npm does (audience=sigstore)
+          TOKEN_JSON=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore")
+          ID_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.value')
+          echo "token_obtained=$([[ -n "$ID_TOKEN" ]] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+
+          echo "=== OIDC Token Claims (payload) ==="
+          PAYLOAD=$(echo "$ID_TOKEN" | awk -F. '{print $2}')
+          # pad base64 if needed, then decode
+          PAD=$(( (4 - ${#PAYLOAD} % 4) % 4 ))
+          printf "%s" "$PAYLOAD" | sed -e "s/-/+/g" -e "s/_/\//g" | tr -d '\n' | awk -v pad="$PAD" '{printf "%s", $0; for(i=0;i<pad;i++) printf "="}' | base64 -d | jq .
+          # Extract key fields
+          SUB=$(printf "%s" "$PAYLOAD" | sed -e "s/-/+/g" -e "s/_/\//g" | tr -d '\n' | awk -v pad="$PAD" '{printf "%s", $0; for(i=0;i<pad;i++) printf "="}' | base64 -d | jq -r '.sub')
+          AUD=$(printf "%s" "$PAYLOAD" | sed -e "s/-/+/g" -e "s/_/\//g" | tr -d '\n' | awk -v pad="$PAD" '{printf "%s", $0; for(i=0;i<pad;i++) printf "="}' | base64 -d | jq -r '.aud')
+          echo "SUB=$SUB"
+          echo "AUD=$AUD"
+          echo
+
+          # Pull out the workflow filename embedded in `sub` (format includes 'workflow:<file>')
+          OIDC_WF=$(echo "$SUB" | sed -n 's/.*workflow:\([^:]*\).*/\1/p')
+          echo "Workflow file (from OIDC sub): $OIDC_WF"
+          echo "oidc_workflow_file=$OIDC_WF" >> "$GITHUB_OUTPUT"
+
+      - name: Compare workflow filename (OIDC vs actual)
+        shell: bash
+        run: |
+          OIDC_WF="${{ steps.oidc.outputs.oidc_workflow_file }}"
+          ACTUAL_WF="${{ steps.wf_file.outputs.file }}"
+          echo "=== Workflow Filename Comparison ==="
+          echo "From OIDC token: $OIDC_WF"
+          echo "From GITHUB_WORKFLOW_REF: $ACTUAL_WF"
+          if [[ "$OIDC_WF" != "$ACTUAL_WF" ]]; then
+            echo "::error title=Trusted Publisher Mismatch::OIDC token workflow ($OIDC_WF) does not match actual workflow file ($ACTUAL_WF)."
+            echo "This is the most common cause of npm E404 on publish. Re-add the Trusted Publisher with the exact filename."
+          else
+            echo "✅ OIDC workflow filename matches actual workflow file."
+          fi
+          echo
+
+      - name: Node & npm environment
+        run: |
+          echo "=== Node & npm ==="
+          node -v || true
+          npm -v || true
+          npm config get registry || true
+          npm ping || true
+          echo
+
+      - name: Inspect package metadata in repo
+        run: |
+          echo "=== package.json sanity (source) ==="
+          node -p "require('./packages/poml-build/package.json').name"
+          node -p "require('./packages/poml-build/package.json').version"
+          node -p "require('./packages/poml-build/package.json').repository"
+          echo
+
+      - name: Build and inspect tarball (no publish)
+        run: |
+          set -e
+          pushd packages/poml-build >/dev/null
+          npm ci
+          npm pack
+          TGZ=$(ls -1 *.tgz | head -n1)
+          echo "Tarball: $TGZ"
+          echo "=== Tarball package.json (first lines) ==="
+          tar -xOf "$TGZ" package/package.json | sed -n '1,120p'
+          popd >/dev/null
+
+      - name: Check package exists on registry (unauthed GET)
+        run: |
+          echo "=== npm view (public) ==="
+          npm view pomljs version || true
+          echo
