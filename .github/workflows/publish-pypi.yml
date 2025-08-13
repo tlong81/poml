@@ -14,8 +14,34 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     uses: ./.github/workflows/check-version.yml
 
+  generate-timestamp:
+    runs-on: ubuntu-latest
+    outputs:
+      timestamp: ${{ steps.timestamp.outputs.value }}
+      build_type: ${{ steps.build_type.outputs.type }}
+    steps:
+      - name: Determine build type
+        id: build_type
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]] || ([[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ ! "${{ github.ref }}" =~ ^refs/tags/ ]]); then
+            echo "type=nightly" >> $GITHUB_OUTPUT
+            echo "Build type: nightly"
+          else
+            echo "type=production" >> $GITHUB_OUTPUT
+            echo "Build type: production"
+          fi
+      
+      - name: Generate timestamp
+        id: timestamp
+        shell: bash
+        run: |
+          TIMESTAMP=$(date +%Y%m%d%H%M)
+          echo "value=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "Generated timestamp: $TIMESTAMP"
+
   publish-to-pypi:
-    needs: [check-version]
+    needs: [check-version, generate-timestamp]
     if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
     strategy:
       matrix:
@@ -40,18 +66,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Determine build type
-        id: build_type
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "schedule" ]] || ([[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ ! "${{ github.ref }}" =~ ^refs/tags/ ]]); then
-            echo "type=nightly" >> $GITHUB_OUTPUT
-            echo "Build type: nightly"
-          else
-            echo "type=production" >> $GITHUB_OUTPUT
-            echo "Build type: production"
-          fi
-      
       - name: Use Node.js 22.x
         uses: actions/setup-node@v4
         with:
@@ -75,12 +89,13 @@ jobs:
           echo "Current version: $VERSION"
 
       - name: Create development version
-        if: steps.build_type.outputs.type == 'nightly'
+        if: needs.generate-timestamp.outputs.build_type == 'nightly'
         id: create_nightly
         shell: bash
         run: |
-          # Create a dev version with timestamp
-          TIMESTAMP=$(date +%Y%m%d%H%M)
+          # Create a dev version with shared timestamp
+          TIMESTAMP=${{ needs.generate-timestamp.outputs.timestamp }}
+          echo "Using shared timestamp: $TIMESTAMP"
           node bump-version.js ${{ steps.get_version.outputs.version }} "$TIMESTAMP"
           NIGHTLY_VERSION=$(python -c "import poml; print(poml.__version__)")
           echo "Nightly version: $NIGHTLY_VERSION"
@@ -138,17 +153,17 @@ jobs:
           compression-level: 0
 
       - name: Publish to Test PyPI (nightly)
-        if: steps.build_type.outputs.type == 'nightly'
+        if: needs.generate-timestamp.outputs.build_type == 'nightly'
         run: |
           twine upload --non-interactive --repository testpypi dist/*.whl
 
       - name: Publish to PyPI (production)
-        if: steps.build_type.outputs.type == 'production'
+        if: needs.generate-timestamp.outputs.build_type == 'production'
         run: |
           twine upload --non-interactive dist/*.whl
 
       - name: Test installation from Test PyPI (nightly)
-        if: steps.build_type.outputs.type == 'nightly'
+        if: needs.generate-timestamp.outputs.build_type == 'nightly'
         run: |
           pip uninstall -y poml
           # Wait a bit for the package to be available
@@ -157,7 +172,7 @@ jobs:
           python -c "import poml; print('Nightly package installed successfully from Test PyPI')"
 
       - name: Test installation from PyPI (production)
-        if: steps.build_type.outputs.type == 'production'
+        if: needs.generate-timestamp.outputs.build_type == 'production'
         run: |
           pip uninstall -y poml
           # Wait a bit for the package to be available

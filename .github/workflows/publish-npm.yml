@@ -91,13 +91,13 @@ jobs:
         if: steps.build_type.outputs.type == 'nightly'
         run: |
           cd packages/poml-build
-          npm publish --provenance --access public --tag nightly
+          npm publish --access public --tag nightly
 
       - name: Publish to npm (production)
         if: steps.build_type.outputs.type == 'production'
         run: |
           cd packages/poml-build
-          npm publish --provenance --access public
+          npm publish --access public
 
       - name: Verify nightly publication
         if: steps.build_type.outputs.type == 'nightly'
