@@ -4,14 +4,19 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v1.0.0, v1.2.3, etc.
+  schedule:
+    # Run daily at 10:00 PM UTC for nightly builds
+    - cron: '0 22 * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
   check-version:
+    if: startsWith(github.ref, 'refs/tags/')
     uses: ./.github/workflows/check-version.yml
 
   build:
-    needs: check-version
+    needs: [check-version]
+    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
     strategy:
       matrix:
         include:
@@ -25,11 +30,25 @@ jobs:
             platform: darwin-x64
           - os: macos-latest
             platform: darwin-arm64
+      fail-fast: false
 
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Determine build type
+      id: build_type
+      shell: bash
+      run: |
+        if [[ "${{ github.event_name }}" == "schedule" ]] || ([[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ ! "${{ github.ref }}" =~ ^refs/tags/ ]]); then
+          echo "type=nightly" >> $GITHUB_OUTPUT
+          echo "Build type: nightly"
+        else
+          echo "type=production" >> $GITHUB_OUTPUT
+          echo "Build type: production"
+        fi
+    
     - name: Use Node.js 22.x
       uses: actions/setup-node@v4
       with:
@@ -42,6 +61,22 @@ jobs:
     - run: npm ci
     - run: npm run build-webview
     - run: npm run build-cli
+
+    - name: Get current version
+      id: get_version
+      shell: bash
+      run: |
+        VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Current version: $VERSION"
+
+    - name: Create development version
+      if: steps.build_type.outputs.type == 'nightly'
+      shell: bash
+      run: |
+        # Create a dev version with timestamp
+        TIMESTAMP=$(date +%Y%m%d%H%M)
+        node bump-version.js ${{ steps.get_version.outputs.version }} "$TIMESTAMP"
     
     - name: Package VSCode Extension for Windows
       if: matrix.platform == 'win32-x64'
@@ -68,6 +103,14 @@ jobs:
         # Copy to platform-specific name
         cp "$VSIX_FILE" "$PLATFORM_VSIX"
         echo "platform-vsix-file=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
+        
+        # For nightly builds, also create latest versioned file
+        if [[ "${{ steps.build_type.outputs.type }}" == "nightly" ]]; then
+          PLATFORM_LATEST_VSIX="poml-latest-${{ matrix.platform }}.vsix"
+          echo "platform-latest-vsix-name=$PLATFORM_LATEST_VSIX" >> $GITHUB_OUTPUT
+          cp "$VSIX_FILE" "$PLATFORM_LATEST_VSIX"
+          echo "platform-latest-vsix-file=$PLATFORM_LATEST_VSIX" >> $GITHUB_OUTPUT
+        fi
     
     # Upload VSIX files as artifacts
     - name: Upload VSIX for ${{ matrix.platform }}
@@ -76,3 +119,20 @@ jobs:
         name: ${{ steps.find-vsix.outputs.platform-vsix-name }}
         path: ${{ steps.find-vsix.outputs.platform-vsix-file }}
         compression-level: 0
+    
+    # Upload nightly builds to Cloudflare R2
+    - name: Upload VSIX to Cloudflare R2 (nightly)
+      if: steps.build_type.outputs.type == 'nightly'
+      shell: bash
+      run: |
+        set -ex
+        aws s3 cp "${{ steps.find-vsix.outputs.platform-vsix-file }}" \
+          s3://poml/vscode/${{ steps.find-vsix.outputs.platform-vsix-name }} \
+          --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
+        aws s3 cp "${{ steps.find-vsix.outputs.platform-latest-vsix-file }}" \
+          s3://poml/vscode/${{ steps.find-vsix.outputs.platform-latest-vsix-name }} \
+          --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: auto

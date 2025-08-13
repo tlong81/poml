@@ -24,11 +24,6 @@ stages:
       inputs:
         versionSpec: '22.x'
 
-    - task: UsePythonVersion@0
-      displayName: 'Use Python 3.11'
-      inputs:
-        versionSpec: '3.11'
-
     - script: |
         npm install -g vsce
       displayName: 'Install VSCE'
@@ -142,65 +137,3 @@ stages:
       displayName: 'Publish VSIX Files to Marketplace'
       env:
         VSCE_PAT: $(VSCE_PAT)
-
-    - script: |
-        python -m pip install --upgrade pip
-        pip install twine
-      displayName: 'Install Twine'
-
-    - script: |
-        set -e
-
-        wheel_count=$(find artifacts -type f -name "*.whl" | wc -l)
-        if [ "$wheel_count" -eq 0 ]; then
-          echo "No wheel files found to publish."
-          exit 0
-        fi
-
-        for wheel in artifacts/*.whl; do
-          if [ -f "$wheel" ]; then
-            echo "Publishing wheel: $wheel"
-            twine upload --non-interactive --repository pypi --username "$PYPI_USERNAME" --password "$PYPI_PASSWORD" "$wheel"
-            if [ $? -eq 0 ]; then
-              echo "Successfully published: $wheel"
-            else
-              echo "Failed to publish: $wheel"
-              exit 1
-            fi
-          fi
-        done
-      displayName: 'Publish Wheels to PyPI'
-      env:
-        PYPI_USERNAME: __token__
-        PYPI_PASSWORD: $(PYPI_TOKEN)
-
-    - script: |
-        set -e
-
-        # Count .tgz packages
-        tgz_count=$(find artifacts -type f -name "*.tgz" | wc -l)
-        if [ "$tgz_count" -eq 0 ]; then
-          echo "No .tgz packages found to publish."
-          exit 0
-        fi
-
-        # Configure npm auth (writes ~/.npmrc)
-        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-
-        # Publish each package
-        for tgz in artifacts/*.tgz; do
-          if [ -f "$tgz" ]; then
-            pkg_path="$(realpath "$tgz")"
-            echo "Publishing package: $pkg_path"
-            npm publish "$pkg_path" --access public
-            if [ $? -eq 0 ]; then
-              echo "Successfully published: $tgz"
-            else
-              echo "Failed to publish: $tgz"
-              exit 1
-            fi
-          fi
-        done
-      displayName: 'Publish .tgz packages to npm'
-      env:
-        NPM_TOKEN: $(NPM_TOKEN)
