@@ -3,6 +3,8 @@
  * Replaces ExtractedContent with a more flexible and structured system
  */
 
+import { binaryToBase64, arrayBufferToDataURL } from './utils';
+
 // POML Component Types based on docs/components.md
 export type POMLComponentType =
   // Basic Components
@@ -247,7 +249,7 @@ function serializeContent(content: CardContentType): SerializedCardContent {
       return content;
     case 'binary':
       if (content.value instanceof ArrayBuffer) {
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(content.value)));
+        const base64 = binaryToBase64(content.value);
         return {
           type: 'binary',
           value: base64,
@@ -390,23 +392,9 @@ export function getBinaryContentDataUrl(content: BinaryContent): string | null {
     return null;
   }
 
-  let base64Value: string;
-
   if (content.value instanceof ArrayBuffer) {
-    // Handle large ArrayBuffers safely to avoid stack overflow
-    const uint8Array = new Uint8Array(content.value);
-    const chunkSize = 8192; // Process in chunks to avoid stack overflow
-    let binary = '';
-
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-
-    base64Value = btoa(binary);
+    return arrayBufferToDataURL(content.value, content.mimeType || 'application/octet-stream');
   } else {
-    base64Value = content.value;
+    return `data:${content.mimeType || 'application/octet-stream'};base64,${content.value}`;
   }
-
-  return `data:${content.mimeType};base64,${base64Value}`;
 }

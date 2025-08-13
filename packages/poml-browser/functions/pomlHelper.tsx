@@ -56,6 +56,7 @@ import {
   CaptionedParagraph
 } from 'poml/components';
 import { ErrorCollection } from 'poml/base';
+import { binaryToBase64 } from './utils';
 
 // Map component type strings to actual React components
 const ComponentMap: Record<string, React.FC<any>> = {
@@ -135,10 +136,18 @@ function buildComponentProps(card: CardModel): Record<string, any> {
   // Add props based on content type
   if (isBinaryContent(card.content)) {
     if (card.content.mimeType) {
-      props.mimeType = card.content.mimeType;
+      props.type = card.content.mimeType;
     }
     if (card.content.encoding === 'base64') {
-      props.src = `data:${card.content.mimeType || 'application/octet-stream'};base64,${card.content.value}`;
+      props.base64 = card.content.value;
+    } else if (card.content.encoding === 'binary') {
+      // For binary encoding, value should be ArrayBuffer
+      if (card.content.value instanceof ArrayBuffer) {
+        props.base64 = binaryToBase64(card.content.value);
+      } else if (typeof card.content.value === 'string') {
+        // If it's already a base64 string, use it directly
+        props.base64 = card.content.value;
+      }
     }
   } else if (isFileContent(card.content)) {
     if (card.content.path) {

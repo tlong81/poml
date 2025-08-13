@@ -1,5 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import * as pdfjsLib from 'pdfjs-dist';
+import { base64ToBinary } from '../functions/utils';
 
 interface ExtractedContent {
   title: string;
@@ -38,8 +39,7 @@ async function extractPdfContent(): Promise<ExtractedContent> {
       }
       
       // Convert base64 back to ArrayBuffer
-      const binaryString = atob(response.base64Data);
-      const uint8Array = Uint8Array.from(binaryString, c => c.charCodeAt(0));
+      const uint8Array = base64ToBinary(response.base64Data);
       
       console.log('[DEBUG] Received and converted base64 to Uint8Array, size:', uint8Array.byteLength);
       loadingTask = pdfjsLib.getDocument({ data: uint8Array });

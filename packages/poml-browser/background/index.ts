@@ -1,5 +1,7 @@
 /// <reference types="chrome-types" />
 
+import { binaryToBase64 } from '../functions/utils';
+
 interface FileData {
   name: string;
   content: string;
@@ -48,17 +50,7 @@ chrome.runtime.onMessage.addListener(
           if (request.binary) {
             // Convert ArrayBuffer to base64 for message passing
             const arrayBuffer = result as ArrayBuffer;
-            const uint8Array = new Uint8Array(arrayBuffer);
-            
-            // Convert to base64 in chunks to avoid call stack overflow
-            let binaryString = '';
-            const chunkSize = 8192;
-            for (let i = 0; i < uint8Array.length; i += chunkSize) {
-              const chunk = uint8Array.subarray(i, i + chunkSize);
-              binaryString += String.fromCharCode(...chunk);
-            }
-            const base64 = btoa(binaryString);
-            
+            const base64 = binaryToBase64(arrayBuffer);
             sendResponse({ success: true, base64Data: base64 });
           } else {
             sendResponse({ success: true, content: result as string });

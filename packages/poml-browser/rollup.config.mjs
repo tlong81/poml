@@ -183,7 +183,7 @@ export default [
       }),
       typescript({
         tsconfig: './tsconfig.json',
-        include: ['poml-browser/contentScript/**/*']
+        include: ['poml-browser/contentScript/**/*', 'poml-browser/functions/**/*'],
       }),
       nodeResolve({
         jsnext: true,
