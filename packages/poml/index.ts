@@ -36,6 +36,36 @@ export const read = async (
   return await reactRender(readElement);
 };
 
+// Read and also returning the POML file
+// A hacky way to get the POML file from the React element
+// Do not use it in production code
+export const _readWithFile = async (
+  element: React.ReactElement | string,
+  options?: PomlReaderOptions,
+  context?: { [key: string]: any },
+  stylesheet?: { [key: string]: any },
+  sourcePath?: string,
+): Promise<[string, PomlFile | undefined]> => {
+  let readElement: React.ReactElement;
+  let pomlFile: PomlFile | undefined;
+  if (typeof element === 'string') {
+    pomlFile = new PomlFile(element, options, sourcePath);
+    readElement = pomlFile.react(context);
+  } else {
+    if (options || context) {
+      console.warn('Options and context are ignored when element is React.ReactElement');
+    }
+    readElement = element;
+  }
+  if (stylesheet) {
+    readElement = React.createElement(StyleSheetProvider, { stylesheet }, readElement);
+  }
+  return [
+    await reactRender(readElement),
+    pomlFile
+  ];
+};
+
 interface WriteOptions {
   speaker?: boolean;
 }
