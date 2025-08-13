@@ -572,24 +572,57 @@ export async function writeRichContentToClipboard(content: RichContent): Promise
     }
   }
 
-  // Create clipboard data
-  const clipboardData: Record<string, Blob> = {};
-  
-  // Always include text content
-  if (textParts.length > 0) {
-    const textContent = textParts.join('');
-    clipboardData['text/plain'] = new Blob([textContent], { type: 'text/plain' });
-  }
+  // Prepare clipboard items
+  const clipboardItems: ClipboardItem[] = [];
 
-  // Include images if present
-  if (imageBlobs.length > 0) {
-    // For now, just include the first image
-    // Multiple images in clipboard is complex and not well supported
-    const firstImage = imageBlobs[0];
-    clipboardData[firstImage.type] = firstImage;
+  if (imageBlobs.length === 0) {
+    // Text only - simple case
+    if (textParts.length > 0) {
+      const textContent = textParts.join('');
+      const clipboardData: Record<string, Blob> = {
+        'text/plain': new Blob([textContent], { type: 'text/plain' })
+      };
+      clipboardItems.push(new ClipboardItem(clipboardData));
+    }
+  } else if (imageBlobs.length === 1) {
+    // Single image with text - combine in one ClipboardItem
+    const clipboardData: Record<string, Blob> = {};
+    
+    // Concatenate all text parts
+    if (textParts.length > 0) {
+      const textContent = textParts.join('');
+      clipboardData['text/plain'] = new Blob([textContent], { type: 'text/plain' });
+    }
+    
+    // Add the single image
+    clipboardData['image/png'] = imageBlobs[0];
+    
+    clipboardItems.push(new ClipboardItem(clipboardData));
+  } else {
+    // Multiple images - try using multiple ClipboardItems
+    // Note: Browser support for multiple ClipboardItems may vary
+    
+    // First item: All text concatenated
+    if (textParts.length > 0) {
+      const textContent = textParts.join('');
+      const textItem = new ClipboardItem({
+        'text/plain': new Blob([textContent], { type: 'text/plain' })
+      });
+      clipboardItems.push(textItem);
+    }
+    
+    // Additional items: Each image separately
+    // Note: Most browsers may only support writing the first item
+    for (const imageBlob of imageBlobs) {
+      const imageItem = new ClipboardItem({
+        'image/png': imageBlob
+      });
+      clipboardItems.push(imageItem);
+    }
+    
+    console.warn('Multiple images detected. Browser may only copy the first clipboard item.');
   }
 
   // Write to clipboard
-  const clipboardItem = new ClipboardItem(clipboardData);
-  await navigator.clipboard.write([clipboardItem]);
+  await navigator.clipboard.write(clipboardItems);
 }
