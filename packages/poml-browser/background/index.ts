@@ -1,6 +1,7 @@
 /// <reference types="chrome-types" />
 
 import { binaryToBase64 } from '../functions/utils';
+import { NotificationMessage } from '../functions/notification';
 
 interface FileData {
   name: string;
@@ -35,19 +36,47 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 // Handle messages from content script/sidepanel
 chrome.runtime.onMessage.addListener(
   (
-    request: MessageRequest,
+    request: MessageRequest | NotificationMessage,
     _sender: chrome.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void
   ): boolean => {
-    if (request.action === "readFile") {
-      if (!request.filePath) {
+    // Handle notification messages
+    if ('type' in request && request.type === 'notification') {
+      const notificationMsg = request as NotificationMessage;
+      
+      // Forward notification to all UI contexts (popup, sidebar, etc.)
+      chrome.runtime.sendMessage(notificationMsg).catch(() => {
+        // If no UI is open, the message will fail, which is fine
+        console.debug('[Background] No UI available to receive notification');
+      });
+      
+      // Also try to send to any open extension tabs
+      chrome.tabs.query({ url: chrome.runtime.getURL('*') }, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, notificationMsg).catch(() => {
+              // Tab might not have a listener, which is fine
+            });
+          }
+        });
+      });
+      
+      sendResponse({ success: true });
+      return true;
+    }
+    
+    // Cast to MessageRequest for action-based messages
+    const messageRequest = request as MessageRequest;
+    
+    if (messageRequest.action === "readFile") {
+      if (!messageRequest.filePath) {
         sendResponse({ success: false, error: "No file path provided" });
         return true;
       }
 
-      readFileContent(request.filePath, request.binary)
+      readFileContent(messageRequest.filePath, messageRequest.binary)
         .then((result) => {
-          if (request.binary) {
+          if (messageRequest.binary) {
             // Convert ArrayBuffer to base64 for message passing
             const arrayBuffer = result as ArrayBuffer;
             const base64 = binaryToBase64(arrayBuffer);
@@ -63,13 +92,13 @@ chrome.runtime.onMessage.addListener(
 
       // Return true to indicate we will send a response asynchronously
       return true;
-    } else if (request.action === "extractPageContent") {
-      if (!request.tabId) {
+    } else if (messageRequest.action === "extractPageContent") {
+      if (!messageRequest.tabId) {
         sendResponse({ success: false, error: "No tab ID provided" });
         return true;
       }
 
-      extractPageContent(request.tabId)
+      extractPageContent(messageRequest.tabId)
         .then((content) => {
           sendResponse({ success: true, content: content });
         })
@@ -80,13 +109,13 @@ chrome.runtime.onMessage.addListener(
 
       // Return true to indicate we will send a response asynchronously
       return true;
-    } else if (request.action === "extractMsWordContent") {
-      if (!request.tabId) {
+    } else if (messageRequest.action === "extractMsWordContent") {
+      if (!messageRequest.tabId) {
         sendResponse({ success: false, error: "No tab ID provided" });
         return true;
       }
 
-      extractMsWordContent(request.tabId)
+      extractMsWordContent(messageRequest.tabId)
         .then((content) => {
           sendResponse({ success: true, content: content });
         })
@@ -97,18 +126,18 @@ chrome.runtime.onMessage.addListener(
 
       // Return true to indicate we will send a response asynchronously
       return true;
-    } else if (request.action === "sendToChatGPT") {
-      if (!request.tabId || !request.prompt) {
+    } else if (messageRequest.action === "sendToChatGPT") {
+      if (!messageRequest.tabId || !messageRequest.prompt) {
         sendResponse({ success: false, error: "Missing required parameters (tabId, prompt)" });
         return true;
       }
 
       // Convert FileData objects back to File objects
-      const files = (request.files || []).map(fileData => 
+      const files = (messageRequest.files || []).map((fileData: FileData) => 
         new File([fileData.content], fileData.name, { type: fileData.type })
       );
       
-      sendToChatGPT(request.tabId, request.prompt, files)
+      sendToChatGPT(messageRequest.tabId, messageRequest.prompt, files)
         .then(() => {
           sendResponse({ success: true });
         })

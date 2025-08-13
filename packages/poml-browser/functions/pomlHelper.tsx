@@ -1,6 +1,5 @@
 import React from 'react';
 import { Paragraph } from 'poml/essentials';
-import { Markup } from 'poml/presentation';
 import { renderToReadableStream } from 'react-dom/server';
 import { RichContent, write } from 'poml';
 import {
@@ -11,6 +10,7 @@ import {
   isNestedContent,
   getDefaultComponentType
 } from './cardModel';
+import { notifyWarning, notifyError, notifyDebug } from './notification';
 
 // Import POML components
 import {
@@ -115,7 +115,7 @@ export function cardToPOMLElement(card: CardModel): React.ReactElement {
 
   const props = buildComponentProps(card);
   const children = buildComponentChildren(card);
-  console.log(card.componentType, props, children);
+  notifyDebug(`Building POML element: ${card.componentType}`, { props, children });
 
   if (children === null || children === undefined) {
     return React.createElement(Component, props);
@@ -203,22 +203,21 @@ export function cardsToPOMLDocument(cards: CardModel[]): React.ReactElement {
  * Render a React element to string using renderToReadableStream
  */
 async function renderElementToString(
-  element: React.ReactElement,
-  onWarning?: (message: string) => void
+  element: React.ReactElement
 ): Promise<string> {
   ErrorCollection.clear(); // Clear any previous errors
   let renderError: any = null;
   const stream = await renderToReadableStream(element, {
     onError: error => {
-      console.error('Error during rendering:', error);
+      notifyError('Error during POML rendering', error);
       renderError = error;
     }
   });
   await stream.allReady;
   const reader = stream.getReader();
 
-  if (renderError && onWarning) {
-    onWarning(`Rendering error: ${renderError.toString()}`);
+  if (renderError) {
+    notifyWarning(`POML rendering encountered an error`, renderError);
   }
 
   let result = '';
@@ -262,11 +261,10 @@ export const richContentToString = (content: RichContent): string => {
  * Convert a single card to POML string
  */
 export async function cardToPOMLString(
-  card: CardModel,
-  onWarning?: (message: string) => void
+  card: CardModel
 ): Promise<RichContent> {
   const element = cardToPOMLElement(card);
-  const ir = await renderElementToString(element, onWarning);
+  const ir = await renderElementToString(element);
   const written = await write(ir, { speaker: false });
   return written;
 }
@@ -275,14 +273,13 @@ export async function cardToPOMLString(
  * Convert multiple cards to POML string
  */
 export async function cardsToPOMLString(
-  cards: CardModel[],
-  onWarning?: (message: string) => void
+  cards: CardModel[]
 ): Promise<RichContent> {
   const document = cardsToPOMLDocument(cards);
-  const ir = await renderElementToString(document, onWarning);
-  console.log(ir);
+  const ir = await renderElementToString(document);
+  notifyDebug('Generated intermediate representation', { length: ir.length });
   const written = await write(ir, { speaker: false });
-  console.log(written);
+  notifyDebug('Generated POML output', { type: typeof written });
   return written;
 }
 
@@ -298,36 +295,24 @@ export function createPOMLElement(
   return React.createElement(Component, props, children);
 }
 
-interface PomlHelperOptions {
-  onWarning?: (message: string) => void;
-  onError?: (message: string) => void;
-}
-
 export default async function pomlHelper(
-  cards?: CardModel[],
-  options?: PomlHelperOptions
+  cards?: CardModel[]
 ): Promise<RichContent | undefined> {
-  const { onWarning, onError } = options || {};
-  
   try {
     // If cards are provided, render them as POML
     if (cards && cards.length > 0) {
-      console.log('Rendering cards to POML:', cards);
-      const results = await cardsToPOMLString(cards, onWarning);
-      if (!results && onWarning) {
-        onWarning('No POML content generated from cards. You may need some debugging.');
+      notifyDebug('Rendering cards to POML', { count: cards.length });
+      const results = await cardsToPOMLString(cards);
+      if (!results) {
+        notifyWarning('No POML content generated from cards. You may need some debugging.');
       }
       return results;
     } else {
-      if (onError) {
-        onError('No cards provided to render.');
-      }
+      notifyError('No cards provided to render');
       return undefined;
     }
   } catch (error: any) {
-    if (onError) {
-      onError(`Error rendering POML: ${error.message}`);
-    }
+    notifyError('Error rendering POML', error);
     return undefined;
   }
 }

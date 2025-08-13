@@ -4,7 +4,8 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { notificationService, NotificationServiceOptions } from '../services/NotificationService';
+import { notificationService } from '../services/NotificationService';
+import { NotificationOptions } from '@functions/notification';
 
 export type NotificationType = 'success' | 'error' | 'warning' | 'info';
 export type NotificationPosition = 'top' | 'bottom';
@@ -126,7 +127,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Register the service handler when provider mounts
   useEffect(() => {
-    const serviceHandler = (type: NotificationType, message: string, options?: NotificationServiceOptions) => {
+    const serviceHandler = (type: NotificationType, message: string, options?: NotificationOptions) => {
       return addNotification({
         type,
         message,

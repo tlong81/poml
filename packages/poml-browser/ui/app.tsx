@@ -110,11 +110,8 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      // Use pomlHelper to convert cards to POML format with callbacks
-      const pomlContent = await pomlHelper(cards, {
-        onWarning: (message) => showWarning(message),
-        onError: (message) => showError(message, 'POML Generation Error')
-      });
+      // Use pomlHelper to convert cards to POML format
+      const pomlContent = await pomlHelper(cards);
       console.log('POML content:', pomlContent);
 
       if (!pomlContent) {
