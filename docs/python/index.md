@@ -6,12 +6,12 @@ This documentation provides an overview of the POML Python SDK, which allows you
 
 ### Stable Release
 ```bash
-pip install poml
+pip install --upgrade poml
 ```
 
 ### Nightly Build
 ```bash
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
+pip install --upgrade --pre --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
 ```
 
 ## References
