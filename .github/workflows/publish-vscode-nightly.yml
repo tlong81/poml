@@ -84,22 +84,20 @@ jobs:
         echo "platform-vsix-file=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
         echo "platform-latest-vsix-file=$PLATFORM_LATEST_VSIX" >> $GITHUB_OUTPUT
 
-    # Upload to Cloudflare R2
-    - name: Configure AWS CLI for Cloudflare R2
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-
     - name: Upload VSIX to Cloudflare R2
+      shell: bash
       run: |
+        set -ex
         aws s3 cp "${{ steps.find-vsix.outputs.platform-vsix-file }}" \
           s3://poml/vscode/${{ steps.find-vsix.outputs.platform-vsix-name }} \
           --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
         aws s3 cp "${{ steps.find-vsix.outputs.platform-latest-vsix-file }}" \
           s3://poml/vscode/${{ steps.find-vsix.outputs.platform-latest-vsix-name }} \
           --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: auto
 
     # Also upload as artifact for backup
     - name: Upload VSIX as artifact

@@ -10,8 +10,8 @@ jobs:
   publish-npm-nightly:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for OIDC authentication
       contents: read
-      packages: write  # Required for GitHub Packages
 
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +20,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@microsoft'
+          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - name: Get current version
@@ -63,20 +62,14 @@ jobs:
           path: packages/poml-build/pomljs-*.tgz
           compression-level: 0
 
-      - name: Publish to GitHub Packages
+      - name: Publish to npm registry
         run: |
           cd packages/poml-build
-          npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure GitHub Packages registry
-        run: |
-          echo "@microsoft:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          npm publish --provenance --access public --tag nightly
 
       - name: Verify publication
         run: |
           # Wait a bit for the package to be available
           sleep 10
-          npm view @microsoft/pomljs@${{ steps.create_nightly.outputs.nightly_version }} --registry https://npm.pkg.github.com
-          echo "✅ Nightly package successfully published to GitHub Packages!"
+          npm view pomljs@${{ steps.create_nightly.outputs.nightly_version }}
+          echo "✅ Nightly package successfully published to npm registry!"
