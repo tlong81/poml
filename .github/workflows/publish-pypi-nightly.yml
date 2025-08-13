@@ -55,10 +55,14 @@ jobs:
 
       - name: Create development version
         id: create_nightly
+        shell: bash
         run: |
           # Create a dev version with timestamp
           TIMESTAMP=$(date +%Y%m%d%H%M)
           node bump-version.js ${{ steps.get_version.outputs.version }} "$TIMESTAMP"
+          NIGHTLY_VERSION=$(python -c "import poml; print(poml.__version__)")
+          echo "Nightly version: $NIGHTLY_VERSION"
+          echo "nightly_version=$NIGHTLY_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build package
         run: hatch build -t wheel
@@ -120,6 +124,6 @@ jobs:
           pip uninstall -y poml
           # Wait a bit for the package to be available
           sleep 30
-          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==@${{ steps.create_nightly.outputs.nightly_version }}
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==${{ steps.create_nightly.outputs.nightly_version }}
           python -c "import poml; print('Package installed successfully')"
 

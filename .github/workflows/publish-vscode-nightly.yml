@@ -49,6 +49,7 @@ jobs:
         echo "Current version: $VERSION"
 
     - name: Create development version
+      shell: bash
       run: |
         # Create a dev version with timestamp
         TIMESTAMP=$(date +%Y%m%d%H%M)

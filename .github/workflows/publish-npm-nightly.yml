@@ -25,6 +25,7 @@ jobs:
 
       - name: Get current version
         id: get_version
+        shell: bash
         run: |
           VERSION=$(node -p "require('./packages/poml-build/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -32,6 +33,7 @@ jobs:
 
       - name: Create nightly version
         id: create_nightly
+        shell: bash
         run: |
           # Create a nightly version with timestamp
           TIMESTAMP=$(date +%Y%m%d%H%M)
