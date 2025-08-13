@@ -115,8 +115,8 @@ jobs:
         BASE_NAME=$(basename "$VSIX_FILE" .vsix)
         PLATFORM_VSIX="${BASE_NAME}.vsix"
         echo "platform-vsix-name=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
-        # Copy to platform-specific name
-        cp "$VSIX_FILE" "$PLATFORM_VSIX"
+        # Copy to platform-specific name (commented out because they are the same)
+        # cp "$VSIX_FILE" "$PLATFORM_VSIX"
         echo "platform-vsix-file=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
         
         # For nightly builds, also create latest versioned file
