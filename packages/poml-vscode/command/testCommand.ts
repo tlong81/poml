@@ -22,7 +22,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAzure } from '@ai-sdk/azure';
-import { ModelMessage, streamText, tool, jsonSchema, Tool } from 'ai';
+import { ModelMessage, streamText, tool, jsonSchema, Tool, streamObject } from 'ai';
 
 import ModelClient from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
@@ -214,6 +214,31 @@ export class TestCommand implements Command {
     if (settings.provider === 'microsoft' && settings.apiUrl?.includes('.models.ai.azure.com')) {
       yield* this.azureAiStream(prompt.content as Message[], settings);
     } else if (prompt.responseSchema) {
+      const model = this.getActiveVercelModel(settings);
+      const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
+        : prompt.content as string;
+      if (prompt.tools) {
+        throw new Error('Tools are not supported when response schema is provided.');
+      }
+
+      const stream = streamObject({
+        model: model,
+        prompt: vercelPrompt,
+        onError: ({ error }) => {
+          // Immediately throw the error
+          throw error;
+        },
+        schema: this.toVercelResponseSchema(prompt.responseSchema),
+        maxRetries: 0,
+        temperature: settings.temperature,
+        maxOutputTokens: settings.maxTokens,
+        ...prompt.runtime,
+      });
+
+      for await (const text of stream.textStream) {
+        yield text;
+      }
+
     } else {
       const model = this.getActiveVercelModel(settings);
       const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
