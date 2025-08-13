@@ -16,6 +16,7 @@ dev = [
   "flake8",
   "pytest",
   "hatch",
+  "twine",
   "mkdocs",
   "mkdocs-material",
   "mkdocstrings[python]",

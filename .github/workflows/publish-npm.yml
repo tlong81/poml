@@ -41,9 +41,12 @@ jobs:
           npm pack
           ls -la *.tgz
 
-      - name: Setup npm for publishing
-        run: |
-          echo "//registry.npmjs.org/:_authToken=\${NODE_AUTH_TOKEN}" > ~/.npmrc
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: packages/poml-build/*.tgz
+          compression-level: 0
 
       - name: Publish to npm (dry-run for workflow_dispatch)
         if: github.event_name == 'workflow_dispatch'
@@ -66,10 +69,3 @@ jobs:
           sleep 30
           npm view pomljs@${{ needs.check-version.outputs.npm_version }}
           echo "✅ Package successfully published to npm!"
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: packages/poml-build/*.tgz
-          compression-level: 0

@@ -21,6 +21,7 @@ jobs:
             wheel_platform: macosx_10_9_x86_64
           - os: macos-latest
             wheel_platform: macosx_11_0_arm64
+      fail-fast: false
 
     runs-on: ${{ matrix.os }}
 
@@ -111,12 +112,12 @@ jobs:
           compression-level: 0
 
       - name: Publish to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
+        run: |
+          twine upload --non-interactive --repository testpypi dist/*.whl
 
       - name: Test installation from Test PyPI
         run: |
+          pip uninstall poml
           # Wait a bit for the package to be available
           sleep 30
           pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==@${{ steps.create_nightly.outputs.nightly_version }}

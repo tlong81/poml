@@ -21,6 +21,7 @@ jobs:
             platform: darwin-x64
           - os: macos-latest
             platform: darwin-arm64
+      fail-fast: false
 
     runs-on: ${{ matrix.os }}
 
@@ -74,10 +75,14 @@ jobs:
         # Extract base name and create platform-specific name
         BASE_NAME=$(basename "$VSIX_FILE" .vsix)
         PLATFORM_VSIX="${BASE_NAME}-${{ matrix.platform }}.vsix"
+        PLATFORM_LATEST_VSIX="poml-latest-${{ matrix.platform }}.vsix"
         echo "platform-vsix-name=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
+        echo "platform-latest-vsix-name=$PLATFORM_LATEST_VSIX" >> $GITHUB_OUTPUT
         # Copy to platform-specific name
         cp "$VSIX_FILE" "$PLATFORM_VSIX"
+        cp "$VSIX_FILE" "$PLATFORM_LATEST_VSIX"
         echo "platform-vsix-file=$PLATFORM_VSIX" >> $GITHUB_OUTPUT
+        echo "platform-latest-vsix-file=$PLATFORM_LATEST_VSIX" >> $GITHUB_OUTPUT
 
     # Upload to Cloudflare R2
     - name: Configure AWS CLI for Cloudflare R2
@@ -85,12 +90,15 @@ jobs:
       with:
         aws-access-key-id: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-        aws-region: auto
+        aws-region: us-east-1
 
     - name: Upload VSIX to Cloudflare R2
       run: |
         aws s3 cp "${{ steps.find-vsix.outputs.platform-vsix-file }}" \
           s3://poml/vscode/${{ steps.find-vsix.outputs.platform-vsix-name }} \
+          --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
+        aws s3 cp "${{ steps.find-vsix.outputs.platform-latest-vsix-file }}" \
+          s3://poml/vscode/${{ steps.find-vsix.outputs.platform-latest-vsix-name }} \
           --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT }}
 
     # Also upload as artifact for backup
