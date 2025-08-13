@@ -156,6 +156,13 @@ export const CardItem: React.FC<CardItemProps> = ({
     }
     return 'Empty';
   }, [card.content]);
+
+  const imageDataUrl = useMemo(() => {
+    if (isBinaryContent(card.content) && isImageBinaryContent(card.content)) {
+      return getBinaryContentDataUrl(card.content);
+    }
+    return null;
+  }, [card.content]);
   
   return (
     <Draggable draggableId={card.id} index={index} isDragDisabled={!editable}>
@@ -206,6 +213,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     value={editedCard.content.value}
                     onChange={(e) => handleContentChange(e.target.value)}
                     minRows={3}
+                    maxRows={50}
                     autosize
                   />
                 )}
@@ -223,11 +231,15 @@ export const CardItem: React.FC<CardItemProps> = ({
               <>
                 <Group justify="space-between" mb="xs">
                   <Group gap="xs">
-                    {editable && (
-                      <div {...provided.dragHandleProps}>
-                        <IconGripVertical size={18} style={{ cursor: 'grab' }} />
-                      </div>
-                    )}
+                    <div {...provided.dragHandleProps}>
+                      <IconGripVertical 
+                        size={18} 
+                        style={{ 
+                          cursor: editable ? 'grab' : 'default',
+                          opacity: editable ? 1 : 0.3
+                        }} 
+                      />
+                    </div>
                     
                     {isNestedContent(card.content) && (
                       <ActionIcon
@@ -293,7 +305,7 @@ export const CardItem: React.FC<CardItemProps> = ({
                     {isBinaryContent(card.content) && isImageBinaryContent(card.content) ? (
                       <Box mt="xs">
                         <Image
-                          src={getBinaryContentDataUrl(card.content)}
+                          src={imageDataUrl}
                           alt={card.title || 'Card image'}
                           fit="contain"
                           h={200}

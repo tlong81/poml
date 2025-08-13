@@ -275,12 +275,12 @@ export function deserializeCard(serialized: SerializedCardModel): CardModel {
     timestamp: serialized.timestamp ? new Date(serialized.timestamp) : undefined,
     content: deserializeContent(serialized.content)
   };
-  
+
   // Ensure componentType is set for legacy cards
   if (!card.componentType) {
     card.componentType = getDefaultComponentType(card as CardModel);
   }
-  
+
   return card as CardModel;
 }
 
@@ -367,12 +367,12 @@ export function createCard(options: {
     parentId: options.parentId,
     timestamp: options.timestamp || new Date(),
     order: options.order,
-    metadata: options.metadata,
+    metadata: options.metadata
   };
-  
+
   // Set the default component type based on content
   card.componentType = getDefaultComponentType(card);
-  
+
   return card;
 }
 
@@ -390,10 +390,23 @@ export function getBinaryContentDataUrl(content: BinaryContent): string | null {
     return null;
   }
 
-  const base64Value =
-    content.value instanceof ArrayBuffer
-      ? btoa(String.fromCharCode(...new Uint8Array(content.value)))
-      : content.value;
+  let base64Value: string;
+
+  if (content.value instanceof ArrayBuffer) {
+    // Handle large ArrayBuffers safely to avoid stack overflow
+    const uint8Array = new Uint8Array(content.value);
+    const chunkSize = 8192; // Process in chunks to avoid stack overflow
+    let binary = '';
+
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+
+    base64Value = btoa(binary);
+  } else {
+    base64Value = content.value;
+  }
 
   return `data:${content.mimeType};base64,${base64Value}`;
 }
