@@ -22,7 +22,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAzure } from '@ai-sdk/azure';
-import { ModelMessage, streamText } from 'ai';
+import { ModelMessage, streamText, tool, jsonSchema, Tool } from 'ai';
 
 import ModelClient from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
@@ -142,12 +142,18 @@ export class TestCommand implements Command {
       });
 
       const stream = this.routeStream(prompt, setting);
+      let hasChunk = false;
       for await (const chunk of stream) {
         clearTimeout(timer);
+        hasChunk = true;
         result.push(chunk);
         this.outputChannel.append(chunk);
       }
-      this.outputChannel.appendLine('');
+      if (!hasChunk) {
+        this.log('error', 'No response received from the language model.');
+      } else {
+        this.outputChannel.appendLine('');
+      }
       const timeElapsed = Date.now() - startTime;
       this.log('info', `Test completed in ${Math.round(timeElapsed / 1000)} seconds. Language models can make mistakes. Check important info.`);
 
@@ -198,21 +204,20 @@ export class TestCommand implements Command {
     if (response.error) {
       throw new Error(`Error rendering prompt: ${uri}\n${response.error}`);
     }
-    return response.content;
+    return response;
   }
 
   private async *routeStream(
-    prompt: Message[] | RichContent,
+    prompt: PreviewResponse,
     settings: LanguageModelSetting,
-    responseSchema?: { [key: string]: any },
-    tools?: { [key: string]: any },
-    runtimeParameters: any = {}
   ): AsyncGenerator<string> {
     if (settings.provider === 'microsoft' && settings.apiUrl?.includes('.models.ai.azure.com')) {
-      yield* this.azureAiStream(prompt as Message[], settings);
+      yield* this.azureAiStream(prompt.content as Message[], settings);
+    } else if (prompt.responseSchema) {
     } else {
       const model = this.getActiveVercelModel(settings);
-      const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt as Message[]) : prompt as string;
+      const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
+        : prompt.content as string;
 
       const stream = streamText({
         model: model,
@@ -221,14 +226,33 @@ export class TestCommand implements Command {
           // Immediately throw the error
           throw error;
         },
+        tools: prompt.tools ? this.toVercelTools(prompt.tools) : undefined,
         maxRetries: 0,
         temperature: settings.temperature,
         maxOutputTokens: settings.maxTokens,
-        ...runtimeParameters,
+        ...prompt.runtime,
       });
 
-      for await (const chunk of stream.textStream) {
-        yield chunk;
+      let firstChunk = true;
+      for await (const chunk of stream.fullStream) {
+        if (chunk.type === 'text-delta') {
+          yield chunk.text;
+        } else if (chunk.type === 'finish') {
+          if (!firstChunk) {
+            yield '\n';
+          }
+          yield `\n[Usage: input=${chunk.totalUsage.inputTokens}, output=${chunk.totalUsage.outputTokens}, ` +
+            `total=${chunk.totalUsage.totalTokens}, cached=${chunk.totalUsage.cachedInputTokens}, ` +
+            `reasoning=${chunk.totalUsage.reasoningTokens}]`;
+        } else if (chunk.type === 'tool-call') {
+          if (!firstChunk) {
+            yield '\n';
+          }
+          yield `Tool call: ${chunk.toolName} (${chunk.toolCallId}) ${JSON.stringify(chunk.input)}`;
+        } else {
+          // TODO: the rest types are ignored for now
+        }
+        firstChunk = false;
       }
     }
   }
@@ -431,6 +455,29 @@ export class TestCommand implements Command {
       });
     }
     return result;
+  }
+
+  private toVercelTools(tools: { [key: string]: any }[]) {
+    const result: { [key: string]: Tool } = {};
+    for (const t of tools) {
+      if (!t.name || !t.description || !t.parameters) {
+        throw new Error(`Tool must have name, description, and parameters: ${JSON.stringify(t)}`);
+      }
+      if (t.type !== 'function') {
+        throw new Error(`Unsupported tool type: ${t.type}. Only 'function' type is supported.`);
+      }
+      const schema = jsonSchema(t.parameters);
+      result[t.name] = tool({
+        description: t.description,
+        inputSchema: schema
+      });
+    };
+    this.log('info', 'Registered tools: ' + Object.keys(result).join(', '));
+    return result;
+  }
+
+  private toVercelResponseSchema(responseSchema: { [key: string]: any }) {
+    return jsonSchema(responseSchema);
   }
 
   private toLangchainMessages(messages: Message[], style: 'openai' | 'google') {
