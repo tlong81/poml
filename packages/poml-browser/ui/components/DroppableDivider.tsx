@@ -22,6 +22,7 @@ interface DroppableDividerProps {
   nestingLevel: number;
   onAddCard: (index: number) => void;
   onDropContent: (cards: CardModel[], index: number) => void;
+  onDragOverDivider?: (isOver: boolean) => void;
 }
 
 export const DroppableDivider: React.FC<DroppableDividerProps> = ({
@@ -29,7 +30,8 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
   isVisible,
   nestingLevel,
   onAddCard,
-  onDropContent
+  onDropContent,
+  onDragOverDivider
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -37,6 +39,7 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
   
   return (
     <Box
+      data-droppable-divider="true"
       style={{
         position: 'relative',
         height: isVisible || isHovered || isDragActive ? '40px' : '12px',
@@ -52,10 +55,12 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
       onDragEnter={(e) => {
         e.preventDefault();
         setIsDragActive(true);
+        onDragOverDivider?.(true);
       }}
       onDragLeave={(e) => {
         e.preventDefault();
         setIsDragActive(false);
+        onDragOverDivider?.(false);
       }}
       onDragOver={(e) => {
         e.preventDefault();
@@ -65,6 +70,7 @@ export const DroppableDivider: React.FC<DroppableDividerProps> = ({
         e.preventDefault();
         e.stopPropagation();
         setIsDragActive(false);
+        onDragOverDivider?.(false);
         
         try {
           const dropData = await handleDropEvent(e.nativeEvent as DragEvent);

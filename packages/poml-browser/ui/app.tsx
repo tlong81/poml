@@ -13,7 +13,8 @@ import {
   readFileContent,
   useGlobalPasteListener,
   arrayBufferToDataUrl,
-  writeRichContentToClipboard
+  writeRichContentToClipboard,
+  handleDropEvent
 } from '@functions/clipboard';
 import { extractPageContent } from '@functions/html';
 import { NotificationProvider, useNotifications } from './contexts/NotificationContext';
@@ -29,14 +30,109 @@ const AppContent: React.FC = () => {
   const [cards, cardsHandlers] = useListState<CardModel>([]);
   const [selectedCard, setSelectedCard] = useState<ExtractedContent | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isDraggingOverDivider, setIsDraggingOverDivider] = useState(false);
   
   // Use the notification system
-  const { showError, showSuccess, showWarning, showInfo } = useNotifications();
+  const { showError, showSuccess, showWarning } = useNotifications();
 
   // Add global paste listener
   useGlobalPasteListener((textContent, files) => {
     handlePastedContent(textContent, files);
   });
+
+  // Add document-level drag and drop handlers
+  useEffect(() => {
+    const handleDocumentDragOver = (e: DragEvent) => {
+      // Prevent default to allow drop
+      e.preventDefault();
+      // Only show the document drop indicator if not over a divider
+      if (!isDraggingOverDivider) {
+        setIsDraggingOver(true);
+      }
+    };
+
+    const handleDocumentDragLeave = (e: DragEvent) => {
+      // Check if we're actually leaving the document
+      if (e.clientX === 0 && e.clientY === 0) {
+        setIsDraggingOver(false);
+      }
+    };
+
+    const handleDocumentDrop = async (e: DragEvent) => {
+      // Always reset the drag state on drop
+      setIsDraggingOver(false);
+      setIsDraggingOverDivider(false);
+      
+      // Only handle drops if not over a divider (dividers handle their own drops)
+      if (!isDraggingOverDivider) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        try {
+          const dropData = await handleDropEvent(e);
+          const newCards: CardModel[] = [];
+          
+          // Create cards for dropped files
+          for (const file of dropData.files) {
+            const card = createCard({
+              content: file.content instanceof ArrayBuffer 
+                ? {
+                    type: 'binary',
+                    value: file.content,
+                    mimeType: file.type,
+                    encoding: 'binary'
+                  }
+                : {
+                    type: 'text',
+                    value: file.content as string
+                  },
+              title: file.name,
+              metadata: {
+                source: 'file'
+              }
+            });
+            newCards.push(card);
+          }
+          
+          // Create card for text content if no files
+          if (dropData.files.length === 0 && dropData.plainText) {
+            const card = createCard({
+              content: {
+                type: 'text',
+                value: dropData.plainText
+              },
+              metadata: {
+                source: 'clipboard'
+              }
+            });
+            newCards.push(card);
+          }
+          
+          if (newCards.length > 0) {
+            // Add all new cards at the end
+            cardsHandlers.append(...newCards);
+            showSuccess(`Added ${newCards.length} card${newCards.length > 1 ? 's' : ''} from drop`, 'Content Added', undefined, 'top');
+          }
+        } catch (error) {
+          console.error('Failed to handle drop:', error);
+          showError('Failed to process dropped content', 'Drop Error');
+        }
+      }
+    };
+
+    // Add event listeners to document
+    document.addEventListener('dragover', handleDocumentDragOver);
+    document.addEventListener('dragleave', handleDocumentDragLeave);
+    document.addEventListener('drop', handleDocumentDrop);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('dragover', handleDocumentDragOver);
+      document.removeEventListener('dragleave', handleDocumentDragLeave);
+      document.removeEventListener('drop', handleDocumentDrop);
+    };
+  }, [cards, cardsHandlers, showError, showSuccess, isDraggingOverDivider]);
 
   const showLoading = () => {
     setLoading(true);
@@ -155,13 +251,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleDeleteCard = (id: string) => {
-    const index = cards.findIndex(card => card.id === id);
-    if (index !== -1) {
-      cardsHandlers.remove(index);
-    }
-  };
-
   const handlePastedContent = async (textContent: string, files: File[]) => {
     try {
       if (!textContent && (!files || files.length === 0)) {
@@ -222,31 +311,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleDropFile = async (file: File, insertIndex?: number) => {
-    try {
-      const content = await readFileContent(file);
-      const title = file.name || 'Dropped File';
-      const newCard = createCard({
-        title,
-        content: { type: 'text', value: content },
-        metadata: {
-          source: 'file',
-          fileName: file.name,
-          excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : '')
-        }
-      });
-
-      if (insertIndex !== undefined) {
-        cardsHandlers.insert(insertIndex, newCard);
-      } else {
-        cardsHandlers.append(newCard);
-      }
-    } catch (error) {
-      console.error('Failed to handle dropped file:', error);
-      showError(`Failed to process dropped file: ${file.name}`, 'Drop Error');
-    }
-  };
-
   return (
     <Stack
       style={{
@@ -254,7 +318,13 @@ const AppContent: React.FC = () => {
         minWidth: '200px',
         height: '100vh',
         padding: '16px',
-        overflow: 'auto'
+        overflow: 'auto',
+        position: 'relative',
+        ...(isDraggingOver ? {
+          backgroundColor: 'rgba(34, 139, 230, 0.05)',
+          border: '2px dashed rgba(34, 139, 230, 0.3)',
+          borderRadius: '8px'
+        } : {})
       }}
     >
       <EditableCardList
@@ -264,6 +334,12 @@ const AppContent: React.FC = () => {
         editable={true}
         nestingLevel={0}
         maxNestingLevel={3}
+        onDragOverDivider={(isOver: boolean) => {
+          setIsDraggingOverDivider(isOver);
+          if (isOver) {
+            setIsDraggingOver(false);
+          }
+        }}
       />
 
       <Group>

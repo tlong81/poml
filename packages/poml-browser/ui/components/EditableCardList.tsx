@@ -29,6 +29,7 @@ interface EditableCardListProps {
   editable?: boolean;
   nestingLevel?: number;
   maxNestingLevel?: number;
+  onDragOverDivider?: (isOver: boolean) => void;
 }
 
 export const EditableCardList: React.FC<EditableCardListProps> = ({
@@ -37,7 +38,8 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
   onCardClick,
   editable = true,
   nestingLevel = 0,
-  maxNestingLevel = 3
+  maxNestingLevel = 3,
+  onDragOverDivider
 }) => {
   const handleDragEnd = useCallback((result: DropResult) => {
     if (!result.destination) {
@@ -166,6 +168,7 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
                   nestingLevel={nestingLevel}
                   onAddCard={handleAddCardAtIndex}
                   onDropContent={handleDropContent}
+                  onDragOverDivider={onDragOverDivider}
                 />
               )}
               
@@ -193,6 +196,7 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
                       nestingLevel={nestingLevel}
                       onAddCard={handleAddCardAtIndex}
                       onDropContent={handleDropContent}
+                      onDragOverDivider={onDragOverDivider}
                     />
                   )}
                 </React.Fragment>
