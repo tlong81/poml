@@ -167,16 +167,38 @@ jobs:
         if: needs.generate-timestamp.outputs.build_type == 'nightly'
         run: |
           pip uninstall -y poml
-          # Wait a bit for the package to be available
-          sleep 60
-          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==${{ steps.create_nightly.outputs.nightly_version }}
-          python -c "import poml; print('Nightly package installed successfully from Test PyPI')"
+          # Retry installation up to 5 times with 60-second delays
+          for i in {1..5}; do
+            echo "Attempt $i/5: Waiting 60 seconds for package to be available..."
+            sleep 60
+            if pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml==${{ steps.create_nightly.outputs.nightly_version }}; then
+              python -c "import poml; print('Nightly package installed successfully from Test PyPI')"
+              exit 0
+            else
+              echo "Installation attempt $i failed"
+              if [ $i -eq 5 ]; then
+                echo "All 5 installation attempts failed"
+                exit 1
+              fi
+            fi
+          done
 
       - name: Test installation from PyPI (production)
         if: needs.generate-timestamp.outputs.build_type == 'production'
         run: |
           pip uninstall -y poml
-          # Wait a bit for the package to be available
-          sleep 60
-          pip install poml==${{ needs.check-version.outputs.pypi_version }}
-          python -c "import poml; print('Package installed successfully from PyPI')"
+          # Retry installation up to 5 times with 60-second delays
+          for i in {1..5}; do
+            echo "Attempt $i/5: Waiting 60 seconds for package to be available..."
+            sleep 60
+            if pip install poml==${{ needs.check-version.outputs.pypi_version }}; then
+              python -c "import poml; print('Package installed successfully from PyPI')"
+              exit 0
+            else
+              echo "Installation attempt $i failed"
+              if [ $i -eq 5 ]; then
+                echo "All 5 installation attempts failed"
+                exit 1
+              fi
+            fi
+          done

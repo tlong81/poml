@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Determine build type
         id: build_type
         shell: bash
@@ -37,7 +37,7 @@ jobs:
             echo "type=production" >> $GITHUB_OUTPUT
             echo "Build type: production"
           fi
-      
+
       - name: Use Node.js 22.x
         uses: actions/setup-node@v4
         with:
@@ -127,6 +127,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
       - name: Print GitHub context
         run: |
           echo "=== GitHub Context ==="
@@ -139,59 +146,70 @@ jobs:
           echo "IS_FORK=${{ github.event.pull_request.head.repo.fork || 'false' }}"
           echo
 
-      - name: Resolve workflow filename actually used
-        id: wf_file
-        shell: bash
-        run: |
-          # GITHUB_WORKFLOW_REF looks like: org/repo/.github/workflows/publish-npm.yml@refs/heads/main
-          WF_FILE=$(echo "$GITHUB_WORKFLOW_REF" | awk -F'[@]' '{print $1}' | sed -E 's#^[^/]*/[^/]*/##')
-          echo "file=$WF_FILE" >> "$GITHUB_OUTPUT"
-          echo "Workflow file (from GITHUB_WORKFLOW_REF): $WF_FILE"
-          echo
-
       - name: Fetch OIDC token (audience=sigstore) and decode claims
         id: oidc
         shell: bash
         run: |
           set -euo pipefail
-          # Request an OIDC token like npm does (audience=sigstore)
           TOKEN_JSON=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore")
           ID_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.value')
           echo "token_obtained=$([[ -n "$ID_TOKEN" ]] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
 
-          echo "=== OIDC Token Claims (payload) ==="
+          decode() { # base64url->json
+            PAYLOAD="$1"
+            PAD=$(( (4 - ${#PAYLOAD} % 4) % 4 ))
+            printf "%s" "$PAYLOAD" | sed -e "s/-/+/g" -e "s/_/\//g" | tr -d '\n' \
+              | awk -v pad="$PAD" '{printf "%s", $0; for(i=0;i<pad;i++) printf "="}' \
+              | base64 -d
+          }
+
           PAYLOAD=$(echo "$ID_TOKEN" | awk -F. '{print $2}')
-          # pad base64 if needed, then decode
-          PAD=$(( (4 - ${#PAYLOAD} % 4) % 4 ))
-          printf "%s" "$PAYLOAD" | sed -e "s/-/+/g" -e "s/_/\//g" | tr -d '\n' | awk -v pad="$PAD" '{printf "%s", $0; for(i=0;i<pad;i++) printf "="}' | base64 -d | jq .
-          # Extract key fields
-          SUB=$(printf "%s" "$PAYLOAD" | sed -e "s/-/+/g" -e "s/_/\//g" | tr -d '\n' | awk -v pad="$PAD" '{printf "%s", $0; for(i=0;i<pad;i++) printf "="}' | base64 -d | jq -r '.sub')
-          AUD=$(printf "%s" "$PAYLOAD" | sed -e "s/-/+/g" -e "s/_/\//g" | tr -d '\n' | awk -v pad="$PAD" '{printf "%s", $0; for(i=0;i<pad;i++) printf "="}' | base64 -d | jq -r '.aud')
+          JSON=$(decode "$PAYLOAD")
+          echo "$JSON" | jq .
+
+          # Extract claims we care about
+          SUB=$(echo "$JSON" | jq -r '.sub')
+          AUD=$(echo "$JSON" | jq -r '.aud')
+          JOB_WF_REF=$(echo "$JSON" | jq -r '.job_workflow_ref')
+          WF_REF=$(echo "$JSON" | jq -r '.workflow_ref')
+
           echo "SUB=$SUB"
           echo "AUD=$AUD"
-          echo
+          echo "JOB_WORKFLOW_REF=$JOB_WF_REF"
+          echo "WORKFLOW_REF=$WF_REF"
 
-          # Pull out the workflow filename embedded in `sub` (format includes 'workflow:<file>')
-          OIDC_WF=$(echo "$SUB" | sed -n 's/.*workflow:\([^:]*\).*/\1/p')
-          echo "Workflow file (from OIDC sub): $OIDC_WF"
-          echo "oidc_workflow_file=$OIDC_WF" >> "$GITHUB_OUTPUT"
+          # Pull filenames out of refs like: org/repo/.github/workflows/publish-npm.yml@refs/heads/branch
+          get_file() { echo "$1" | awk -F'[@]' '{print $1}' | sed -E 's#^[^/]*/[^/]*/##'; }
+          echo "oidc_job_wf_file=$(get_file "$JOB_WF_REF")" >> "$GITHUB_OUTPUT"
+          echo "oidc_wf_file=$(get_file "$WF_REF")" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve workflow filename actually used
+        id: wf_file
+        shell: bash
+        run: |
+          WF_FILE=$(echo "$GITHUB_WORKFLOW_REF" | awk -F'[@]' '{print $1}' | sed -E 's#^[^/]*/[^/]*/##')
+          echo "file=$WF_FILE" >> "$GITHUB_OUTPUT"
+          echo "Workflow file (from GITHUB_WORKFLOW_REF): $WF_FILE"
 
       - name: Compare workflow filename (OIDC vs actual)
         shell: bash
         run: |
-          OIDC_WF="${{ steps.oidc.outputs.oidc_workflow_file }}"
           ACTUAL_WF="${{ steps.wf_file.outputs.file }}"
+          OIDC_JOB_WF="${{ steps.oidc.outputs.oidc_job_wf_file }}"
+          OIDC_WF="${{ steps.oidc.outputs.oidc_wf_file }}"
           echo "=== Workflow Filename Comparison ==="
-          echo "From OIDC token: $OIDC_WF"
-          echo "From GITHUB_WORKFLOW_REF: $ACTUAL_WF"
-          if [[ "$OIDC_WF" != "$ACTUAL_WF" ]]; then
-            echo "::error title=Trusted Publisher Mismatch::OIDC token workflow ($OIDC_WF) does not match actual workflow file ($ACTUAL_WF)."
-            echo "This is the most common cause of npm E404 on publish. Re-add the Trusted Publisher with the exact filename."
+          echo "From OIDC job_workflow_ref: $OIDC_JOB_WF"
+          echo "From OIDC workflow_ref:    $OIDC_WF"
+          echo "From GITHUB_WORKFLOW_REF:  $ACTUAL_WF"
+          MATCH=no
+          if [[ "$OIDC_JOB_WF" == "$ACTUAL_WF" || "$OIDC_WF" == "$ACTUAL_WF" ]]; then MATCH=yes; fi
+          if [[ "$MATCH" != "yes" ]]; then
+            echo "::error title=Trusted Publisher Mismatch::OIDC token's workflow file ($OIDC_JOB_WF or $OIDC_WF) does not match actual workflow file ($ACTUAL_WF). Re-add the Trusted Publisher with the exact filename."
+            exit 1
           else
             echo "✅ OIDC workflow filename matches actual workflow file."
           fi
-          echo
 
       - name: Node & npm environment
         run: |
