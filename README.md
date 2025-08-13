@@ -3,9 +3,7 @@
 [![Documentation](https://img.shields.io/badge/docs-microsoft.github.io-blue)](https://microsoft.github.io/poml/)
 [![VSCode Extension](https://img.shields.io/visual-studio-marketplace/v/poml-team.poml)](https://marketplace.visualstudio.com/items?itemName=poml-team.poml)
 [![PyPI](https://img.shields.io/pypi/v/poml)](https://pypi.org/project/poml/)
-[![TestPyPI](https://img.shields.io/badge/TestPyPI-nightly-orange)](https://test.pypi.org/project/poml/)
 [![npm (latest)](https://img.shields.io/npm/v/pomljs)](https://www.npmjs.com/package/pomljs)
-[![npm (nightly)](https://img.shields.io/npm/v/pomljs/nightly)](https://www.npmjs.com/package/pomljs?activeTab=versions)
 [![Test Status](https://github.com/microsoft/poml/actions/workflows/test.yml/badge.svg)](https://github.com/microsoft/poml/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
