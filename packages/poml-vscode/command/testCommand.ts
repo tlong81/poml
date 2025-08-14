@@ -4,19 +4,7 @@ import { POMLWebviewPanelManager } from '../panel/manager';
 import { PanelSettings } from 'poml-vscode/panel/types';
 import { PreviewMethodName, PreviewParams, PreviewResponse } from '../panel/types';
 import { getClient } from '../extension';
-import { Message, RichContent } from 'poml';
-const { BaseChatModel } = require('@langchain/core/language_models/chat_models');  // eslint-disable-line
-const {
-  HumanMessage,
-  AIMessage,
-  SystemMessage,
-  BaseMessage,
-  MessageContent,
-  MessageContentComplex
-} = require('@langchain/core/messages');  // eslint-disable-line
-// import { ChatAnthropic } from "@langchain/anthropic";
-const { AzureChatOpenAI, ChatOpenAI, AzureOpenAI, OpenAI } = require('@langchain/openai');  // eslint-disable-line
-const { ChatGoogleGenerativeAI, GoogleGenerativeAI } = require('@langchain/google-genai');  // eslint-disable-line
+import { Message } from 'poml';
 
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
@@ -214,6 +202,7 @@ export class TestCommand implements Command {
     if (settings.provider === 'microsoft' && settings.apiUrl?.includes('.models.ai.azure.com')) {
       yield* this.azureAiStream(prompt.content as Message[], settings);
     } else if (prompt.responseSchema) {
+      // Case with response schema.
       const model = this.getActiveVercelModel(settings);
       const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
         : prompt.content as string;
@@ -240,6 +229,7 @@ export class TestCommand implements Command {
       }
 
     } else {
+      // The most regular case.
       const model = this.getActiveVercelModel(settings);
       const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
         : prompt.content as string;
@@ -260,22 +250,53 @@ export class TestCommand implements Command {
 
       let firstChunk = true;
       for await (const chunk of stream.fullStream) {
-        if (chunk.type === 'text-delta') {
+        if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') {
           yield chunk.text;
         } else if (chunk.type === 'finish') {
           if (!firstChunk) {
             yield '\n';
           }
-          yield `\n[Usage: input=${chunk.totalUsage.inputTokens}, output=${chunk.totalUsage.outputTokens}, ` +
-            `total=${chunk.totalUsage.totalTokens}, cached=${chunk.totalUsage.cachedInputTokens}, ` +
-            `reasoning=${chunk.totalUsage.reasoningTokens}]`;
+          let usageInfo = `[Usage: input=${chunk.totalUsage.inputTokens}, output=${chunk.totalUsage.outputTokens}, ` +
+            `total=${chunk.totalUsage.totalTokens}`;
+          if (chunk.totalUsage.cachedInputTokens) {
+            usageInfo += `, cached=${chunk.totalUsage.cachedInputTokens}`;
+          }
+          if (chunk.totalUsage.reasoningTokens) {
+            usageInfo += `, reasoning=${chunk.totalUsage.reasoningTokens}`;
+          }
+          usageInfo += ']';
+          yield usageInfo;
         } else if (chunk.type === 'tool-call') {
           if (!firstChunk) {
             yield '\n';
           }
           yield `Tool call: ${chunk.toolName} (${chunk.toolCallId}) ${JSON.stringify(chunk.input)}`;
+        } else if (chunk.type.startsWith('tool-input')) {
+          continue;
+        } else if (chunk.type === 'reasoning-start') {
+          if (!firstChunk) {
+            yield '\n';
+          }
+          yield '[Reasoning]';
+        } else if (chunk.type === 'reasoning-end') {
+          yield '\n[/Reasoning]';
+        } else if (['start', 'finish', 'start-step', 'end-step', 'message-metadata'].includes(chunk.type)) {
+          continue;
+        } else if (chunk.type === 'abort') {
+          if (!firstChunk) {
+            yield '\n';
+          }
+          yield '[Aborted]';
+        } else if (chunk.type === 'error') {
+          if (!firstChunk) {
+            yield '\n';
+          }
+          yield '[Error: ' + chunk.error + ']';
         } else {
-          // TODO: the rest types are ignored for now
+          if (!firstChunk) {
+            yield '\n';
+          }
+          yield `[${chunk.type} chunk: ${JSON.stringify(chunk)}]`;
         }
         firstChunk = false;
       }
@@ -347,34 +368,6 @@ export class TestCommand implements Command {
     }
   }
 
-  private async *langchainStream(
-    prompt: Message[] | RichContent,
-    settings: LanguageModelSetting
-  ): AsyncGenerator<string> {
-    const lm = this.getActiveLangchainModel(settings);
-    const lcPrompt = this.isChatting
-      ? this.toLangchainMessages(
-        prompt as Message[],
-        settings.provider === 'google' ? 'google' : 'openai'
-      )
-      : this.toLangchainString(prompt as RichContent);
-    GenerationController.abortAll();
-    const stream = await lm.stream(lcPrompt, {
-      signal: GenerationController.getNewAbortController().signal
-    });
-    for await (const chunk of stream) {
-      if (typeof chunk === 'string') {
-        yield chunk;
-      } else if (typeof chunk.content === 'string') {
-        yield chunk.content;
-      } else {
-        for (const complex of chunk.content) {
-          yield `[not displayable ${complex.type}]`;
-        }
-      }
-    }
-  }
-
   private getActiveVercelModelProvider(settings: LanguageModelSetting) {
     switch (settings.provider) {
       case 'anthropic':
@@ -403,51 +396,6 @@ export class TestCommand implements Command {
   private getActiveVercelModel(settings: LanguageModelSetting) {
     const provider = this.getActiveVercelModelProvider(settings);
     return provider(settings.model);
-  }
-
-  private getActiveLangchainModel(settings: LanguageModelSetting) {
-    switch (settings.provider) {
-      case 'anthropic':
-        // return new ChatAnthropic({
-        //   model: settings.model,
-        //   anthropicApiKey: settings.apiKey,
-        //   anthropicApiUrl: settings.apiUrl,
-        //   maxTokens: settings.maxTokens,
-        //   temperature: settings.temperature
-        // });
-        throw new Error('Anthropic is currently not supported');
-      case 'microsoft':
-        return new (this.isChatting ? AzureChatOpenAI : AzureOpenAI)({
-          azureOpenAIApiDeploymentName: settings.model,
-          azureOpenAIApiKey: settings.apiKey,
-          azureOpenAIEndpoint: settings.apiUrl,
-          azureOpenAIApiVersion: settings.apiVersion,
-          maxTokens: settings.maxTokens,
-          temperature: settings.temperature
-        });
-      case 'openai':
-        return new (this.isChatting ? ChatOpenAI : OpenAI)({
-          model: settings.model,
-          maxTokens: settings.maxTokens,
-          temperature: settings.temperature,
-          apiKey: settings.apiKey,
-          configuration: {
-            apiKey: settings.apiKey,
-            baseURL: settings.apiUrl
-          }
-        });
-      case 'google':
-        return new (this.isChatting ? ChatGoogleGenerativeAI : GoogleGenerativeAI)({
-          model: settings.model,
-          maxOutputTokens: settings.maxTokens,
-          temperature: settings.temperature,
-          apiKey: settings.apiKey,
-          apiVersion: settings.apiVersion,
-          baseUrl: settings.apiUrl
-        });
-      default:
-        throw new Error(`Unsupported language model provider: ${settings.provider}`);
-    }
   }
 
   private pomlMessagesToVercelMessage(messages: Message[]): ModelMessage[] {
@@ -505,22 +453,6 @@ export class TestCommand implements Command {
     return jsonSchema(responseSchema);
   }
 
-  private toLangchainMessages(messages: Message[], style: 'openai' | 'google') {
-    return messages.map(msg => {
-      const content = this.messageToContentObject(msg, style);
-      switch (msg.speaker) {
-        case 'ai':
-          return new AIMessage({ content });
-        case 'human':
-          return new HumanMessage({ content });
-        case 'system':
-          return new SystemMessage({ content });
-        default:
-          throw new Error(`Invalid speaker: ${msg.speaker}`);
-      }
-    });
-  }
-
   private toMessageObjects(messages: Message[], style: 'openai' | 'google') {
     const speakerMapping = {
       ai: 'assistant',
@@ -533,57 +465,6 @@ export class TestCommand implements Command {
         content: msg.content
       };
     });
-  }
-
-  private toLangchainString(content: RichContent): string {
-    if (typeof content === 'string') {
-      return content;
-    }
-    return content
-      .map(part => {
-        if (typeof part === 'string') {
-          return part;
-        } else {
-          return `[not displayable ${part.type}]`;
-        }
-      })
-      .join('');
-  }
-
-  private messageToContentObject(msg: Message, style: 'openai' | 'google') {
-    if (typeof msg.content === 'string') {
-      return [
-        {
-          type: 'text',
-          text: msg.content
-        }
-      ];
-    } else {
-      return msg.content.map(part => {
-        if (typeof part === 'string') {
-          return {
-            type: 'text',
-            text: part
-          };
-        } else if (part.type.startsWith('image/')) {
-          if (style === 'google') {
-            return {
-              type: 'image_url',
-              image_url: `data:${part.type};base64,${part.base64}`
-            };
-          } else {
-            return {
-              type: 'image_url',
-              image_url: {
-                url: `data:${part.type};base64,${part.base64}`
-              }
-            };
-          }
-        } else {
-          throw new Error(`Unsupported content type: ${part.type}`);
-        }
-      });
-    }
   }
 
   private getLanguageModelSettings(uri: vscode.Uri) {
