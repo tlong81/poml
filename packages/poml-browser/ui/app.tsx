@@ -8,7 +8,6 @@ import { ExtractedContent } from '@functions/types';
 import { CardModel, createCard, isTextContent } from '@functions/cardModel';
 import { shadcnTheme } from './themes/zinc';
 import { googleDocsManager } from '@functions/gdoc';
-import { msWordManager } from '@functions/msword';
 import {
   readFileContent,
   useGlobalPasteListener,
@@ -16,7 +15,7 @@ import {
   writeRichContentToClipboard,
   handleDropEvent
 } from '@functions/clipboard';
-import { extractPageContent } from '@functions/html';
+import { contentManager } from '@functions/html';
 import { NotificationProvider, useNotifications } from './contexts/NotificationContext';
 import TopNotifications from './components/TopNotifications';
 import BottomNotifications from './components/BottomNotifications';
@@ -148,10 +147,8 @@ const AppContent: React.FC = () => {
       let content: string;
       if (await googleDocsManager.checkGoogleDocsTab()) {
         content = await googleDocsManager.fetchGoogleDocsContent();
-      } else if (await msWordManager.checkMsWordTab()) {
-        content = await msWordManager.fetchMsWordContent();
       } else {
-        content = await extractPageContent();
+        content = await contentManager.fetchContent();
       }
 
       if (content.trim()) {

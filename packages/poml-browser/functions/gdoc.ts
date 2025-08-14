@@ -1,22 +1,32 @@
+import { notifyDebug, notifyError, notifyInfo } from './notification';
+
 class GoogleDocsManager {
   private accessToken: string | null = null;
 
+  /**
+   * Check if the current tab is a Google Docs document
+   */
   async checkGoogleDocsTab(): Promise<boolean> {
     try {
       if (!chrome.tabs) { return false; }
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       return (tab && tab.url && tab.url.includes('docs.google.com/document')) || false;
     } catch (error) {
-      console.error('Error checking tab:', error);
+      notifyDebug('Error checking Google Docs tab', error);
       return false;
     }
   }
 
+  /**
+   * Authenticate with Google and get access token
+   */
   private async authenticateGoogle(): Promise<string> {
     try {
       if (!chrome.identity) {
         throw new Error('Chrome identity API not available');
       }
+
+      notifyInfo('Authenticating with Google');
 
       const authResponse = await chrome.identity.getAuthToken({ 
         interactive: true,
@@ -24,23 +34,31 @@ class GoogleDocsManager {
       });
 
       if (!authResponse || typeof authResponse !== 'object' || !authResponse.token) {
-        console.error('Failed to get access token:', authResponse);
+        notifyError('Failed to get access token', authResponse);
         throw new Error('Failed to get access token');
       }
 
       this.accessToken = authResponse.token;
+      notifyInfo('Google authentication successful');
       return authResponse.token;
     } catch (error) {
-      console.error('Authentication failed:', error);
+      notifyError('Authentication failed', error);
       throw error;
     }
   }
 
+  /**
+   * Extract document ID from Google Docs URL
+   */
   private extractDocumentId(url: string): string | null {
     const match = url.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
     return match ? match[1] : null;
   }
 
+  /**
+   * Fetch content from Google Docs using API
+   * Note: This runs in the extension context, not as a content script
+   */
   async fetchGoogleDocsContent(isRetry: boolean = false): Promise<string> {
     try {
       if (!chrome.tabs) {
@@ -58,6 +76,8 @@ class GoogleDocsManager {
         throw new Error('Could not extract document ID from URL');
       }
 
+      notifyInfo('Fetching Google Docs content', { documentId });
+
       if (!this.accessToken) {
         await this.authenticateGoogle();
       }
@@ -73,6 +93,7 @@ class GoogleDocsManager {
 
       if (!response.ok) {
         if (response.status === 401 && !isRetry) {
+          notifyInfo('Token expired, re-authenticating');
           this.accessToken = null;
           await this.authenticateGoogle();
           return this.fetchGoogleDocsContent(true);
@@ -110,12 +131,108 @@ class GoogleDocsManager {
         throw new Error('No text content found in document');
       }
 
+      notifyInfo('Google Docs content extracted successfully', { 
+        length: textContent.length 
+      });
+
       return textContent;
     } catch (error) {
-      console.error('Error fetching Google Docs content:', error);
+      notifyError('Error fetching Google Docs content', error);
       throw error;
     }
   }
 }
 
+// Export the manager instance for UI/popup use
 export const googleDocsManager = new GoogleDocsManager();
+
+/**
+ * Content script functions (used when injected by service worker).
+ * Extract content from Google Docs by parsing the DOM.
+ * This function is used when injected as a content script.
+ * Note: This is a fallback method when API access is not available.
+ */
+export function extractGoogleDocsContentFromDOM(): string {
+  try {
+    notifyDebug('Starting Google Docs DOM extraction');
+    
+    // Try to find the main content container
+    const contentSelectors = [
+      '.kix-page-content-wrapper',
+      '.kix-document-top-shadow-inner',
+      '.kix-page',
+      '[role="textbox"]',
+      '.docs-texteventtarget-iframe'
+    ];
+    
+    let content = '';
+    
+    for (const selector of contentSelectors) {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length > 0) {
+        notifyDebug(`Found Google Docs content with selector: ${selector}`, { 
+          count: elements.length 
+        });
+        
+        elements.forEach(element => {
+          const text = element.textContent?.trim();
+          if (text) {
+            content += text + '\n\n';
+          }
+        });
+        
+        if (content.trim()) {
+          break;
+        }
+      }
+    }
+    
+    // If no content found with specific selectors, try fallback
+    if (!content.trim()) {
+      notifyDebug('Using fallback extraction for Google Docs');
+      content = document.body?.innerText || document.body?.textContent || '';
+    }
+    
+    notifyInfo('Google Docs DOM extraction completed', { 
+      length: content.length 
+    });
+    
+    return content;
+  } catch (error) {
+    notifyError('Failed to extract Google Docs content from DOM', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if the current page is a Google Docs document
+ */
+export function isGoogleDocsDocument(): boolean {
+  return document.location.hostname === 'docs.google.com' && 
+         document.location.pathname.includes('/document/');
+}
+
+/**
+ * Main extraction function for Google Docs when injected as content script
+ * This tries DOM extraction as a fallback when API is not available
+ */
+export function extractGoogleDocsDocumentContent(): string {
+  try {
+    if (!isGoogleDocsDocument()) {
+      throw new Error('Not a Google Docs document');
+    }
+    
+    const content = extractGoogleDocsContentFromDOM();
+    
+    // Add document title if available
+    const title = document.title.replace(' - Google Docs', '').trim();
+    if (title && title !== 'Untitled document') {
+      return `# ${title}\n\n${content}`;
+    }
+    
+    return content;
+  } catch (error) {
+    notifyError('Failed to extract Google Docs document content', error);
+    throw error;
+  }
+}

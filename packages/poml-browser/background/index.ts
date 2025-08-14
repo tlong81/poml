@@ -92,35 +92,23 @@ chrome.runtime.onMessage.addListener(
 
       // Return true to indicate we will send a response asynchronously
       return true;
-    } else if (messageRequest.action === "extractPageContent") {
+    } else if (messageRequest.action === "extractContent" || 
+               messageRequest.action === "extractPageContent" ||
+               messageRequest.action === "extractWordContent" || 
+               messageRequest.action === "extractMsWordContent" ||
+               messageRequest.action === "extractPdfContent" ||
+               messageRequest.action === "extractHtmlContent") {
       if (!messageRequest.tabId) {
         sendResponse({ success: false, error: "No tab ID provided" });
         return true;
       }
 
-      extractPageContent(messageRequest.tabId)
+      extractContent(messageRequest.tabId)
         .then((content) => {
           sendResponse({ success: true, content: content });
         })
         .catch((error) => {
-          console.error("Error extracting page content:", error);
-          sendResponse({ success: false, error: error.message });
-        });
-
-      // Return true to indicate we will send a response asynchronously
-      return true;
-    } else if (messageRequest.action === "extractMsWordContent") {
-      if (!messageRequest.tabId) {
-        sendResponse({ success: false, error: "No tab ID provided" });
-        return true;
-      }
-
-      extractMsWordContent(messageRequest.tabId)
-        .then((content) => {
-          sendResponse({ success: true, content: content });
-        })
-        .catch((error) => {
-          console.error("Error extracting MS Word content:", error);
+          console.error("Error extracting content:", error);
           sendResponse({ success: false, error: error.message });
         });
 
@@ -202,15 +190,15 @@ async function readFileContent(filePath: string, binary: boolean = false): Promi
   }
 }
 
-async function extractPageContent(tabId: number): Promise<string> {
+async function extractContent(tabId: number): Promise<string> {
   try {
     if (!chrome.scripting) {
       throw new Error("Chrome scripting API not available");
     }
 
-    console.log(`[DEBUG] Starting content extraction for tab ${tabId}`);
+    console.log(`[DEBUG] Starting unified content extraction for tab ${tabId}`);
 
-    // Inject the content extractor script that includes Readability
+    // Inject the content extractor script that includes all extraction capabilities
     await chrome.scripting.executeScript({
       target: { tabId: tabId },
       files: ["contentScript.js"],
@@ -218,18 +206,14 @@ async function extractPageContent(tabId: number): Promise<string> {
 
     console.log(`[DEBUG] Content extractor script injected`);
 
-    // Now execute the extraction function
+    // Now execute the extraction function - the content script will auto-detect document type
     const extractionResults = await chrome.scripting.executeScript({
       target: { tabId: tabId },
-      func: () => {
-        // The content-extractor.js should have made extractContent available globally
+      func: async () => {
+        // The contentScript.js should have made extractContent available globally
         if (typeof (window as any).extractContent === "function") {
-          return (window as any).extractContent();
-        } else if (
-          typeof (window as any).ContentExtractor !== "undefined" &&
-          (window as any).ContentExtractor.extractContent
-        ) {
-          return (window as any).ContentExtractor.extractContent();
+          const result = await (window as any).extractContent();
+          return result;
         } else {
           console.error("[DEBUG] extractContent function not found");
           // Fallback
@@ -283,150 +267,12 @@ async function extractPageContent(tabId: number): Promise<string> {
       );
     }
   } catch (error) {
-    console.error("[DEBUG] Error in background extractPageContent:", error);
+    console.error("[DEBUG] Error in background extractContent:", error);
     throw error;
   }
 }
 
-async function extractMsWordContent(tabId: number): Promise<string> {
-  try {
-    if (!chrome.scripting) {
-      throw new Error("Chrome scripting API not available");
-    }
-
-    console.log(`[DEBUG] Starting MS Word content extraction for tab ${tabId}`);
-
-    // First, try to find all frames in the tab
-    const frames = await chrome.webNavigation.getAllFrames({ tabId: tabId });
-    console.log(`[DEBUG] Found ${frames?.length || 0} frames in tab`);
-
-    let wordFrameId: number | undefined;
-    
-    // Look for the Word iframe frame
-    if (frames) {
-      for (const frame of frames) {
-        console.log(`[DEBUG] Frame ${frame.frameId}: ${frame.url}`);
-        if (frame.url && (
-          frame.url.includes('word-edit.officeapps.live.com') ||
-          frame.url.includes('word-view.officeapps.live.com') ||
-          frame.url.includes('officeapps.live.com') ||
-          frame.url.includes('WopiFrame')
-        )) {
-          wordFrameId = frame.frameId;
-          console.log(`[DEBUG] Found Word frame with ID: ${wordFrameId}`);
-          break;
-        }
-      }
-    }
-
-    if (wordFrameId === undefined) {
-      console.log(`[DEBUG] No Word frame found, trying main frame`);
-      wordFrameId = 0; // Main frame
-    }
-
-    // Inject the content extractor script into the Word frame
-    await chrome.scripting.executeScript({
-      target: { tabId: tabId, frameIds: [wordFrameId] },
-      files: ["contentScript.js"],
-    });
-
-    console.log(`[DEBUG] Content extractor script injected into frame ${wordFrameId}`);
-
-    // Now execute the convertDomToMarkup function in the Word frame
-    const extractionResults = await chrome.scripting.executeScript({
-      target: { tabId: tabId, frameIds: [wordFrameId] },
-      func: () => {
-        console.log('[DEBUG] Executing convertDomToMarkup in frame');
-        console.log('[DEBUG] Current document URL:', document.location.href);
-        console.log('[DEBUG] Document title:', document.title);
-        
-        // The contentScript.js should have made convertDomToMarkup available globally
-        if (typeof (window as any).convertDomToMarkup === "function") {
-          const blocks = (window as any).convertDomToMarkup();
-          
-          console.log(`[DEBUG] convertDomToMarkup returned ${blocks.length} blocks`);
-          
-          // Convert blocks to markdown text
-          let content = '';
-          
-          for (const block of blocks) {
-            switch (block.type) {
-              case 'header':
-                content += '#'.repeat(block.level) + ' ' + block.content + '\n\n';
-                break;
-              case 'paragraph':
-                content += block.content + '\n\n';
-                break;
-              case 'image':
-                content += `![${block.alt}](${block.src})\n\n`;
-                break;
-            }
-          }
-          
-          return {
-            title: document.title || "MS Word Document",
-            content: content.trim(),
-            excerpt: "",
-            debug: `Extracted ${blocks.length} blocks from MS Word document in frame`
-          };
-        } else {
-          console.error("[DEBUG] convertDomToMarkup function not found in frame");
-          // Fallback - try to get any text content from the document
-          const fallbackContent = document.body
-            ? document.body.innerText || document.body.textContent || ""
-            : "";
-          
-          return {
-            title: document.title || "MS Word Document",
-            content: fallbackContent,
-            excerpt: "",
-            debug: "convertDomToMarkup function not available in frame, used fallback text extraction",
-          };
-        }
-      },
-    });
-
-    console.log("[DEBUG] MS Word script execution completed");
-    console.log("[DEBUG] MS Word extraction results:", extractionResults);
-
-    if (
-      extractionResults &&
-      extractionResults[0] &&
-      extractionResults[0].result
-    ) {
-      const article = extractionResults[0].result;
-      console.log("[DEBUG] MS Word article debug info:", article.debug);
-
-      if (!article.content.trim()) {
-        console.log("[DEBUG] No content found in MS Word document result");
-        throw new Error(
-          `No readable content found in MS Word document. Debug: ${article.debug}`
-        );
-      }
-
-      let extractedText = "";
-      if (article.title && !article.title.includes("Word")) {
-        extractedText += `# ${article.title}\n\n`;
-      }
-      extractedText += article.content;
-
-      console.log(
-        "[DEBUG] Successfully extracted MS Word content:",
-        extractedText.length,
-        "characters"
-      );
-      return extractedText;
-    } else {
-      console.log("[DEBUG] No results returned from MS Word script execution");
-      throw new Error(
-        "Could not extract readable content from MS Word document - no results returned"
-      );
-    }
-  } catch (error) {
-    console.error("[DEBUG] Error in background extractMsWordContent:", error);
-    throw error;
-  }
-}
+// Removed redundant extraction functions - now using unified extractContent
 
 async function sendToChatGPT(
   tabId: number,
