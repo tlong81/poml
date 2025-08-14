@@ -192,7 +192,7 @@ class ContentMultiMedia(BaseModel):
 
 RichContent = Union[str, List[Union[str, ContentMultiMedia]]]
 
-Speaker = Literal["human", "assistant", "system"]
+Speaker = Literal["human", "ai", "system"]
 
 
 class PomlMessage(BaseModel):
@@ -205,7 +205,7 @@ def _poml_response_to_openai_chat(messages: List[PomlMessage]) -> List[Dict[str,
     openai_messages = []
     speaker_to_role = {
         "human": "user",
-        "assistant": "assistant",
+        "ai": "assistant",
         "system": "system",
     }
 
