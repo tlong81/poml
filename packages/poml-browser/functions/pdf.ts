@@ -1,22 +1,17 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { base64ToBinary } from './utils';
 import { notifyDebug, notifyError, notifyInfo } from './notification';
-
-export interface PdfExtractResult {
-  title: string;
-  content: string;
-  excerpt: string;
-  pageCount: number;
-}
+import { CardModel, TextContent, createCard } from './cardModel';
 
 // PDF manager functions moved to unified contentManager in html.ts
 
 /**
- * Content script functions (used when injected by service worker).
- * Extracts text content from a PDF document.
- * This function is used by the content script when injected.
+ * Extracts text content from a PDF document
+ * Returns an array of CardModel objects
  */
-export async function extractPdfContent(pdfUrl?: string): Promise<PdfExtractResult> {
+export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
+  const cards: CardModel[] = [];
+  
   try {
     const targetUrl = pdfUrl || document.location.href;
     notifyDebug('Starting PDF text extraction', { url: targetUrl });
@@ -61,8 +56,20 @@ export async function extractPdfContent(pdfUrl?: string): Promise<PdfExtractResu
     
     notifyInfo(`PDF loaded successfully`, { pages: pageCount });
     
-    let fullText = '';
+    // Add document title card
     const title = document.title || 'PDF Document';
+    if (title && title !== 'about:blank') {
+      cards.push(createCard({
+        content: { type: 'text', value: title } as TextContent,
+        componentType: 'Header',
+        title: title,
+        metadata: {
+          source: 'file',
+          url: targetUrl,
+          tags: ['document-title', 'pdf']
+        }
+      }));
+    }
     
     // Extract text from all pages
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
@@ -72,40 +79,52 @@ export async function extractPdfContent(pdfUrl?: string): Promise<PdfExtractResu
       // Combine all text items from the page
       const pageText = textContent.items
         .map((item: any) => item.str)
-        .join(' ');
+        .join(' ')
+        .trim();
       
-      fullText += pageText + '\n\n';
+      if (pageText) {
+        // Create a card for each page
+        cards.push(createCard({
+          content: { type: 'text', value: pageText } as TextContent,
+          componentType: 'Paragraph',
+          title: `Page ${pageNum}`,
+          metadata: {
+            source: 'file',
+            url: targetUrl,
+            tags: ['pdf', `page-${pageNum}`]
+          }
+        }));
+      }
       
       notifyDebug(`Extracted page ${pageNum}/${pageCount}`, { 
         textLength: pageText.length 
       });
     }
     
-    // Clean up the text
-    fullText = fullText.trim();
-    
     notifyInfo('PDF extraction completed', { 
-      totalLength: fullText.length,
+      cardsCount: cards.length,
       pages: pageCount 
     });
     
-    return {
-      title: title,
-      content: fullText,
-      excerpt: fullText.substring(0, 200) + (fullText.length > 200 ? '...' : ''),
-      pageCount: pageCount
-    };
+    return cards;
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     notifyError('PDF extraction failed', error);
     
-    return {
-      title: document.title || 'PDF Document',
-      content: 'Error extracting PDF content: ' + errorMsg,
-      excerpt: '',
-      pageCount: 0
-    };
+    // Return error card
+    return [createCard({
+      content: { 
+        type: 'text', 
+        value: `Failed to extract PDF: ${errorMsg}`
+      } as TextContent,
+      componentType: 'Paragraph',
+      metadata: {
+        source: 'file',
+        url: pdfUrl || document.location.href,
+        tags: ['error', 'pdf']
+      }
+    })];
   }
 }
 
@@ -120,12 +139,11 @@ export function isPdfDocument(url?: string): boolean {
 
 /**
  * Main extraction function for PDF documents
- * This is called when the content script is injected by the service worker
+ * Returns CardModel array
  */
-export async function extractPdfDocumentContent(): Promise<string> {
+export async function extractPdfDocumentContent(): Promise<CardModel[]> {
   try {
-    const result = await extractPdfContent();
-    return result.content;
+    return await extractPdfContent();
   } catch (error) {
     notifyError('Failed to extract PDF document content', error);
     throw error;

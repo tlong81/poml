@@ -1,26 +1,7 @@
 import { notifyDebug, notifyInfo, notifyError } from './notification';
+import { CardModel, TextContent, createCard } from './cardModel';
 
-/**
- * Block types for structured content in Word documents
- */
-export interface HeaderBlock {
-  type: 'header';
-  level: number;
-  content: string;
-}
-
-export interface ParagraphBlock {
-  type: 'paragraph';
-  content: string;
-}
-
-export interface ImageBlock {
-  type: 'image';
-  src: string;
-  alt: string;
-}
-
-export type Block = HeaderBlock | ParagraphBlock | ImageBlock;
+// MS Word manager functions moved to unified contentManager in html.ts
 
 /**
  * Cleans and normalizes text by replacing non-breaking spaces,
@@ -36,15 +17,30 @@ export function cleanText(text: string | null): string {
 
 /**
  * Extract content from Microsoft Word Online documents
- * This function is used by the content script when injected
+ * Returns an array of CardModel objects
  */
-export function extractWordContent(): Block[] {
-  const blocks: Block[] = [];
+export function extractWordContent(): CardModel[] {
+  const cards: CardModel[] = [];
   
   notifyDebug('Starting Word document extraction', {
     url: document.location.href,
     title: document.title
   });
+  
+  // Add document title as first card if available
+  const docTitle = document.title?.replace(' - Word', '').trim();
+  if (docTitle && docTitle !== 'Word') {
+    cards.push(createCard({
+      content: { type: 'text', value: docTitle } as TextContent,
+      componentType: 'Header',
+      title: docTitle,
+      metadata: {
+        source: 'web',
+        url: document.location.href,
+        tags: ['document-title', 'heading-level-1']
+      }
+    }));
+  }
   
   // Select all primary content containers, which seem to be '.OutlineElement'
   const elements = document.querySelectorAll('.OutlineElement');
@@ -85,16 +81,24 @@ export function extractWordContent(): Block[] {
                 parseInt(element.tagName.charAt(1)) : 
                 parseInt(element.getAttribute('aria-level') || '1', 10);
               
-              blocks.push({
-                type: 'header',
-                level: isNaN(level) ? 1 : level,
-                content: content,
-              });
+              cards.push(createCard({
+                content: { type: 'text', value: content } as TextContent,
+                componentType: 'Header',
+                metadata: {
+                  source: 'web',
+                  url: document.location.href,
+                  tags: [`heading-level-${level}`]
+                }
+              }));
             } else {
-              blocks.push({
-                type: 'paragraph',
-                content: content,
-              });
+              cards.push(createCard({
+                content: { type: 'text', value: content } as TextContent,
+                componentType: 'Paragraph',
+                metadata: {
+                  source: 'web',
+                  url: document.location.href
+                }
+              }));
             }
           }
         });
@@ -107,11 +111,19 @@ export function extractWordContent(): Block[] {
       // Check for Images
       const imageEl = element.querySelector('image');
       if (imageEl && imageEl.getAttribute('href')) {
-        blocks.push({
-          type: 'image',
-          src: imageEl.getAttribute('href')!,
-          alt: 'Document image'
-        });
+        cards.push(createCard({
+          content: {
+            type: 'file',
+            url: imageEl.getAttribute('href')!,
+            name: 'Document image',
+            mimeType: 'image/png'
+          },
+          componentType: 'Image',
+          metadata: {
+            source: 'web',
+            url: document.location.href
+          }
+        }));
         return;
       }
 
@@ -128,66 +140,35 @@ export function extractWordContent(): Block[] {
         // Check if the paragraph is a header
         if (p.getAttribute('role') === 'heading') {
           const level = parseInt(p.getAttribute('aria-level') || '1', 10);
-          blocks.push({
-            type: 'header',
-            level: isNaN(level) ? 1 : level,
-            content: content,
-          });
+          cards.push(createCard({
+            content: { type: 'text', value: content } as TextContent,
+            componentType: 'Header',
+            metadata: {
+              source: 'web',
+              url: document.location.href,
+              tags: [`heading-level-${level}`]
+            }
+          }));
         } else {
           // Otherwise, it's a standard paragraph (or list item)
-          blocks.push({
-            type: 'paragraph',
-            content: content,
-          });
+          cards.push(createCard({
+            content: { type: 'text', value: content } as TextContent,
+            componentType: 'Paragraph',
+            metadata: {
+              source: 'web',
+              url: document.location.href
+            }
+          }));
         }
       }
     });
   }
 
   notifyInfo('Word document extraction completed', { 
-    blocksCount: blocks.length 
+    cardsCount: cards.length 
   });
   
-  return blocks;
-}
-
-/**
- * Convert Word document blocks to structured content format
- */
-export function convertWordBlocksToContent(blocks: Block[]): {
-  title: string;
-  content: string;
-  excerpt: string;
-} {
-  const title = document.title || 'Word Document';
-  
-  // Convert blocks to text content
-  const contentParts: string[] = [];
-  
-  blocks.forEach(block => {
-    switch (block.type) {
-      case 'header':
-        // Add headers with markdown-style formatting
-        const headerPrefix = '#'.repeat(block.level);
-        contentParts.push(`${headerPrefix} ${block.content}`);
-        break;
-      case 'paragraph':
-        contentParts.push(block.content);
-        break;
-      case 'image':
-        contentParts.push(`[Image: ${block.alt}]`);
-        break;
-    }
-  });
-  
-  const content = contentParts.join('\n\n');
-  const excerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '');
-  
-  return {
-    title,
-    content,
-    excerpt
-  };
+  return cards;
 }
 
 /**
@@ -214,13 +195,11 @@ export function isWordDocument(): boolean {
 
 /**
  * Main extraction function for Word documents
- * This is called when the content script is injected by the service worker
+ * Returns CardModel array
  */
-export function extractWordDocumentContent(): string {
+export function extractWordDocumentContent(): CardModel[] {
   try {
-    const blocks = extractWordContent();
-    const result = convertWordBlocksToContent(blocks);
-    return result.content;
+    return extractWordContent();
   } catch (error) {
     notifyError('Failed to extract Word document content', error);
     throw error;

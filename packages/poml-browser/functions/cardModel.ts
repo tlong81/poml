@@ -351,11 +351,12 @@ export function generateId(): string {
   return `card-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
-// Helper to create a new card with default component type set
+// Helper to create a new card with specified or default component type
 export function createCard(options: {
   id?: string;
   title?: string;
   content: CardContentType;
+  componentType?: POMLComponentType;
   parentId?: string | null;
   timestamp?: Date;
   order?: number;
@@ -365,15 +366,15 @@ export function createCard(options: {
     id: options.id || generateId(),
     title: options.title,
     content: options.content,
-    componentType: 'Text', // Temporary value, will be set correctly below
+    componentType: options.componentType || getDefaultComponentType({
+      content: options.content,
+      componentType: 'Text'
+    } as CardModel),
     parentId: options.parentId,
     timestamp: options.timestamp || new Date(),
     order: options.order,
     metadata: options.metadata
   };
-
-  // Set the default component type based on content
-  card.componentType = getDefaultComponentType(card);
 
   return card;
 }

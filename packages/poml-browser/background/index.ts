@@ -168,7 +168,7 @@ async function readFileContent(filePath: string, binary: boolean = false): Promi
   }
 }
 
-async function extractContent(tabId: number): Promise<string> {
+async function extractContent(tabId: number): Promise<any> {
   try {
     if (!chrome.scripting) {
       throw new Error("Chrome scripting API not available");
@@ -194,16 +194,23 @@ async function extractContent(tabId: number): Promise<string> {
           return result;
         } else {
           console.error("[DEBUG] extractContent function not found");
-          // Fallback
-          return {
+          // Return fallback CardModel array
+          return [{
+            id: `fallback-${Date.now()}`,
             title: document.title || "Untitled",
-            content: document.body
-              ? document.body.innerText || document.body.textContent || ""
-              : "",
-            excerpt: "",
-            debug:
-              "extractContent function not available, used emergency fallback",
-          };
+            content: {
+              type: 'text',
+              value: document.body
+                ? document.body.innerText || document.body.textContent || ""
+                : ""
+            },
+            componentType: 'Paragraph',
+            metadata: {
+              source: 'web',
+              url: document.location.href,
+              tags: ['fallback']
+            }
+          }];
         }
       },
     });
@@ -216,32 +223,15 @@ async function extractContent(tabId: number): Promise<string> {
       extractionResults[0] &&
       extractionResults[0].result
     ) {
-      const article = extractionResults[0].result;
-      console.log("[DEBUG] Article debug info:", article.debug);
+      const cards = extractionResults[0].result;
+      console.log("[DEBUG] Extracted cards count:", Array.isArray(cards) ? cards.length : 'not an array');
 
-      if (!article.content.trim()) {
-        console.log("[DEBUG] No content found in article result");
-        throw new Error(
-          `No readable content found on this page. Debug: ${article.debug}`
-        );
-      }
-
-      let extractedText = "";
-      if (article.title) {
-        extractedText += `# ${article.title}\n\n`;
-      }
-      extractedText += article.content;
-
-      console.log(
-        "[DEBUG] Successfully extracted",
-        extractedText.length,
-        "characters"
-      );
-      return extractedText;
+      // Return the CardModel array directly
+      return cards;
     } else {
       console.log("[DEBUG] No results returned from script execution");
       throw new Error(
-        "Could not extract readable content from page - no results returned"
+        "Could not extract content from page - no results returned"
       );
     }
   } catch (error) {

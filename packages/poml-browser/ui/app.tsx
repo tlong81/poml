@@ -144,45 +144,21 @@ const AppContent: React.FC = () => {
   const handleExtractContent = async () => {
     try {
       showLoading();
-      let content: string;
+      let extractedCards: CardModel[];
       if (await googleDocsManager.checkGoogleDocsTab()) {
-        content = await googleDocsManager.fetchGoogleDocsContent();
+        extractedCards = await googleDocsManager.fetchGoogleDocsContent();
       } else {
-        content = await contentManager.fetchContent();
+        extractedCards = await contentManager.fetchContent();
       }
 
-      if (content.trim()) {
-        // Get current tab URL
-        let currentUrl = '';
-        try {
-          if (chrome.tabs) {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            currentUrl = tab?.url || '';
-          }
-        } catch (e) {
-          // Ignore URL extraction errors
-        }
-
-        // Extract title and create excerpt
-        const lines = content.split('\n').filter(line => line.trim());
-        const title = lines[0]?.substring(0, 100) || 'Extracted Content';
-        const excerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '');
-
-        // Create new content card
-        const newCard = createCard({
-          title,
-          content: { type: 'text', value: content },
-          metadata: {
-            source: 'web',
-            excerpt,
-            url: currentUrl
-          }
+      if (extractedCards && extractedCards.length > 0) {
+        // Add the extracted cards to the cards state
+        extractedCards.forEach(card => {
+          cardsHandlers.append(card);
         });
-
-        // Add to card list
-        cardsHandlers.append(newCard);
+        
         hideLoading();
-        showSuccess('Page content extracted successfully');
+        showSuccess(`Extracted ${extractedCards.length} content cards successfully`);
       } else {
         throw new Error('No readable content found');
       }

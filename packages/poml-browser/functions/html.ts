@@ -1,12 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import { notifyDebug, notifyError, notifyInfo, notifyWarning } from './notification';
-
-export interface ExtractedContent {
-  title: string;
-  content: string;
-  excerpt: string;
-  method: 'readability' | 'fallback';
-}
+import { CardModel, TextContent, createCard } from './cardModel';
 
 /**
  * Unified content manager for all document types (HTML, PDF, Word)
@@ -16,8 +10,9 @@ export const contentManager = {
   /**
    * Request content extraction from the current tab via background service worker
    * The content script will automatically detect the document type (HTML, PDF, Word)
+   * Returns an array of CardModel objects
    */
-  async fetchContent(): Promise<string> {
+  async fetchContent(): Promise<CardModel[]> {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
@@ -67,11 +62,12 @@ export const contentManager = {
 export const extractPageContent = contentManager.fetchContent;
 
 /**
- * Content script functions (used when injected by service worker).
- * Extract content from a regular HTML page using Readability.
- * This function is used by the content script when injected.
+ * Extract content from a regular HTML page using Readability
+ * Returns an array of CardModel objects
  */
-export async function extractHtmlContent(): Promise<ExtractedContent> {
+export async function extractHtmlContent(): Promise<CardModel[]> {
+  const cards: CardModel[] = [];
+  
   try {
     notifyDebug('Starting HTML content extraction', {
       url: document.location.href,
@@ -90,12 +86,15 @@ export async function extractHtmlContent(): Promise<ExtractedContent> {
     // If we have no fallback content, return early
     if (!fallbackContent.trim()) {
       notifyWarning('No text content found on this page');
-      return {
-        title: fallbackTitle,
-        content: 'No text content found on this page',
-        excerpt: '',
-        method: 'fallback'
-      };
+      return [createCard({
+        content: { type: 'text', value: 'No text content found on this page' } as TextContent,
+        componentType: 'Paragraph',
+        metadata: {
+          source: 'web',
+          url: document.location.href,
+          tags: ['empty', 'fallback']
+        }
+      })];
     }
     
     // Try to use Readability for better extraction
@@ -121,58 +120,115 @@ export async function extractHtmlContent(): Promise<ExtractedContent> {
         hasExcerpt: !!article.excerpt
       });
       
-      return {
-        title: article.title || fallbackTitle,
-        content: article.textContent,
-        excerpt: article.excerpt || '',
-        method: 'readability'
-      };
+      // Add title card if available
+      if (article.title && article.title !== fallbackTitle) {
+        cards.push(createCard({
+          content: { type: 'text', value: article.title } as TextContent,
+          componentType: 'Header',
+          title: article.title,
+          metadata: {
+            source: 'web',
+            url: document.location.href,
+            tags: ['article-title', 'readability']
+          }
+        }));
+      }
+      
+      // Add main content as paragraphs (split by double newlines for better structure)
+      const paragraphs = article.textContent.split(/\n\n+/).filter(p => p.trim());
+      paragraphs.forEach((paragraph, index) => {
+        cards.push(createCard({
+          content: { type: 'text', value: paragraph.trim() } as TextContent,
+          componentType: 'Paragraph',
+          metadata: {
+            source: 'web',
+            url: document.location.href,
+            excerpt: index === 0 && article.excerpt ? article.excerpt : undefined,
+            tags: ['readability', `paragraph-${index + 1}`]
+          }
+        }));
+      });
+      
     } else {
       notifyWarning('Readability failed, using fallback text extraction');
       
-      return {
-        title: fallbackTitle,
-        content: fallbackContent,
-        excerpt: fallbackContent.substring(0, 200) + 
-                 (fallbackContent.length > 200 ? '...' : ''),
-        method: 'fallback'
-      };
+      // Add title card
+      if (fallbackTitle && fallbackTitle !== 'Untitled') {
+        cards.push(createCard({
+          content: { type: 'text', value: fallbackTitle } as TextContent,
+          componentType: 'Header',
+          title: fallbackTitle,
+          metadata: {
+            source: 'web',
+            url: document.location.href,
+            tags: ['page-title', 'fallback']
+          }
+        }));
+      }
+      
+      // Add content as a single card (or split if very long)
+      const maxLength = 5000; // Split long content into chunks
+      if (fallbackContent.length > maxLength) {
+        const chunks = [];
+        for (let i = 0; i < fallbackContent.length; i += maxLength) {
+          chunks.push(fallbackContent.substring(i, i + maxLength));
+        }
+        chunks.forEach((chunk, index) => {
+          cards.push(createCard({
+            content: { type: 'text', value: chunk } as TextContent,
+            componentType: 'Paragraph',
+            metadata: {
+              source: 'web',
+              url: document.location.href,
+              tags: ['fallback', `chunk-${index + 1}`]
+            }
+          }));
+        });
+      } else {
+        cards.push(createCard({
+          content: { type: 'text', value: fallbackContent } as TextContent,
+          componentType: 'Paragraph',
+          metadata: {
+            source: 'web',
+            url: document.location.href,
+            excerpt: fallbackContent.substring(0, 200) + (fallbackContent.length > 200 ? '...' : ''),
+            tags: ['fallback']
+          }
+        }));
+      }
     }
     
   } catch (error) {
     notifyError('Error in HTML content extraction', error);
     
-    // Emergency fallback
-    const emergencyTitle = document.title || 'Error extracting title';
-    const emergencyContent = document.body ? 
-      (document.body.innerText || document.body.textContent || 'Error extracting content') : 
-      'No body element found';
-    
-    return {
-      title: emergencyTitle,
-      content: emergencyContent,
-      excerpt: '',
-      method: 'fallback'
-    };
+    // Return error card
+    return [createCard({
+      content: { 
+        type: 'text', 
+        value: `Failed to extract HTML content: ${error instanceof Error ? error.message : String(error)}`
+      } as TextContent,
+      componentType: 'Paragraph',
+      metadata: {
+        source: 'web',
+        url: document.location.href,
+        tags: ['error', 'html']
+      }
+    })];
   }
+  
+  notifyInfo('HTML extraction completed', { 
+    cardsCount: cards.length 
+  });
+  
+  return cards;
 }
 
 /**
  * Main extraction function for HTML documents
- * This is called when the content script is injected by the service worker
  */
-export async function extractHtmlDocumentContent(): Promise<string> {
+export async function extractHtmlDocumentContent(): Promise<CardModel[]> {
   try {
-    const result = await extractHtmlContent();
-    
-    // Format the output with title if available
-    let extractedText = '';
-    if (result.title && result.title !== 'Untitled') {
-      extractedText += `# ${result.title}\n\n`;
-    }
-    extractedText += result.content;
-    
-    return extractedText;
+    return await extractHtmlContent();
   } catch (error) {
     notifyError('Failed to extract HTML document content', error);
     throw error;
