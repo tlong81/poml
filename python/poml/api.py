@@ -25,12 +25,11 @@ _trace_enabled: bool = False
 _weave_enabled: bool = False
 _agentops_enabled: bool = False
 _mlflow_enabled: bool = False
-_langsmith_enabled: bool = False
 _langfuse_enabled: bool = False
 _trace_log: List[Dict[str, Any]] = []
 _trace_dir: Optional[Path] = None
 
-Backend = Literal["local", "weave", "agentops", "mlflow", "langsmith", "langfuse"]
+Backend = Literal["local", "weave", "agentops", "mlflow", "langfuse"]
 OutputFormat = Literal["raw", "dict", "openai_chat", "langchain", "pydantic"]
 
 
@@ -46,7 +45,7 @@ def set_trace(
         enabled: Controls which tracing backends to enable. Can be:
             - True: Enable local tracing only (equivalent to ["local"])
             - False: Disable all tracing (equivalent to [])
-            - str: Enable a single backend ("local", "weave", "agentops", "mlflow", "langsmith", "langfuse")
+            - str: Enable a single backend ("local", "weave", "agentops", "mlflow", "langfuse")
             - List[str]: Enable multiple backends. "local" is auto-enabled if any backends are specified.
         trace_dir: Optional directory for local trace files. If provided when local
             tracing is enabled, a subdirectory named by the current timestamp
@@ -62,7 +61,6 @@ def set_trace(
         - "weave": Log to Weights & Biases Weave (requires local tracing)
         - "agentops": Log to AgentOps (requires local tracing)
         - "mlflow": Log to MLflow (requires local tracing)
-        - "langsmith": Log to LangSmith (requires local tracing)
         - "langfuse": Log to Langfuse (requires local tracing)
     """
 
@@ -110,11 +108,6 @@ def set_trace(
         _mlflow_enabled = True
     else:
         _mlflow_enabled = False
-
-    if "langsmith" in enabled:
-        _langsmith_enabled = True
-    else:
-        _langsmith_enabled = False
 
     if "langfuse" in enabled:
         _langfuse_enabled = True
@@ -457,24 +450,24 @@ def poml(
                 # Do nothing
                 pass
             else:
-                result = json.loads(result)
-                if isinstance(result, dict) and "messages" in result:
+                result_dict = json.loads(result)
+                if isinstance(result_dict, dict) and "messages" in result_dict:
                     # The new versions will always return a dict with "messages" key.
-                    result = result["messages"]
+                    result_dict = result_dict["messages"]
                 if format != "dict":
                     # Continue to validate the format.
                     if chat:
-                        pydantic_result = [PomlMessage(**item) for item in result]
+                        pydantic_result = [PomlMessage(**item) for item in result_dict]
                     else:
                         # TODO: Make it a RichContent object
-                        pydantic_result = [PomlMessage(speaker="human", content=result)]
+                        pydantic_result = [PomlMessage(speaker="human", content=result_dict)]  # type: ignore
 
                     if format == "pydantic":
-                        return pydantic_result
+                        result = pydantic_result
                     elif format == "openai_chat":
-                        return _poml_response_to_openai_chat(pydantic_result)
+                        result = _poml_response_to_openai_chat(pydantic_result)
                     elif format == "langchain":
-                        return _poml_response_to_langchain(pydantic_result)
+                        result = _poml_response_to_langchain(pydantic_result)
                     else:
                         raise ValueError(f"Unknown output format: {format}")
 
@@ -539,26 +532,6 @@ def poml(
                     result,
                 )
 
-            if _langsmith_enabled:
-                from .integration import langsmith
-
-                trace_prefix = _latest_trace_prefix()
-                current_version = _current_trace_version()
-                if trace_prefix is None or current_version is None:
-                    raise RuntimeError(
-                        "LangSmith tracing requires local tracing to be enabled."
-                    )
-                poml_content = _read_latest_traced_file(".poml")
-                context_content = _read_latest_traced_file(".context.json")
-                stylesheet_content = _read_latest_traced_file(".stylesheet.json")
-                langsmith.log_poml_call(
-                    trace_prefix.name,
-                    poml_content or str(markup),
-                    json.loads(context_content) if context_content else None,
-                    json.loads(stylesheet_content) if stylesheet_content else None,
-                    result,
-                )
-
             if _langfuse_enabled:
                 from .integration import langfuse
 
@@ -580,7 +553,7 @@ def poml(
                 )
 
             if trace_record is not None:
-                trace_record["result"] = result
+                trace_record["result"] = result_dict
             return result
     finally:
         if temp_input_file:
