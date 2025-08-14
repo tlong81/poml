@@ -21,6 +21,8 @@ import { getSuggestions } from './util/xmlContentAssist';
 import { existsSync, readFileSync } from './util/fs';
 import path from 'path';
 import { POML_VERSION } from './version';
+import { Schema, ToolsSchema } from './util/schema';
+import { z } from 'zod';
 
 export interface PomlReaderOptions {
   trim?: boolean;
@@ -62,6 +64,9 @@ export class PomlFile {
   private disabledComponents: Set<string> = new Set();
   private expressionTokens: PomlToken[] = [];
   private expressionEvaluations: Map<string, any[]> = new Map();
+  private responseSchema: Schema | undefined;
+  private toolsSchema: ToolsSchema | undefined;
+  private runtimeParameters: { [key: string]: any } | undefined;
 
   constructor(text: string, options?: PomlReaderOptions, sourcePath?: string) {
     this.config = {
@@ -243,6 +248,18 @@ export class PomlFile {
       );
       return undefined;
     }
+  }
+
+  public getResponseSchema(): Schema | undefined {
+    return this.responseSchema;
+  }
+
+  public getToolsSchema(): ToolsSchema | undefined {
+    return this.toolsSchema;
+  }
+
+  public getRuntimeParameters(): { [key: string]: any } | undefined {
+    return this.runtimeParameters;
   }
 
   public xmlRootElement(): XMLElement | undefined {
@@ -681,10 +698,100 @@ export class PomlFile {
     return <>{resultNodes}</>;
   };
 
+  private handleSchema = (element: XMLElement): Schema | undefined => {
+    let lang: 'json' | 'zod' | undefined = xmlAttribute(element, 'lang')?.value as any;
+    const text = xmlElementText(element);
+    if (!lang) {
+      if (text.trim().startsWith('{')) {
+        lang = 'json';
+      } else if (text.trim().startsWith('z')) {
+        lang = 'zod';
+      } else {
+        this.reportError(
+          'lang attribute is expected for responseSchema meta type.',
+          this.xmlElementRange(element)
+        );
+        return undefined;
+      }
+    } else if (lang !== 'json' && lang !== 'zod') {
+      this.reportError(
+        `Invalid lang attribute: ${lang}. Expected "json" or "zod" for responseSchema.`,
+        this.xmlAttributeValueRange(xmlAttribute(element, 'lang')!)
+      );
+      return undefined;
+    }
+    try {
+      if (lang === 'json') {
+        return Schema.fromOpenAPI(JSON.parse(text));
+      } else if (lang === 'zod') {
+        const zodObject = evalWithVariables(text.trim(), { z });
+        return Schema.fromZod(zodObject);
+      }
+    } catch (e) {
+      this.reportError(
+        e instanceof Error ? e.message : 'Error parsing response schema',
+        this.xmlElementRange(element),
+        e
+      );
+    }
+    return undefined;
+  }
+
   private handleMeta = (element: XMLElement): boolean => {
     if (element.name?.toLowerCase() !== 'meta') {
       return false;
     }
+    const metaType = xmlAttribute(element, 'type')?.value;
+    if (metaType === 'responseSchema') {
+      if (this.responseSchema) {
+        this.reportError(
+          'Multiple responseSchema meta elements found. Only one is allowed.',
+          this.xmlElementRange(element)
+        );
+        return true;
+      }
+      const schema = this.handleSchema(element);
+      if (schema) {
+        this.responseSchema = schema;
+      }
+      return true;
+    }
+
+    if (metaType === 'tool') {
+      const name = xmlAttribute(element, 'name')?.value;
+      if (!name) {
+        throw new Error('name attribute is required for tool meta type');
+      }
+      const description = xmlAttribute(element, 'description')?.value;
+      const inputSchema = this.handleSchema(element);
+      if (inputSchema) {
+        if (!this.toolsSchema) {
+          this.toolsSchema = new ToolsSchema();
+        }
+        try {
+          this.toolsSchema.addTool(name, description || undefined, inputSchema);
+        } catch (e) {
+          this.reportError(
+            e instanceof Error ? e.message : 'Error adding tool to tools schema',
+            this.xmlElementRange(element),
+            e
+          );
+        }
+      }
+      return true;
+    }
+
+    if (metaType === 'runtime') {
+      // Extra runtime parameters sending to LLM.
+      const runtimeParams: any = {};
+      for (const attribute of element.attributes) {
+        if (attribute.key && attribute.value && attribute.key?.toLowerCase() !== 'type') {
+          runtimeParams[attribute.key] = attribute.value;
+        }
+      }
+      this.runtimeParameters = runtimeParams;
+    }
+
     const minVersion = xmlAttribute(element, 'minVersion')?.value;
     if (minVersion && compareVersions(POML_VERSION, minVersion) < 0) {
       this.reportError(
@@ -1263,25 +1370,52 @@ const camelToHyphenCase = (text: string): string => {
 };
 
 /**
- * Compares two semantic version strings (e.g., "1.2.3").
+ * Compares two version strings supporting semantic versioning with nightly/dev suffixes.
+ * Supports formats: "x.y.z", "x.y.z-nightly.timestamp", "x.y.z.devtimestamp"
  * 
- * @param a - The first version string in the format "x.y.z".
- * @param b - The second version string in the format "x.y.z".
+ * @param a - The first version string.
+ * @param b - The second version string.
  * @returns -1 if `a` is less than `b`, 1 if `a` is greater than `b`, and 0 if they are equal.
  */
 const compareVersions = (a: string, b: string): number => {
-  const pa = a.split('.').map(n => parseInt(n, 10));
-  const pb = b.split('.').map(n => parseInt(n, 10));
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const na = pa[i] || 0;
-    const nb = pb[i] || 0;
-    if (na > nb) {
-      return 1;
+  const parseVersion = (version: string) => {
+    // Handle nightly versions: "1.2.3-nightly.202508120345"
+    const nightlyMatch = version.match(/^(\d+\.\d+\.\d+)-nightly\.(\d+)$/);
+    if (nightlyMatch) {
+      const [, baseVersion, timestamp] = nightlyMatch;
+      const parts = baseVersion.split('.').map(n => parseInt(n, 10));
+      return { parts, isPrerelease: true, timestamp: parseInt(timestamp, 10) };
     }
-    if (na < nb) {
-      return -1;
-    }
+
+    // Handle regular semantic versions: "1.2.3"
+    const parts = version.split('.').map(n => parseInt(n, 10));
+    return { parts, isPrerelease: false, timestamp: 0 };
+  };
+
+  const versionA = parseVersion(a);
+  const versionB = parseVersion(b);
+
+  // Compare base version parts first
+  for (let i = 0; i < Math.max(versionA.parts.length, versionB.parts.length); i++) {
+    const na = versionA.parts[i] || 0;
+    const nb = versionB.parts[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
   }
+
+  // If base versions are equal, handle prerelease comparison
+  if (versionA.isPrerelease && !versionB.isPrerelease) {
+    return -1; // Prerelease is less than release
+  }
+  if (!versionA.isPrerelease && versionB.isPrerelease) {
+    return 1; // Release is greater than prerelease
+  }
+  if (versionA.isPrerelease && versionB.isPrerelease) {
+    // Both are prereleases, compare timestamps
+    if (versionA.timestamp > versionB.timestamp) return 1;
+    if (versionA.timestamp < versionB.timestamp) return -1;
+  }
+
   return 0;
 };
 
