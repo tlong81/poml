@@ -10,7 +10,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAzure } from '@ai-sdk/azure';
-import { ModelMessage, streamText, tool, jsonSchema, Tool, streamObject } from 'ai';
+import { ModelMessage, streamText, tool, jsonSchema, Tool, streamObject, TextStreamPart } from 'ai';
 
 import ModelClient from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
@@ -202,105 +202,118 @@ export class TestCommand implements Command {
     if (settings.provider === 'microsoft' && settings.apiUrl?.includes('.models.ai.azure.com')) {
       yield* this.azureAiStream(prompt.content as Message[], settings);
     } else if (prompt.responseSchema) {
-      // Case with response schema.
-      const model = this.getActiveVercelModel(settings);
-      const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
-        : prompt.content as string;
-      if (prompt.tools) {
-        throw new Error('Tools are not supported when response schema is provided.');
-      }
-
-      const stream = streamObject({
-        model: model,
-        prompt: vercelPrompt,
-        onError: ({ error }) => {
-          // Immediately throw the error
-          throw error;
-        },
-        schema: this.toVercelResponseSchema(prompt.responseSchema),
-        maxRetries: 0,
-        temperature: settings.temperature,
-        maxOutputTokens: settings.maxTokens,
-        ...prompt.runtime,
-      });
-
-      for await (const text of stream.textStream) {
-        yield text;
-      }
-
+      yield* this.handleResponseSchemaStream(prompt, settings);
     } else {
-      // The most regular case.
-      const model = this.getActiveVercelModel(settings);
-      const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
-        : prompt.content as string;
+      yield* this.handleRegularTextStream(prompt, settings);
+    }
+  }
 
-      const stream = streamText({
-        model: model,
-        prompt: vercelPrompt,
-        onError: ({ error }) => {
-          // Immediately throw the error
-          throw error;
-        },
-        tools: prompt.tools ? this.toVercelTools(prompt.tools) : undefined,
-        maxRetries: 0,
-        temperature: settings.temperature,
-        maxOutputTokens: settings.maxTokens,
-        ...prompt.runtime,
-      });
+  private async *handleResponseSchemaStream(
+    prompt: PreviewResponse,
+    settings: LanguageModelSetting,
+  ): AsyncGenerator<string> {
+    const model = this.getActiveVercelModel(settings);
+    const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
+      : prompt.content as string;
+    
+    if (prompt.tools) {
+      throw new Error('Tools are not supported when response schema is provided.');
+    }
 
-      let firstChunk = true;
-      for await (const chunk of stream.fullStream) {
-        if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') {
-          yield chunk.text;
-        } else if (chunk.type === 'finish') {
-          if (!firstChunk) {
-            yield '\n';
-          }
-          let usageInfo = `[Usage: input=${chunk.totalUsage.inputTokens}, output=${chunk.totalUsage.outputTokens}, ` +
-            `total=${chunk.totalUsage.totalTokens}`;
-          if (chunk.totalUsage.cachedInputTokens) {
-            usageInfo += `, cached=${chunk.totalUsage.cachedInputTokens}`;
-          }
-          if (chunk.totalUsage.reasoningTokens) {
-            usageInfo += `, reasoning=${chunk.totalUsage.reasoningTokens}`;
-          }
-          usageInfo += ']';
-          yield usageInfo;
-        } else if (chunk.type === 'tool-call') {
-          if (!firstChunk) {
-            yield '\n';
-          }
-          yield `Tool call: ${chunk.toolName} (${chunk.toolCallId}) ${JSON.stringify(chunk.input)}`;
-        } else if (chunk.type.startsWith('tool-input')) {
-          continue;
-        } else if (chunk.type === 'reasoning-start') {
-          if (!firstChunk) {
-            yield '\n';
-          }
-          yield '[Reasoning]';
-        } else if (chunk.type === 'reasoning-end') {
-          yield '\n[/Reasoning]';
-        } else if (['start', 'finish', 'start-step', 'end-step', 'message-metadata'].includes(chunk.type)) {
-          continue;
-        } else if (chunk.type === 'abort') {
-          if (!firstChunk) {
-            yield '\n';
-          }
-          yield '[Aborted]';
-        } else if (chunk.type === 'error') {
-          if (!firstChunk) {
-            yield '\n';
-          }
-          yield '[Error: ' + chunk.error + ']';
-        } else {
-          if (!firstChunk) {
-            yield '\n';
-          }
-          yield `[${chunk.type} chunk: ${JSON.stringify(chunk)}]`;
-        }
-        firstChunk = false;
+    if (!prompt.responseSchema) {
+      throw new Error('Response schema is required but not provided.');
+    }
+
+    const stream = streamObject({
+      model: model,
+      prompt: vercelPrompt,
+      onError: ({ error }) => {
+        // Immediately throw the error
+        throw error;
+      },
+      schema: this.toVercelResponseSchema(prompt.responseSchema),
+      maxRetries: 0,
+      temperature: settings.temperature,
+      maxOutputTokens: settings.maxTokens,
+      ...prompt.runtime,
+    });
+
+    for await (const text of stream.textStream) {
+      yield text;
+    }
+  }
+
+  private async *handleRegularTextStream(
+    prompt: PreviewResponse,
+    settings: LanguageModelSetting,
+  ): AsyncGenerator<string> {
+    const model = this.getActiveVercelModel(settings);
+    const vercelPrompt = this.isChatting ? this.pomlMessagesToVercelMessage(prompt.content as Message[])
+      : prompt.content as string;
+
+    const stream = streamText({
+      model: model,
+      prompt: vercelPrompt,
+      onError: ({ error }) => {
+        // Immediately throw the error
+        throw error;
+      },
+      tools: prompt.tools ? this.toVercelTools(prompt.tools) : undefined,
+      maxRetries: 0,
+      temperature: settings.temperature,
+      maxOutputTokens: settings.maxTokens,
+      ...prompt.runtime,
+    });
+
+    let lastChunkEndline: boolean = false;
+    for await (const chunk of stream.fullStream) {
+      const result = this.processStreamChunk(chunk, lastChunkEndline);
+      if (result !== null) {
+        yield result;
+        lastChunkEndline = result.endsWith('\n');
       }
     }
+  }
+
+  private processStreamChunk(chunk: TextStreamPart<any>, lastChunkEndline: boolean): string | null {
+    const newline = lastChunkEndline ? '' : '\n';
+    if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') {
+      return chunk.text;
+    } else if (chunk.type === 'finish') {
+      return this.formatUsageInfo(chunk, lastChunkEndline);
+    } else if (chunk.type === 'tool-call') {
+      return `${newline}Tool call (${chunk.toolCallId}) ${chunk.toolName}  Input: ${JSON.stringify(chunk.input)}`;
+    } else if (chunk.type.startsWith('tool-input')) {
+      return null;
+    } else if (chunk.type === 'reasoning-start') {
+      return `${newline}[Reasoning]`;
+    } else if (chunk.type === 'reasoning-end') {
+      return '\n[/Reasoning]';
+    } else if (['start', 'finish', 'start-step', 'finish-step', 'message-metadata'].includes(chunk.type)) {
+      return null;
+    } else if (chunk.type === 'abort') {
+      return `${newline}[Aborted]`;
+    } else if (chunk.type === 'error') {
+      return `${newline}[Error: ${chunk.error}]`;
+    } else {
+      return `${newline}[${chunk.type} chunk: ${JSON.stringify(chunk)}]`;
+    }
+  }
+
+  private formatUsageInfo(chunk: any, lastChunkEndline: boolean): string {
+    const newline = lastChunkEndline ? '' : '\n';
+    let usageInfo = `${newline}[Usage: input=${chunk.totalUsage.inputTokens}, output=${chunk.totalUsage.outputTokens}, ` +
+      `total=${chunk.totalUsage.totalTokens}`;
+    
+    if (chunk.totalUsage.cachedInputTokens) {
+      usageInfo += `, cached=${chunk.totalUsage.cachedInputTokens}`;
+    }
+    if (chunk.totalUsage.reasoningTokens) {
+      usageInfo += `, reasoning=${chunk.totalUsage.reasoningTokens}`;
+    }
+    usageInfo += ']';
+    
+    return usageInfo;
   }
 
   private async *azureAiStream(
