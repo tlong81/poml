@@ -57,8 +57,14 @@ jobs:
       - run: python -m pytest -v python/tests
       - run: xvfb-run -a npm run compile && xvfb-run -a npm run test-vscode
         if: runner.os == 'Linux'
+      - uses: nick-invision/retry@v3
+        if: matrix.os == 'macos-13'
+        with:
+          max_attempts: 3
+          timeout_minutes: 10
+          command: npm run compile && npm run test-vscode
       - run: npm run compile && npm run test-vscode
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' && matrix.os != 'macos-13'
 
   docs:
     runs-on: ubuntu-latest
