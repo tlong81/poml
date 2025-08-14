@@ -114,28 +114,6 @@ chrome.runtime.onMessage.addListener(
 
       // Return true to indicate we will send a response asynchronously
       return true;
-    } else if (messageRequest.action === "sendToChatGPT") {
-      if (!messageRequest.tabId || !messageRequest.prompt) {
-        sendResponse({ success: false, error: "Missing required parameters (tabId, prompt)" });
-        return true;
-      }
-
-      // Convert FileData objects back to File objects
-      const files = (messageRequest.files || []).map((fileData: FileData) => 
-        new File([fileData.content], fileData.name, { type: fileData.type })
-      );
-      
-      sendToChatGPT(messageRequest.tabId, messageRequest.prompt, files)
-        .then(() => {
-          sendResponse({ success: true });
-        })
-        .catch((error) => {
-          console.error("Error sending to ChatGPT:", error);
-          sendResponse({ success: false, error: error.message });
-        });
-
-      // Return true to indicate we will send a response asynchronously
-      return true;
     }
 
     return false;
@@ -270,53 +248,4 @@ async function extractContent(tabId: number): Promise<string> {
     console.error("[DEBUG] Error in background extractContent:", error);
     throw error;
   }
-}
-
-// Removed redundant extraction functions - now using unified extractContent
-
-async function sendToChatGPT(
-  tabId: number,
-  prompt: string,
-  files: File[] = []
-): Promise<void> {
-  await chrome.scripting.executeScript({
-    target: { tabId: tabId },
-    func: async () => {
-      // 1.  Focus the textarea and inject the text
-      const ta =
-        document.querySelector('textarea[name="prompt-textarea"]') ||
-        document.querySelector("form textarea");
-
-      if (ta) {
-        console.log("[DEBUG] Textarea found for prompt injection", ta);
-        (ta as any).focus();
-        (ta as any).value = prompt;
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-      } else {
-        console.error("[DEBUG] Textarea not found for prompt injection");
-        throw new Error("Textarea not found for prompt injection");
-      }
-
-      // 2.  Attach files (works for images, PDFs, anything ChatGPT UI accepts)
-      if (files.length) {
-        // ChatGPT uses a hidden <input type="file"> behind the 📎 button.
-        const hiddenInput = document.querySelector(
-          'input[type="file"][multiple]'
-        );
-        if (hiddenInput) {
-          console.log("[DEBUG] Hidden file input found for file attachment");
-          // Trick: create a DataTransfer so the input thinks the user selected files
-          const dt = new DataTransfer();
-          files.forEach((f) => dt.items.add(f));
-          (hiddenInput as any).files = dt.files;
-
-          // Trigger the "change" event so React sees it
-          hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
-        } else {
-          console.error("[DEBUG] Hidden file input not found for file attachment");
-          throw new Error("Hidden file input not found for file attachment");
-        }
-      }
-    },
-  });
 }
