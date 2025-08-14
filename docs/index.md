@@ -25,4 +25,4 @@ Welcome to the Prompt Orchestration Markup Language (POML) documentation.
 
 ## Community
 
-Join our Discord community: Connect with the team and other users on our [Discord server](https://discord.gg/kSzTeMn9Vb).
+Join our Discord community: Connect with the team and other users on our [Discord server](https://discord.gg/FhMCqWzAn6).
