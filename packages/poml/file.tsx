@@ -698,38 +698,51 @@ export class PomlFile {
     return <>{resultNodes}</>;
   };
 
-  private handleSchema = (element: XMLElement): Schema | undefined => {
-    let lang: 'json' | 'zod' | undefined = xmlAttribute(element, 'lang')?.value as any;
-    const text = xmlElementText(element);
+  private handleSchema = (element: XMLElement, context?: { [key: string]: any }): Schema | undefined => {
+    let lang: 'json' | 'expr' | undefined = xmlAttribute(element, 'lang')?.value as any;
+    const text = xmlElementText(element).trim();
+    
+    // Auto-detect language if not specified
     if (!lang) {
-      if (text.trim().startsWith('{')) {
+      if (text.startsWith('{')) {
         lang = 'json';
-      } else if (text.trim().startsWith('z')) {
-        lang = 'zod';
       } else {
-        this.reportError(
-          'lang attribute is expected for responseSchema meta type.',
-          this.xmlElementRange(element)
-        );
-        return undefined;
+        lang = 'expr';
       }
-    } else if (lang !== 'json' && lang !== 'zod') {
+    } else if (lang !== 'json' && lang !== 'expr') {
       this.reportError(
-        `Invalid lang attribute: ${lang}. Expected "json" or "zod" for responseSchema.`,
+        `Invalid lang attribute: ${lang}. Expected "json" or "expr"`,
         this.xmlAttributeValueRange(xmlAttribute(element, 'lang')!)
       );
       return undefined;
     }
+    
     try {
       if (lang === 'json') {
-        return Schema.fromOpenAPI(JSON.parse(text));
-      } else if (lang === 'zod') {
-        const zodObject = evalWithVariables(text.trim(), { z });
-        return Schema.fromZod(zodObject);
+        // Process template expressions in JSON text
+        const processedText = this.handleText(text, context || {}, this.xmlElementRange(element));
+        // handleText returns an array, join if all strings
+        const jsonText = processedText.length === 1 && typeof processedText[0] === 'string'
+          ? processedText[0]
+          : processedText.map(p => typeof p === 'string' ? p : JSON.stringify(p)).join('');
+        const jsonSchema = JSON.parse(jsonText);
+        return Schema.fromOpenAPI(jsonSchema);
+      } else if (lang === 'expr') {
+        // Evaluate expression directly with z in context
+        const contextWithZ = { z, ...context };
+        const result = evalWithVariables(text, contextWithZ);
+        // Determine if result is a Zod schema or JSON schema
+        if (result && typeof result === 'object' && result._def) {
+          // It's a Zod schema
+          return Schema.fromZod(result);
+        } else {
+          // Treat as JSON schema
+          return Schema.fromOpenAPI(result);
+        }
       }
     } catch (e) {
       this.reportError(
-        e instanceof Error ? e.message : 'Error parsing response schema',
+        e instanceof Error ? e.message : 'Error parsing schema',
         this.xmlElementRange(element),
         e
       );
@@ -737,7 +750,7 @@ export class PomlFile {
     return undefined;
   }
 
-  private handleMeta = (element: XMLElement): boolean => {
+  private handleMeta = (element: XMLElement, context?: { [key: string]: any }): boolean => {
     if (element.name?.toLowerCase() !== 'meta') {
       return false;
     }
@@ -750,7 +763,7 @@ export class PomlFile {
         );
         return true;
       }
-      const schema = this.handleSchema(element);
+      const schema = this.handleSchema(element, context);
       if (schema) {
         this.responseSchema = schema;
       }
@@ -760,10 +773,14 @@ export class PomlFile {
     if (metaType === 'tool') {
       const name = xmlAttribute(element, 'name')?.value;
       if (!name) {
-        throw new Error('name attribute is required for tool meta type');
+        this.reportError(
+          'name attribute is required for tool meta type',
+          this.xmlElementRange(element)
+        );
+        return true;
       }
       const description = xmlAttribute(element, 'description')?.value;
-      const inputSchema = this.handleSchema(element);
+      const inputSchema = this.handleSchema(element, context);
       if (inputSchema) {
         if (!this.toolsSchema) {
           this.toolsSchema = new ToolsSchema();
@@ -790,6 +807,7 @@ export class PomlFile {
         }
       }
       this.runtimeParameters = runtimeParams;
+      return true;
     }
 
     const minVersion = xmlAttribute(element, 'minVersion')?.value;
@@ -933,15 +951,12 @@ export class PomlFile {
       return <></>;
     }
 
-    if (this.handleMeta(element)) {
-      return <></>;
-    }
-
     const tagName = element.name;
     if (!tagName) {
       // Probably already had an invalid syntax error.
       return <></>;
     }
+    const isMeta = tagName.toLowerCase() === 'meta';
     const isInclude = tagName.toLowerCase() === 'include';
 
     // Common logic for handling for-loops
@@ -955,6 +970,11 @@ export class PomlFile {
 
       // Common logic for handling if-conditions
       if (!this.handleIfCondition(element, context)) {
+        continue;
+      }
+      // Common logic for handling meta elements
+      if (isMeta && this.handleMeta(element, context)) {
+        // If it's a meta element, we don't render anything.
         continue;
       }
 

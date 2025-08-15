@@ -47,18 +47,62 @@ Use the `lang="json"` attribute to specify JSON Schema format:
 </meta>
 ```
 
-### Zod Schema Format
+### Expression Format
 
-When the `lang` attribute is omitted, POML assumes Zod format:
+Use the `lang="expr"` attribute (or omit it for auto-detection) to evaluate JavaScript expressions that return schemas:
 
 ```xml
-<meta type="responseSchema">
+<meta type="responseSchema" lang="expr">
   z.object({
     name: z.string(),
     age: z.number().optional()
   })
 </meta>
 ```
+
+When `lang` is omitted, POML auto-detects the format:
+- If the content starts with `{`, it's treated as JSON
+- Otherwise, it's treated as an expression
+
+### Expression Evaluation in Schemas
+
+#### JSON Schema with Template Expressions
+
+JSON schemas support template expressions using `{{ }}` syntax:
+
+```xml
+<let name="maxAge" value="100" />
+<meta type="responseSchema" lang="json">
+  {
+    "type": "object",
+    "properties": {
+      "name": { "type": "string" },
+      "age": { 
+        "type": "number",
+        "minimum": 0,
+        "maximum": {{ maxAge }}
+      }
+    }
+  }
+</meta>
+```
+
+#### Expression Format with JavaScript Evaluation
+
+Expression schemas are evaluated as JavaScript code with access to context variables and the `z` (Zod) variable:
+
+```xml
+<let name="fields" value='["name", "email", "age"]' />
+<meta type="responseSchema" lang="expr">
+  z.object(
+    Object.fromEntries(fields.map(f => [f, z.string()]))
+  )
+</meta>
+```
+
+The expression can return either:
+- A Zod schema object (detected by the presence of `_def` property)
+- A plain JavaScript object treated as JSON Schema
 
 **Important limitations:**
 - Only one `responseSchema` meta element is allowed per document. Multiple response schemas will result in an error.
@@ -88,10 +132,10 @@ Tool registration enables AI models to interact with external functions during c
 </meta>
 ```
 
-### Zod Schema Format
+### Expression Format
 
 ```xml
-<meta type="tool" name="calculate" description="Perform calculation">
+<meta type="tool" name="calculate" description="Perform calculation" lang="expr">
   z.object({
     operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
     a: z.number(),
@@ -100,9 +144,46 @@ Tool registration enables AI models to interact with external functions during c
 </meta>
 ```
 
+### Expression Evaluation in Tool Schemas
+
+Tool schemas support the same evaluation modes as response schemas:
+
+#### JSON with Template Expressions
+
+```xml
+<let name="maxValue" value="1000" />
+<meta type="tool" name="calculator" description="Calculate values" lang="json">
+  {
+    "type": "object",
+    "properties": {
+      "value": { 
+        "type": "number",
+        "maximum": {{ maxValue }}
+      }
+    }
+  }
+</meta>
+```
+
+#### Expression Format
+
+```xml
+<let name="supportedOperations" value='["add", "subtract", "multiply", "divide"]' />
+<meta type="tool" name="calculator" description="Perform mathematical operations" lang="expr">
+  z.object({
+    operation: z.enum(supportedOperations),
+    a: z.number(),
+    b: z.number()
+  })
+</meta>
+```
+
+In expression mode, the `z` variable is automatically available for constructing Zod schemas, and you have direct access to all context variables.
+
 **Required attributes for tools:**
 - **name**: Tool identifier (required)
 - **description**: Tool description (optional but recommended)
+- **lang**: Schema language, either "json" or "expr" (optional, auto-detected based on content)
 
 You can define multiple tools in a single document.
 
@@ -114,7 +195,7 @@ Runtime parameters configure the language model's behavior during execution. The
 <meta type="runtime" 
       temperature="0.7" 
       maxOutputTokens="1000" 
-      model="gpt-4"
+      model="gpt-5"
       topP="0.9" />
 ```
 
@@ -122,7 +203,7 @@ All attributes except `type` are passed as runtime parameters. Common parameters
 
 - **temperature**: Controls randomness (0-2, typically 0.3-0.7 for balanced output)
 - **maxOutputTokens**: Maximum response length in tokens
-- **model**: Model identifier (e.g., "gpt-4", "claude-3-sonnet")
+- **model**: Model identifier (e.g., "gpt-5", "claude-4-sonnet")
 - **topP**: Nucleus sampling threshold (0-1, typically 0.9-0.95)
 - **frequencyPenalty**: Reduces token repetition based on frequency (-2 to 2)
 - **presencePenalty**: Reduces repetition based on presence (-2 to 2)
