@@ -342,6 +342,25 @@ export class PomlFile {
     const regex = /{{\s*(.+?)\s*}}(?!})/gm;
 
     const visit = (element: XMLElement) => {
+      // Special handling for meta elements with lang="expr"
+      if (element.name?.toLowerCase() === 'meta') {
+        const langAttr = xmlAttribute(element, 'lang');
+        const typeAttr = xmlAttribute(element, 'type');
+        const isSchemaType = typeAttr?.value === 'responseSchema' || typeAttr?.value === 'tool';
+        const text = xmlElementText(element).trim();
+
+        // Check if it's an expression (either explicit lang="expr" or auto-detected)
+        if (isSchemaType && (langAttr?.value === 'expr' || (!langAttr && !text.trim().startsWith('{')))) {
+          const position = this.xmlElementRange(element.textContents[0]);
+          tokens.push({
+            type: 'expression',
+            range: position,
+            expression: text.trim(),
+          });
+          return;
+        }
+      }
+
       // attributes
       for (const attr of element.attributes) {
         if (!attr.value) {
@@ -382,6 +401,8 @@ export class PomlFile {
       for (const tc of element.textContents) {
         const text = tc.text || '';
         const pos = this.xmlElementRange(tc);
+
+        // Regular template expression handling for other elements and JSON
         regex.lastIndex = 0;
         let match: RegExpExecArray | null;
         while ((match = regex.exec(text))) {
@@ -702,6 +723,11 @@ export class PomlFile {
     let lang: 'json' | 'expr' | undefined = xmlAttribute(element, 'lang')?.value as any;
     const text = xmlElementText(element).trim();
     
+    // Get the range for the text content (if available)
+    const textRange = element.textContents.length > 0 
+      ? this.xmlElementRange(element.textContents[0])
+      : this.xmlElementRange(element);
+    
     // Auto-detect language if not specified
     if (!lang) {
       if (text.startsWith('{')) {
@@ -720,7 +746,7 @@ export class PomlFile {
     try {
       if (lang === 'json') {
         // Process template expressions in JSON text
-        const processedText = this.handleText(text, context || {}, this.xmlElementRange(element));
+        const processedText = this.handleText(text, context || {}, textRange);
         // handleText returns an array, join if all strings
         const jsonText = processedText.length === 1 && typeof processedText[0] === 'string'
           ? processedText[0]
@@ -730,7 +756,13 @@ export class PomlFile {
       } else if (lang === 'expr') {
         // Evaluate expression directly with z in context
         const contextWithZ = { z, ...context };
-        const result = evalWithVariables(text, contextWithZ);
+        const result = this.evaluateExpression(text, contextWithZ, textRange);
+        
+        // If evaluation failed, result will be empty string
+        if (!result) {
+          return undefined;
+        }
+        
         // Determine if result is a Zod schema or JSON schema
         if (result && typeof result === 'object' && result._def) {
           // It's a Zod schema

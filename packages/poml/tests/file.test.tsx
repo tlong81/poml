@@ -246,6 +246,34 @@ describe('templateEngine', () => {
 });
 
 describe('expressionEvaluation', () => {
+  test('captures expression tokens for meta lang="expr"', () => {
+    const text = `<poml>
+      <let name="fields" value='["name", "age"]' />
+      <meta type="responseSchema" lang="expr">
+        z.object({
+          name: z.string(),
+          age: z.number()
+        })
+      </meta>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    
+    const tokens = file.getExpressionTokens();
+    // Should have tokens for: let value attribute and meta expr content
+    expect(tokens.length).toBeGreaterThanOrEqual(2);
+    
+    // Find the let value token
+    const letToken = tokens.find(t => t.expression === '["name", "age"]');
+    expect(letToken).toBeDefined();
+    expect(letToken?.type).toBe('expression');
+    
+    // Find the meta expr token
+    const metaToken = tokens.find(t => t.expression?.includes('z.object'));
+    expect(metaToken).toBeDefined();
+    expect(metaToken?.type).toBe('expression');
+  });
+
   test('captures evaluation history', () => {
     ErrorCollection.clear();
     const text = '<p for="i in [1,2]">{{i}}</p>';
@@ -256,6 +284,34 @@ describe('expressionEvaluation', () => {
     const position = text.indexOf('{{i}}');
     expect(file.getExpressionEvaluations({ start: position, end: position + 4 })).toStrictEqual([1, 2]);
     expect(ErrorCollection.empty()).toBe(true);
+  });
+
+  test('tracks meta expr evaluation', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="num" value="42" />
+      <meta type="responseSchema" lang="expr">
+        z.object({ value: z.number().max(num) })
+      </meta>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    
+    // Verify the schema was created successfully
+    const schema = file.getResponseSchema();
+    expect(schema).toBeDefined();
+    
+    // Verify expression tokens are collected
+    const tokens = file.getExpressionTokens();
+    const metaToken = tokens.find(t => t.expression?.includes('z.object'));
+    expect(metaToken).toBeDefined();
+    expect(metaToken?.type).toBe('expression');
+    
+    // The expression should be the full z.object expression
+    expect(metaToken?.expression?.trim()).toContain('z.object');
+    expect(metaToken?.expression?.trim()).toContain('z.number()');
+    
+    ErrorCollection.clear();
   });
 
   test('tracks each expression separately', () => {
