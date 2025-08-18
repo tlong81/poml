@@ -1,1 +1,1 @@
-export const POML_VERSION = "0.0.7";
+export const POML_VERSION = "0.0.8";

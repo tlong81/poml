@@ -1,5 +1,13 @@
 # POML: Prompt Orchestration Markup Language
 
+[![Documentation](https://img.shields.io/badge/docs-microsoft.github.io-blue)](https://microsoft.github.io/poml/)
+[![VSCode Extension](https://img.shields.io/visual-studio-marketplace/v/poml-team.poml)](https://marketplace.visualstudio.com/items?itemName=poml-team.poml)
+[![PyPI](https://img.shields.io/pypi/v/poml)](https://pypi.org/project/poml/)
+[![npm (latest)](https://img.shields.io/npm/v/pomljs)](https://www.npmjs.com/package/pomljs)
+[![Test Status](https://github.com/microsoft/poml/actions/workflows/test.yml/badge.svg)](https://github.com/microsoft/poml/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/FhMCqWzAn6)
+
 **POML (Prompt Orchestration Markup Language)** is a novel markup language designed to bring structure, maintainability, and versatility to advanced prompt engineering for Large Language Models (LLMs). It addresses common challenges in prompt development, such as lack of structure, complex data integration, format sensitivity, and inadequate tooling. POML provides a systematic way to organize prompt components, integrate diverse data types seamlessly, and manage presentation variations, empowering developers to create more sophisticated and reliable LLM applications.
 
 ## Demo Video
@@ -65,14 +73,21 @@ pip install poml
 
 For development or local installation, you might use `pip install -e .` from a cloned repository.
 
+**Refer to the [documentation](https://microsoft.github.io/poml) for more details on installing the nightly build.**
+
 ## Documentation
 
-For detailed information on POML syntax, components, styling, templating, SDKs, and the VS Code extension, please refer to our [documentation](docs).
+For detailed information on POML syntax, components, styling, templating, SDKs, and the VS Code extension, please refer to our [documentation](https://microsoft.github.io/poml).
 
 ## Learn More
 
 * **Watch our Demo Video on YouTube:** [POML Introduction & Demo](https://youtu.be/b9WDcFsKixo)
+* **Join our Discord community:** Connect with the team and other users on our [Discord server](https://discord.gg/FhMCqWzAn6).
 * **Read the Research Paper (coming soon):** For an in-depth understanding of POML's design, implementation, and evaluation, check out our paper: [Paper link TBD](TBD).
+
+## Ecosystem & Community Projects
+
+- [mini-poml-rs](https://github.com/linmx0130/mini-poml-rs) – Experimental Rust-based POML renderer for environments without JavaScript or Python interpreters.
 
 ## Contributing
 
@@ -88,7 +103,7 @@ This project may contain trademarks or logos for projects, products, or services
 
 ## Responsible AI
 
-This project has been evaluated and certified to comply with the Microsoft Responsible AI Standard. The team will continue to monitor and maintain the repository, addressing any severe issues, including potential harms, if they arise. For more details, refer to the [Responsible AI Readme](RAI_README).
+This project has been evaluated and certified to comply with the Microsoft Responsible AI Standard. The team will continue to monitor and maintain the repository, addressing any severe issues, including potential harms, if they arise. For more details, refer to the [Responsible AI Readme](RAI_README.md).
 
 ## License
 

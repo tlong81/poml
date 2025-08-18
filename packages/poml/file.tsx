@@ -21,6 +21,8 @@ import { getSuggestions } from './util/xmlContentAssist';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { POML_VERSION } from './version';
+import { Schema, ToolsSchema } from './util/schema';
+import { z } from 'zod';
 
 export interface PomlReaderOptions {
   trim?: boolean;
@@ -62,6 +64,9 @@ export class PomlFile {
   private disabledComponents: Set<string> = new Set();
   private expressionTokens: PomlToken[] = [];
   private expressionEvaluations: Map<string, any[]> = new Map();
+  private responseSchema: Schema | undefined;
+  private toolsSchema: ToolsSchema | undefined;
+  private runtimeParameters: { [key: string]: any } | undefined;
 
   constructor(text: string, options?: PomlReaderOptions, sourcePath?: string) {
     this.config = {
@@ -245,6 +250,18 @@ export class PomlFile {
     }
   }
 
+  public getResponseSchema(): Schema | undefined {
+    return this.responseSchema;
+  }
+
+  public getToolsSchema(): ToolsSchema | undefined {
+    return this.toolsSchema;
+  }
+
+  public getRuntimeParameters(): { [key: string]: any } | undefined {
+    return this.runtimeParameters;
+  }
+
   public xmlRootElement(): XMLElement | undefined {
     if (!this.ast || !this.ast.rootElement) {
       this.reportError('Root element is invalid.', {
@@ -325,6 +342,25 @@ export class PomlFile {
     const regex = /{{\s*(.+?)\s*}}(?!})/gm;
 
     const visit = (element: XMLElement) => {
+      // Special handling for meta elements with lang="expr"
+      if (element.name?.toLowerCase() === 'meta') {
+        const langAttr = xmlAttribute(element, 'lang');
+        const typeAttr = xmlAttribute(element, 'type');
+        const isSchemaType = typeAttr?.value === 'responseSchema' || typeAttr?.value === 'tool';
+        const text = xmlElementText(element).trim();
+
+        // Check if it's an expression (either explicit lang="expr" or auto-detected)
+        if (isSchemaType && (langAttr?.value === 'expr' || (!langAttr && !text.trim().startsWith('{')))) {
+          const position = this.xmlElementRange(element.textContents[0]);
+          tokens.push({
+            type: 'expression',
+            range: position,
+            expression: text.trim(),
+          });
+          return;
+        }
+      }
+
       // attributes
       for (const attr of element.attributes) {
         if (!attr.value) {
@@ -365,6 +401,8 @@ export class PomlFile {
       for (const tc of element.textContents) {
         const text = tc.text || '';
         const pos = this.xmlElementRange(tc);
+
+        // Regular template expression handling for other elements and JSON
         regex.lastIndex = 0;
         let match: RegExpExecArray | null;
         while ((match = regex.exec(text))) {
@@ -681,10 +719,129 @@ export class PomlFile {
     return <>{resultNodes}</>;
   };
 
-  private handleMeta = (element: XMLElement): boolean => {
+  private handleSchema = (element: XMLElement, context?: { [key: string]: any }): Schema | undefined => {
+    let lang: 'json' | 'expr' | undefined = xmlAttribute(element, 'lang')?.value as any;
+    const text = xmlElementText(element).trim();
+    
+    // Get the range for the text content (if available)
+    const textRange = element.textContents.length > 0 
+      ? this.xmlElementRange(element.textContents[0])
+      : this.xmlElementRange(element);
+    
+    // Auto-detect language if not specified
+    if (!lang) {
+      if (text.startsWith('{')) {
+        lang = 'json';
+      } else {
+        lang = 'expr';
+      }
+    } else if (lang !== 'json' && lang !== 'expr') {
+      this.reportError(
+        `Invalid lang attribute: ${lang}. Expected "json" or "expr"`,
+        this.xmlAttributeValueRange(xmlAttribute(element, 'lang')!)
+      );
+      return undefined;
+    }
+    
+    try {
+      if (lang === 'json') {
+        // Process template expressions in JSON text
+        const processedText = this.handleText(text, context || {}, textRange);
+        // handleText returns an array, join if all strings
+        const jsonText = processedText.length === 1 && typeof processedText[0] === 'string'
+          ? processedText[0]
+          : processedText.map(p => typeof p === 'string' ? p : JSON.stringify(p)).join('');
+        const jsonSchema = JSON.parse(jsonText);
+        return Schema.fromOpenAPI(jsonSchema);
+      } else if (lang === 'expr') {
+        // Evaluate expression directly with z in context
+        const contextWithZ = { z, ...context };
+        const result = this.evaluateExpression(text, contextWithZ, textRange);
+        
+        // If evaluation failed, result will be empty string
+        if (!result) {
+          return undefined;
+        }
+        
+        // Determine if result is a Zod schema or JSON schema
+        if (result && typeof result === 'object' && result._def) {
+          // It's a Zod schema
+          return Schema.fromZod(result);
+        } else {
+          // Treat as JSON schema
+          return Schema.fromOpenAPI(result);
+        }
+      }
+    } catch (e) {
+      this.reportError(
+        e instanceof Error ? e.message : 'Error parsing schema',
+        this.xmlElementRange(element),
+        e
+      );
+    }
+    return undefined;
+  }
+
+  private handleMeta = (element: XMLElement, context?: { [key: string]: any }): boolean => {
     if (element.name?.toLowerCase() !== 'meta') {
       return false;
     }
+    const metaType = xmlAttribute(element, 'type')?.value;
+    if (metaType === 'responseSchema') {
+      if (this.responseSchema) {
+        this.reportError(
+          'Multiple responseSchema meta elements found. Only one is allowed.',
+          this.xmlElementRange(element)
+        );
+        return true;
+      }
+      const schema = this.handleSchema(element, context);
+      if (schema) {
+        this.responseSchema = schema;
+      }
+      return true;
+    }
+
+    if (metaType === 'tool') {
+      const name = xmlAttribute(element, 'name')?.value;
+      if (!name) {
+        this.reportError(
+          'name attribute is required for tool meta type',
+          this.xmlElementRange(element)
+        );
+        return true;
+      }
+      const description = xmlAttribute(element, 'description')?.value;
+      const inputSchema = this.handleSchema(element, context);
+      if (inputSchema) {
+        if (!this.toolsSchema) {
+          this.toolsSchema = new ToolsSchema();
+        }
+        try {
+          this.toolsSchema.addTool(name, description || undefined, inputSchema);
+        } catch (e) {
+          this.reportError(
+            e instanceof Error ? e.message : 'Error adding tool to tools schema',
+            this.xmlElementRange(element),
+            e
+          );
+        }
+      }
+      return true;
+    }
+
+    if (metaType === 'runtime') {
+      // Extra runtime parameters sending to LLM.
+      const runtimeParams: any = {};
+      for (const attribute of element.attributes) {
+        if (attribute.key && attribute.value && attribute.key?.toLowerCase() !== 'type') {
+          runtimeParams[attribute.key] = attribute.value;
+        }
+      }
+      this.runtimeParameters = runtimeParams;
+      return true;
+    }
+
     const minVersion = xmlAttribute(element, 'minVersion')?.value;
     if (minVersion && compareVersions(POML_VERSION, minVersion) < 0) {
       this.reportError(
@@ -826,15 +983,12 @@ export class PomlFile {
       return <></>;
     }
 
-    if (this.handleMeta(element)) {
-      return <></>;
-    }
-
     const tagName = element.name;
     if (!tagName) {
       // Probably already had an invalid syntax error.
       return <></>;
     }
+    const isMeta = tagName.toLowerCase() === 'meta';
     const isInclude = tagName.toLowerCase() === 'include';
 
     // Common logic for handling for-loops
@@ -848,6 +1002,11 @@ export class PomlFile {
 
       // Common logic for handling if-conditions
       if (!this.handleIfCondition(element, context)) {
+        continue;
+      }
+      // Common logic for handling meta elements
+      if (isMeta && this.handleMeta(element, context)) {
+        // If it's a meta element, we don't render anything.
         continue;
       }
 
@@ -1263,25 +1422,52 @@ const camelToHyphenCase = (text: string): string => {
 };
 
 /**
- * Compares two semantic version strings (e.g., "1.2.3").
+ * Compares two version strings supporting semantic versioning with nightly/dev suffixes.
+ * Supports formats: "x.y.z", "x.y.z-nightly.timestamp", "x.y.z.devtimestamp"
  * 
- * @param a - The first version string in the format "x.y.z".
- * @param b - The second version string in the format "x.y.z".
+ * @param a - The first version string.
+ * @param b - The second version string.
  * @returns -1 if `a` is less than `b`, 1 if `a` is greater than `b`, and 0 if they are equal.
  */
 const compareVersions = (a: string, b: string): number => {
-  const pa = a.split('.').map(n => parseInt(n, 10));
-  const pb = b.split('.').map(n => parseInt(n, 10));
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const na = pa[i] || 0;
-    const nb = pb[i] || 0;
-    if (na > nb) {
-      return 1;
+  const parseVersion = (version: string) => {
+    // Handle nightly versions: "1.2.3-nightly.202508120345"
+    const nightlyMatch = version.match(/^(\d+\.\d+\.\d+)-nightly\.(\d+)$/);
+    if (nightlyMatch) {
+      const [, baseVersion, timestamp] = nightlyMatch;
+      const parts = baseVersion.split('.').map(n => parseInt(n, 10));
+      return { parts, isPrerelease: true, timestamp: parseInt(timestamp, 10) };
     }
-    if (na < nb) {
-      return -1;
-    }
+
+    // Handle regular semantic versions: "1.2.3"
+    const parts = version.split('.').map(n => parseInt(n, 10));
+    return { parts, isPrerelease: false, timestamp: 0 };
+  };
+
+  const versionA = parseVersion(a);
+  const versionB = parseVersion(b);
+
+  // Compare base version parts first
+  for (let i = 0; i < Math.max(versionA.parts.length, versionB.parts.length); i++) {
+    const na = versionA.parts[i] || 0;
+    const nb = versionB.parts[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
   }
+
+  // If base versions are equal, handle prerelease comparison
+  if (versionA.isPrerelease && !versionB.isPrerelease) {
+    return -1; // Prerelease is less than release
+  }
+  if (!versionA.isPrerelease && versionB.isPrerelease) {
+    return 1; // Release is greater than prerelease
+  }
+  if (versionA.isPrerelease && versionB.isPrerelease) {
+    // Both are prereleases, compare timestamps
+    if (versionA.timestamp > versionB.timestamp) return 1;
+    if (versionA.timestamp < versionB.timestamp) return -1;
+  }
+
   return 0;
 };
 
