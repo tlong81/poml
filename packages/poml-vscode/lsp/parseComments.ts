@@ -9,10 +9,10 @@ const checkMode = process.argv.includes('--check');
 let hasChanges = false;
 
 function writeOrCheck(filePath: string, content: string) {
-  let existing: string | undefined;
+  let existing: string;
   try {
     existing = readFileSync(filePath, 'utf8');
-  } catch {
+  } catch (_) {
     existing = undefined;
   }
 
