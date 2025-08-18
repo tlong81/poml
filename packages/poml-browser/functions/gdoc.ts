@@ -59,7 +59,7 @@ class GoogleDocsManager {
   /**
    * Fetch content from Google Docs using API
    * Note: This runs in the extension context, not as a content script
-   * Returns an array of CardModel objects
+   * Returns an array of CardModel objects (single parent with nested children)
    */
   async fetchGoogleDocsContent(isRetry: boolean = false): Promise<CardModel[]> {
     try {
@@ -104,24 +104,10 @@ class GoogleDocsManager {
       }
 
       const document = await response.json();
-      const cards: CardModel[] = [];
-      
-      // Add document title as header if available
-      if (document.title && document.title.trim()) {
-        cards.push(createCard({
-          content: { type: 'text', value: document.title } as TextContent,
-          componentType: 'Header',
-          title: document.title,
-          metadata: {
-            source: 'web',
-            url: tab.url,
-            tags: ['document-title', 'google-docs']
-          }
-        }));
-      }
+      const childCards: CardModel[] = [];
       
       // Process document body and extract structured content
-      const processContent = (content: any, parentId?: string | null): void => {
+      const processContent = (content: any): void => {
         if (!content || !content.content) return;
         
         for (const element of content.content) {
@@ -148,10 +134,9 @@ class GoogleDocsManager {
             
             // Only add non-empty paragraphs
             if (paragraphText.trim()) {
-              cards.push(createCard({
+              childCards.push(createCard({
                 content: { type: 'text', value: paragraphText.trim() } as TextContent,
                 componentType: isHeading ? 'Header' : 'Paragraph',
-                parentId,
                 metadata: {
                   source: 'web',
                   url: tab.url,
@@ -161,27 +146,51 @@ class GoogleDocsManager {
             }
           } else if (element.table) {
             // Create a table card with nested content
-            const tableCard = createCard({
-              content: { type: 'nested', children: [] },
-              componentType: 'Table',
-              parentId,
-              metadata: {
-                source: 'web',
-                url: tab.url,
-                tags: ['table', 'google-docs']
-              }
-            });
+            const tableCells: CardModel[] = [];
             
             // Process table rows
+            const processTableContent = (tableContent: any): void => {
+              if (!tableContent || !tableContent.content) return;
+              for (const elem of tableContent.content) {
+                if (elem.paragraph) {
+                  let cellText = '';
+                  for (const paragraphElement of elem.paragraph.elements || []) {
+                    if (paragraphElement.textRun) {
+                      cellText += paragraphElement.textRun.content || '';
+                    }
+                  }
+                  if (cellText.trim()) {
+                    tableCells.push(createCard({
+                      content: { type: 'text', value: cellText.trim() } as TextContent,
+                      componentType: 'Paragraph',
+                      metadata: {
+                        source: 'web',
+                        url: tab.url,
+                        tags: ['table-cell', 'google-docs']
+                      }
+                    }));
+                  }
+                }
+              }
+            };
+            
             for (const row of element.table.tableRows || []) {
               for (const cell of row.tableCells || []) {
-                processContent(cell, tableCard.id);
+                processTableContent(cell);
               }
             }
             
             // Only add table if it has content
-            if ((tableCard.content as any).children?.length > 0) {
-              cards.push(tableCard);
+            if (tableCells.length > 0) {
+              childCards.push(createCard({
+                content: { type: 'nested', children: tableCells },
+                componentType: 'Table',
+                metadata: {
+                  source: 'web',
+                  url: tab.url,
+                  tags: ['table', 'google-docs']
+                }
+              }));
             }
           }
         }
@@ -189,24 +198,26 @@ class GoogleDocsManager {
 
       processContent(document.body);
       
-      if (cards.length === 0) {
-        // If no structured content found, return a single card with error message
-        cards.push(createCard({
-          content: { type: 'text', value: 'No text content found in document' } as TextContent,
-          componentType: 'Paragraph',
-          metadata: {
-            source: 'web',
-            url: tab.url,
-            tags: ['empty', 'google-docs']
-          }
-        }));
-      }
-
-      notifyInfo('Google Docs content extracted successfully', { 
-        cardsCount: cards.length 
+      // Create a single parent card with all content as nested children
+      const documentTitle = document.title && document.title.trim() ? document.title : 'Google Docs Document';
+      const parentCard = createCard({
+        content: childCards.length > 0 ? 
+          { type: 'nested', children: childCards } : 
+          { type: 'text', value: 'No text content found in document' } as TextContent,
+        componentType: 'CaptionedParagraph',
+        title: documentTitle,
+        metadata: {
+          source: 'web',
+          url: tab.url,
+          tags: ['google-docs', 'document']
+        }
       });
 
-      return cards;
+      notifyInfo('Google Docs content extracted successfully', { 
+        childCardsCount: childCards.length 
+      });
+
+      return [parentCard];
     } catch (error) {
       notifyError('Error fetching Google Docs content', error);
       throw error;
@@ -216,146 +227,3 @@ class GoogleDocsManager {
 
 // Export the manager instance for UI/popup use
 export const googleDocsManager = new GoogleDocsManager();
-
-/**
- * Content script functions (used when injected by service worker).
- * Extract content from Google Docs by parsing the DOM.
- * This function is used when injected as a content script.
- * Note: This is a fallback method when API access is not available.
- * Returns an array of CardModel objects
- */
-export function extractGoogleDocsContentFromDOM(): CardModel[] {
-  try {
-    notifyDebug('Starting Google Docs DOM extraction');
-    const cards: CardModel[] = [];
-    
-    // Add document title as header if available
-    const title = document.title.replace(' - Google Docs', '').trim();
-    if (title && title !== 'Untitled document') {
-      cards.push(createCard({
-        content: { type: 'text', value: title } as TextContent,
-        componentType: 'Header',
-        title: title,
-        metadata: {
-          source: 'web',
-          url: document.location.href,
-          tags: ['document-title', 'google-docs']
-        }
-      }));
-    }
-    
-    // Try to find the main content container
-    const contentSelectors = [
-      '.kix-page-content-wrapper',
-      '.kix-document-top-shadow-inner',
-      '.kix-page',
-      '[role="textbox"]',
-      '.docs-texteventtarget-iframe'
-    ];
-    
-    let contentExtracted = false;
-    
-    for (const selector of contentSelectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        notifyDebug(`Found Google Docs content with selector: ${selector}`, { 
-          count: elements.length 
-        });
-        
-        elements.forEach(element => {
-          const text = element.textContent?.trim();
-          if (text) {
-            // Split content into paragraphs for better structure
-            const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
-            paragraphs.forEach((paragraph, index) => {
-              cards.push(createCard({
-                content: { type: 'text', value: paragraph.trim() } as TextContent,
-                componentType: 'Paragraph',
-                metadata: {
-                  source: 'web',
-                  url: document.location.href,
-                  tags: ['google-docs', `paragraph-${index + 1}`]
-                }
-              }));
-            });
-            contentExtracted = true;
-          }
-        });
-        
-        if (contentExtracted) {
-          break;
-        }
-      }
-    }
-    
-    // If no content found with specific selectors, try fallback
-    if (!contentExtracted) {
-      notifyDebug('Using fallback extraction for Google Docs');
-      const fallbackContent = document.body?.innerText || document.body?.textContent || '';
-      
-      if (fallbackContent.trim()) {
-        // Split fallback content into paragraphs
-        const paragraphs = fallbackContent.split(/\n\n+/).filter(p => p.trim());
-        paragraphs.forEach((paragraph, index) => {
-          cards.push(createCard({
-            content: { type: 'text', value: paragraph.trim() } as TextContent,
-            componentType: 'Paragraph',
-            metadata: {
-              source: 'web',
-              url: document.location.href,
-              tags: ['google-docs', 'fallback', `paragraph-${index + 1}`]
-            }
-          }));
-        });
-      }
-    }
-    
-    // If still no cards, add an empty message
-    if (cards.length === 0) {
-      cards.push(createCard({
-        content: { type: 'text', value: 'No content found in Google Docs document' } as TextContent,
-        componentType: 'Paragraph',
-        metadata: {
-          source: 'web',
-          url: document.location.href,
-          tags: ['empty', 'google-docs']
-        }
-      }));
-    }
-    
-    notifyInfo('Google Docs DOM extraction completed', { 
-      cardsCount: cards.length 
-    });
-    
-    return cards;
-  } catch (error) {
-    notifyError('Failed to extract Google Docs content from DOM', error);
-    throw error;
-  }
-}
-
-/**
- * Check if the current page is a Google Docs document
- */
-export function isGoogleDocsDocument(): boolean {
-  return document.location.hostname === 'docs.google.com' && 
-         document.location.pathname.includes('/document/');
-}
-
-/**
- * Main extraction function for Google Docs when injected as content script
- * This tries DOM extraction as a fallback when API is not available
- * Returns CardModel array
- */
-export function extractGoogleDocsDocumentContent(): CardModel[] {
-  try {
-    if (!isGoogleDocsDocument()) {
-      throw new Error('Not a Google Docs document');
-    }
-    
-    return extractGoogleDocsContentFromDOM();
-  } catch (error) {
-    notifyError('Failed to extract Google Docs document content', error);
-    throw error;
-  }
-}

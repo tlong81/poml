@@ -63,10 +63,10 @@ export const extractPageContent = contentManager.fetchContent;
 
 /**
  * Extract content from a regular HTML page using Readability
- * Returns an array of CardModel objects
+ * Returns an array of CardModel objects (single parent with nested children)
  */
 export async function extractHtmlContent(): Promise<CardModel[]> {
-  const cards: CardModel[] = [];
+  const childCards: CardModel[] = [];
   
   try {
     notifyDebug('Starting HTML content extraction', {
@@ -83,18 +83,20 @@ export async function extractHtmlContent(): Promise<CardModel[]> {
       contentLength: fallbackContent.length 
     });
     
-    // If we have no fallback content, return early
+    // If we have no fallback content, prepare to return empty document
     if (!fallbackContent.trim()) {
       notifyWarning('No text content found on this page');
-      return [createCard({
+      const emptyCard = createCard({
         content: { type: 'text', value: 'No text content found on this page' } as TextContent,
-        componentType: 'Paragraph',
+        componentType: 'CaptionedParagraph',
+        title: fallbackTitle,
         metadata: {
           source: 'web',
           url: document.location.href,
-          tags: ['empty', 'fallback']
+          tags: ['empty', 'fallback', 'document']
         }
-      })];
+      });
+      return [emptyCard];
     }
     
     // Try to use Readability for better extraction
@@ -120,24 +122,10 @@ export async function extractHtmlContent(): Promise<CardModel[]> {
         hasExcerpt: !!article.excerpt
       });
       
-      // Add title card if available
-      if (article.title && article.title !== fallbackTitle) {
-        cards.push(createCard({
-          content: { type: 'text', value: article.title } as TextContent,
-          componentType: 'Header',
-          title: article.title,
-          metadata: {
-            source: 'web',
-            url: document.location.href,
-            tags: ['article-title', 'readability']
-          }
-        }));
-      }
-      
       // Add main content as paragraphs (split by double newlines for better structure)
       const paragraphs = article.textContent.split(/\n\n+/).filter(p => p.trim());
       paragraphs.forEach((paragraph, index) => {
-        cards.push(createCard({
+        childCards.push(createCard({
           content: { type: 'text', value: paragraph.trim() } as TextContent,
           componentType: 'Paragraph',
           metadata: {
@@ -149,24 +137,31 @@ export async function extractHtmlContent(): Promise<CardModel[]> {
         }));
       });
       
+      // Use article title if available
+      const documentTitle = article.title || fallbackTitle;
+      
+      // Create parent card with Readability content
+      const parentCard = createCard({
+        content: { type: 'nested', children: childCards },
+        componentType: 'CaptionedParagraph',
+        title: documentTitle,
+        metadata: {
+          source: 'web',
+          url: document.location.href,
+          tags: ['html', 'readability', 'document']
+        }
+      });
+      
+      notifyInfo('HTML extraction completed', { 
+        childCardsCount: childCards.length 
+      });
+      
+      return [parentCard];
+      
     } else {
       notifyWarning('Readability failed, using fallback text extraction');
       
-      // Add title card
-      if (fallbackTitle && fallbackTitle !== 'Untitled') {
-        cards.push(createCard({
-          content: { type: 'text', value: fallbackTitle } as TextContent,
-          componentType: 'Header',
-          title: fallbackTitle,
-          metadata: {
-            source: 'web',
-            url: document.location.href,
-            tags: ['page-title', 'fallback']
-          }
-        }));
-      }
-      
-      // Add content as a single card (or split if very long)
+      // Add content as paragraphs (or split if very long)
       const maxLength = 5000; // Split long content into chunks
       if (fallbackContent.length > maxLength) {
         const chunks = [];
@@ -174,7 +169,7 @@ export async function extractHtmlContent(): Promise<CardModel[]> {
           chunks.push(fallbackContent.substring(i, i + maxLength));
         }
         chunks.forEach((chunk, index) => {
-          cards.push(createCard({
+          childCards.push(createCard({
             content: { type: 'text', value: chunk } as TextContent,
             componentType: 'Paragraph',
             metadata: {
@@ -185,7 +180,7 @@ export async function extractHtmlContent(): Promise<CardModel[]> {
           }));
         });
       } else {
-        cards.push(createCard({
+        childCards.push(createCard({
           content: { type: 'text', value: fallbackContent } as TextContent,
           componentType: 'Paragraph',
           metadata: {
@@ -198,6 +193,26 @@ export async function extractHtmlContent(): Promise<CardModel[]> {
       }
     }
     
+    // Create parent card with fallback content
+    const parentCard = createCard({
+      content: childCards.length > 0 ? 
+        { type: 'nested', children: childCards } : 
+        { type: 'text', value: 'No content extracted' } as TextContent,
+      componentType: 'CaptionedParagraph',
+      title: fallbackTitle,
+      metadata: {
+        source: 'web',
+        url: document.location.href,
+        tags: ['html', 'fallback', 'document']
+      }
+    });
+    
+    notifyInfo('HTML extraction completed', { 
+      childCardsCount: childCards.length 
+    });
+    
+    return [parentCard];
+    
   } catch (error) {
     notifyError('Error in HTML content extraction', error);
     
@@ -207,20 +222,15 @@ export async function extractHtmlContent(): Promise<CardModel[]> {
         type: 'text', 
         value: `Failed to extract HTML content: ${error instanceof Error ? error.message : String(error)}`
       } as TextContent,
-      componentType: 'Paragraph',
+      componentType: 'CaptionedParagraph',
+      title: 'Error',
       metadata: {
         source: 'web',
         url: document.location.href,
-        tags: ['error', 'html']
+        tags: ['error', 'html', 'document']
       }
     })];
   }
-  
-  notifyInfo('HTML extraction completed', { 
-    cardsCount: cards.length 
-  });
-  
-  return cards;
 }
 
 /**

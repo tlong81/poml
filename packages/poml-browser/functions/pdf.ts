@@ -7,10 +7,10 @@ import { CardModel, TextContent, createCard } from './cardModel';
 
 /**
  * Extracts text content from a PDF document
- * Returns an array of CardModel objects
+ * Returns an array of CardModel objects (single parent with nested children)
  */
 export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
-  const cards: CardModel[] = [];
+  const childCards: CardModel[] = [];
   
   try {
     const targetUrl = pdfUrl || document.location.href;
@@ -56,20 +56,9 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
     
     notifyInfo(`PDF loaded successfully`, { pages: pageCount });
     
-    // Add document title card
+    // Extract document title
     const title = document.title || 'PDF Document';
-    if (title && title !== 'about:blank') {
-      cards.push(createCard({
-        content: { type: 'text', value: title } as TextContent,
-        componentType: 'Header',
-        title: title,
-        metadata: {
-          source: 'file',
-          url: targetUrl,
-          tags: ['document-title', 'pdf']
-        }
-      }));
-    }
+    const documentTitle = title && title !== 'about:blank' ? title : 'PDF Document';
     
     // Extract text from all pages
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
@@ -84,7 +73,7 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
       
       if (pageText) {
         // Create a card for each page
-        cards.push(createCard({
+        childCards.push(createCard({
           content: { type: 'text', value: pageText } as TextContent,
           componentType: 'Paragraph',
           title: `Page ${pageNum}`,
@@ -101,12 +90,26 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
       });
     }
     
+    // Create a single parent card with all pages as nested children
+    const parentCard = createCard({
+      content: childCards.length > 0 ? 
+        { type: 'nested', children: childCards } : 
+        { type: 'text', value: 'No text content found in PDF' } as TextContent,
+      componentType: 'CaptionedParagraph',
+      title: documentTitle,
+      metadata: {
+        source: 'file',
+        url: targetUrl,
+        tags: ['pdf', 'document']
+      }
+    });
+
     notifyInfo('PDF extraction completed', { 
-      cardsCount: cards.length,
+      childCardsCount: childCards.length,
       pages: pageCount 
     });
     
-    return cards;
+    return [parentCard];
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
