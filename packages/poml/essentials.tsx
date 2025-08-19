@@ -772,10 +772,7 @@ export const Audio = component('Audio', { aliases: ['audio'], asynchorous: true 
     } else if (!base64) {
       throw ReadError.fromProps('Either `src` or `base64` must be specified.', others);
     }
-    const audio = useWithCatch(
-      preprocessAudio({ src, base64, type }),
-      others
-    );
+    const audio = useWithCatch(preprocessAudio({ src, base64, type }), others);
     if (!audio) {
       return null;
     }
@@ -789,5 +786,80 @@ export const Audio = component('Audio', { aliases: ['audio'], asynchorous: true 
     );
   } else {
     return null;
+  }
+});
+
+export interface ToolRequestProps extends PropsSyntaxBase, MultiMedia.ToolRequestProps {}
+
+export interface ToolResponseProps extends PropsSyntaxBase, MultiMedia.ToolResponseProps {}
+
+/**
+ * ToolRequest represents an AI-generated tool request with parameters.
+ * Used to display tool calls made by AI models.
+ *
+ * @param {string} id - Tool request ID
+ * @param {string} name - Tool name
+ * @param {any} parameters - Tool input parameters
+ *
+ * @example
+ * ```xml
+ * <ToolRequest id="123" name="search" parameters={{ query: "hello" }} />
+ * ```
+ */
+export const ToolRequest = component('ToolRequest', { aliases: ['toolRequest'] })((
+  props: ToolRequestProps
+) => {
+  const { syntax, id, name, parameters, ...others } = props;
+  const presentation = computeSyntaxContext(props, 'multimedia', []);
+
+  if (presentation === 'multimedia') {
+    return (
+      <MultiMedia.ToolRequest
+        presentation={presentation}
+        id={id}
+        name={name}
+        parameters={parameters}
+        {...others}
+      />
+    );
+  } else {
+    return <Object syntax={syntax} data={{ id, name, parameters }} {...others} />;
+  }
+});
+
+/**
+ * ToolResponse represents the result of a tool execution.
+ * Used to display tool execution results with rich content.
+ *
+ * @param {'markdown'|'html'|'json'|'yaml'|'xml'|'text'} syntax - The syntax of ToolResponse is special.
+ *   It is always `multimedia` for itself. The syntax is used to render the content inside.
+ *   If not specified, it will inherit from the parent context.
+ * @param {string} id - Tool call ID to respond to
+ * @param {string} name - Tool name
+ * @param children - Tool output (nested rich content)
+ *
+ * @example
+ * ```xml
+ * <ToolResponse id="123" name="search">
+ *  <Paragraph>Search results for "hello":</Paragraph>
+ *  <List>
+ *   <ListItem>Result 1</ListItem>
+ *   <ListItem>Result 2</ListItem>
+ *  </List>
+ * </ToolResponse>
+ * ```
+ */
+export const ToolResponse = component('ToolResponse', { aliases: ['toolResponse'] })((
+  props: React.PropsWithChildren<ToolResponseProps>
+) => {
+  const { syntax, id, name, children, ...others } = props;
+  const presentation = computeSyntaxContext(props);
+
+  if (presentation === 'multimedia') {
+    return (
+      <MultiMedia.ToolResponse presentation={'multimedia'} id={id} name={name} {...others}>
+        <Inline syntax={syntax}>{children}</Inline>
+      </MultiMedia.ToolResponse>
+    );
   }
 });
