@@ -7,3 +7,12 @@ export const htmlPages = [
   "https://www.imdb.com/title/tt1182345/",
   "https://finance.yahoo.com/news/p-affirms-us-credit-rating-040451877.html",
 ];
+
+export const pdfFiles = [
+  "test/assets/google-doc-document.pdf",
+  "test/assets/linenumber-with-subfigures.pdf",
+  "test/assets/multicolumn.pdf",
+  "test/assets/pdflatex-4-pages.pdf",
+  "test/assets/pdflatex-image.pdf",
+  "test/assets/trivial-libre-office-writer.pdf",
+];

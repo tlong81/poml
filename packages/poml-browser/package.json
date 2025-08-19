@@ -10,11 +10,12 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
-    "test:prepare": "tsx tests/scripts/seed-browser.ts"
+    "test:prepare": "playwright test tests/scripts/seed-browser.ts"
   },
   "keywords": [],
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "@rollup/plugin-alias": "^5.1.1",
     "@rollup/plugin-commonjs": "26.0.1",
     "@rollup/plugin-json": "^6.1.0",

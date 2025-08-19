@@ -4,3 +4,4 @@ node_modules
 /*.zip
 .rollup.cache
 tsconfig.tsbuildinfo
+test-results/
