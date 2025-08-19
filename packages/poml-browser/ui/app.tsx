@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { MantineProvider, Stack, Button, Group } from '@mantine/core';
+import { MantineProvider, Stack, Button, Group, ActionIcon } from '@mantine/core';
 import { useListState } from '@mantine/hooks';
-import { IconClipboard } from '@tabler/icons-react';
+import { IconClipboard, IconSettings } from '@tabler/icons-react';
 import EditableCardList from './components/EditableCardList';
 import CardModal from './components/CardModal';
+import Settings from './components/Settings';
 import { ExtractedContent } from '@functions/types';
 import { CardModel, createCard, isTextContent } from '@functions/cardModel';
 import { shadcnTheme } from './themes/zinc';
@@ -17,6 +18,7 @@ import {
 } from '@functions/clipboard';
 import { contentManager } from '@functions/html';
 import { NotificationProvider, useNotifications } from './contexts/NotificationContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import TopNotifications from './components/TopNotifications';
 import BottomNotifications from './components/BottomNotifications';
 
@@ -31,6 +33,7 @@ const AppContent: React.FC = () => {
   const [modalOpened, setModalOpened] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isDraggingOverDivider, setIsDraggingOverDivider] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   
   // Use the notification system
   const { showError, showSuccess, showWarning } = useNotifications();
@@ -284,6 +287,11 @@ const AppContent: React.FC = () => {
     }
   };
 
+  // Show settings page if requested
+  if (showSettings) {
+    return <Settings onBack={() => setShowSettings(false)} />;
+  }
+
   return (
     <Stack
       style={{
@@ -300,6 +308,18 @@ const AppContent: React.FC = () => {
         } : {})
       }}
     >
+      {/* Header with settings button */}
+      <Group justify="space-between" style={{ marginBottom: '8px' }}>
+        <div></div>
+        <ActionIcon
+          variant="subtle"
+          onClick={() => setShowSettings(true)}
+          aria-label="Settings"
+        >
+          <IconSettings size={18} />
+        </ActionIcon>
+      </Group>
+
       <EditableCardList
         cards={cards}
         onChange={handleCardsChange}
@@ -354,12 +374,14 @@ const AppContent: React.FC = () => {
 // Main App component with providers
 const App: React.FC = () => {
   return (
-    <MantineProvider theme={shadcnTheme} defaultColorScheme="light">
-      <NotificationProvider>
-        <AppContent />
-        {/* Top notifications overlay */}
-        <TopNotifications />
-      </NotificationProvider>
+    <MantineProvider theme={shadcnTheme} defaultColorScheme="auto">
+      <ThemeProvider>
+        <NotificationProvider>
+          <AppContent />
+          {/* Top notifications overlay */}
+          <TopNotifications />
+        </NotificationProvider>
+      </ThemeProvider>
     </MantineProvider>
   );
 };
