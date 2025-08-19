@@ -1,15 +1,10 @@
-#!/usr/bin/env node
-
 /**
- * Test utility script to extract content cards from HTML pages and PDF files
- * for use in automated tests. Runs in a mocked browser environment.
+ * Test utility to extract content cards from HTML pages and PDF files
+ * for use in automated tests. Runs in browser environment.
  */
 
-import { extractHtmlContent } from '../../functions/html';
+import { contentManager } from '../../functions/html';
 import { extractPdfContent } from '../../functions/pdf';
-import * as fs from 'fs';
-import * as path from 'path';
-import { Window } from 'happy-dom';
 
 // HTML pages to extract
 const htmlPages = [
@@ -40,61 +35,33 @@ interface ExtractionResult {
   extractedAt: string;
 }
 
-async function fetchUrl(url: string): Promise<string> {
-  // Use built-in fetch if available, otherwise fall back to https module
-  if (typeof fetch !== 'undefined') {
-    const response = await fetch(url);
-    return await response.text();
-  }
-  
-  // Fallback for Node.js without fetch
-  const https = await import('https');
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve(data));
-    }).on('error', reject);
-  });
-}
-
 async function extractHtmlCards(): Promise<ExtractionResult[]> {
   const results: ExtractionResult[] = [];
-  const assetsDir = path.join(__dirname, '..', 'assets');
-  
-  // Ensure assets directory exists
-  if (!fs.existsSync(assetsDir)) {
-    fs.mkdirSync(assetsDir, { recursive: true });
-  }
   
   for (const url of htmlPages) {
     console.log(`Extracting from: ${url}`);
     
     try {
-      // Fetch the HTML content
-      const html = await fetchUrl(url);
+      // Open URL in a new tab for extraction
+      const tab = await chrome.tabs.create({ url, active: false });
       
-      // Create a DOM environment with happy-dom
-      const window = new Window({
-        url,
-        settings: {
-          disableJavaScriptEvaluation: true,
-          disableComputedStyleRendering: true,
-          disableCSSFileLoading: true,
-          disableIframePageLoading: true,
-        }
+      if (!tab.id) {
+        throw new Error('Failed to create tab');
+      }
+      
+      // Wait for tab to load
+      await new Promise<void>((resolve) => {
+        const listener = (tabId: number, changeInfo: any) => {
+          if (tabId === tab.id && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
       });
-      const document = window.document;
       
-      // Set the HTML content
-      document.write(html);
-      
-      // Make document available globally for extraction function
-      (global as any).document = document;
-      (global as any).window = window;
-      
-      // Extract content
-      const cards = await extractHtmlContent();
+      // Extract content using content manager
+      const cards = await contentManager.fetchContent();
       
       results.push({
         url,
@@ -104,8 +71,8 @@ async function extractHtmlCards(): Promise<ExtractionResult[]> {
       
       console.log(`  ✓ Extracted ${cards.length} cards`);
       
-      // Clean up
-      window.close();
+      // Close the tab
+      await chrome.tabs.remove(tab.id);
       
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -118,82 +85,70 @@ async function extractHtmlCards(): Promise<ExtractionResult[]> {
     }
   }
   
-  // Save HTML cards to JSON
-  const outputPath = path.join(assetsDir, 'html-cards.json');
-  fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
-  console.log(`\nHTML cards saved to: ${outputPath}`);
+  // Save results to browser storage
+  await chrome.storage.local.set({ 'html-cards': results });
+  console.log(`\nHTML cards saved to browser storage`);
   
   return results;
 }
 
 async function extractPdfCards(): Promise<ExtractionResult[]> {
   const results: ExtractionResult[] = [];
-  const assetsDir = path.join(__dirname, '..', 'assets');
   
   for (const pdfFile of pdfFiles) {
-    const pdfPath = path.join(assetsDir, pdfFile);
     console.log(`Extracting from: ${pdfFile}`);
     
     try {
-      // Check if PDF file exists
-      if (!fs.existsSync(pdfPath)) {
-        throw new Error(`PDF file not found: ${pdfPath}`);
+      // Create a local URL for the PDF file (assumes PDFs are in test assets)
+      const pdfUrl = chrome.runtime.getURL(`tests/assets/${pdfFile}`);
+      
+      // Open PDF in a new tab for extraction
+      const tab = await chrome.tabs.create({ url: pdfUrl, active: false });
+      
+      if (!tab.id) {
+        throw new Error('Failed to create tab');
       }
       
-      // Read PDF file
-      const pdfBuffer = fs.readFileSync(pdfPath);
-      const pdfUrl = `file://${pdfPath}`;
+      // Wait for tab to load
+      await new Promise<void>((resolve) => {
+        const listener = (tabId: number, changeInfo: any) => {
+          if (tabId === tab.id && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+      });
       
-      // Mock document for PDF extraction
-      (global as any).document = {
-        location: { href: pdfUrl },
-        title: pdfFile,
-        contentType: 'application/pdf',
-      };
-      
-      // Mock chrome runtime for file reading
-      (global as any).chrome = {
-        runtime: {
-          getURL: (path: string) => path,
-          sendMessage: async (message: any) => {
-            if (message.action === 'readFile') {
-              return {
-                success: true,
-                base64Data: pdfBuffer.toString('base64'),
-              };
-            }
-          },
-        },
-      };
-      
-      // Extract content
+      // Extract content using PDF extraction function
       const cards = await extractPdfContent(pdfUrl);
       
       results.push({
         file: pdfFile,
-        path: pdfPath,
+        url: pdfUrl,
         cards,
         extractedAt: new Date().toISOString(),
       });
       
       console.log(`  ✓ Extracted ${cards.length} cards`);
       
+      // Close the tab
+      await chrome.tabs.remove(tab.id);
+      
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`  ✗ Error extracting ${pdfFile}:`, errorMessage);
       results.push({
         file: pdfFile,
-        path: pdfPath,
         error: errorMessage,
         extractedAt: new Date().toISOString(),
       });
     }
   }
   
-  // Save PDF cards to JSON
-  const outputPath = path.join(assetsDir, 'pdf-cards.json');
-  fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
-  console.log(`\nPDF cards saved to: ${outputPath}`);
+  // Save results to browser storage
+  await chrome.storage.local.set({ 'pdf-cards': results });
+  console.log(`\nPDF cards saved to browser storage`);
   
   return results;
 }
@@ -223,18 +178,13 @@ async function main() {
     },
   };
   
-  const summaryPath = path.join(__dirname, '..', 'assets', 'extraction-summary.json');
-  fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
+  // Save summary to browser storage
+  await chrome.storage.local.set({ 'extraction-summary': summary });
   
   console.log('\n=== Extraction Summary ===');
   console.log(`HTML: ${summary.html.successful}/${summary.html.total} successful`);
   console.log(`PDF: ${summary.pdf.successful}/${summary.pdf.total} successful`);
-  console.log(`\nSummary saved to: ${summaryPath}`);
-}
-
-// Check if running as script
-if (require.main === module) {
-  main().catch(console.error);
+  console.log(`\nSummary saved to browser storage`);
 }
 
 // Export for use in tests
