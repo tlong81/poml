@@ -26,6 +26,7 @@ Welcome to the Prompt Orchestration Markup Language (POML) documentation.
 ## Ecosystem & Community Projects
 
 - [mini-poml-rs](https://github.com/linmx0130/mini-poml-rs) – Experimental Rust-based POML renderer for environments without JavaScript or Python interpreters.
+- [poml-ruby](https://github.com/GhennadiiMir/poml) – Ruby gem implementation of POML for Ruby applications.
 
 ## Community
 
