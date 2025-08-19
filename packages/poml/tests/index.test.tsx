@@ -96,6 +96,68 @@ describe('endToEnd', () => {
     const element = write(await read(text), { speaker: true });
     expect(element).toStrictEqual([{ speaker: 'human', content: [] }]);
   });
+
+  test('toolRequest', async () => {
+    const text = '<tool-request id="test-123" name="search" parameters="{{ { query: \'hello\', limit: 10 } }}" />';
+    const result = await poml(text);
+    expect(result).toHaveLength(1);
+    expect((result[0] as any).type).toBe('application/vnd.poml.toolrequest');
+    expect((result[0] as any).id).toBe('test-123');
+    expect((result[0] as any).name).toBe('search');
+    expect((result[0] as any).content).toEqual({ query: 'hello', limit: 10 });
+  });
+
+  test('toolResponse', async () => {
+    const text = `<tool-response id="test-123" name="search">
+      <p>Found results:</p>
+      <list>
+        <item>Result 1</item>
+        <item>Result 2</item>
+      </list>
+    </tool-response>`;
+    const result = await poml(text);
+    expect(result).toHaveLength(1);
+    expect((result[0] as any).type).toBe('application/vnd.poml.toolresponse');
+    expect((result[0] as any).id).toBe('test-123');
+    expect((result[0] as any).name).toBe('search');
+    expect((result[0] as any).content).toMatch(/Found results:/);
+    expect((result[0] as any).content).toMatch(/- Result 1/);
+  });
+
+  test('toolsInConversation', async () => {
+    const text = `<poml>
+      <p speaker="human">Search for information about TypeScript</p>
+      <tool-request id="search-1" name="web_search" parameters={{ query: "TypeScript programming language" }} />
+      <tool-response id="search-1" name="web_search" speaker="tool">
+        <p>TypeScript is a strongly typed programming language that builds on JavaScript.</p>
+      </tool-response>
+      <p speaker="ai">Based on the search results, TypeScript is a typed superset of JavaScript.</p>
+    </poml>`;
+    const element = write(await read(text), { speaker: true });
+    expect(element).toHaveLength(4);
+    expect(element[0].speaker).toBe('human');
+    expect(element[0].content).toBe('Search for information about TypeScript');
+    expect(element[1].speaker).toBe('ai');
+    expect((element[1].content[0] as any).type).toBe('application/vnd.poml.toolrequest');
+    expect(element[2].speaker).toBe('tool');
+    expect((element[2].content[0] as any).type).toBe('application/vnd.poml.toolresponse');
+    expect(element[3].speaker).toBe('ai');
+  });
+
+  test('toolResponseWithImage', async () => {
+    const text = `<tool-response id="img-123" name="generate_image">
+      <p>Generated image:</p>
+      <image base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="/>
+      <p>A simple test image</p>
+    </tool-response>`;
+    const result = await poml(text);
+    expect(result).toHaveLength(1);
+    const response = (result[0] as any);
+    expect(response.type).toBe('application/vnd.poml.toolresponse');
+    expect(Array.isArray(response.content)).toBe(true);
+    expect(response.content).toHaveLength(3);
+    expect(response.content[1].type).toBe('image/png');
+  });
 });
 
 describe('diagnosis', () => {

@@ -800,6 +800,7 @@ export interface ToolResponseProps extends PropsSyntaxBase, MultiMedia.ToolRespo
  * @param {string} id - Tool request ID
  * @param {string} name - Tool name
  * @param {any} parameters - Tool input parameters
+ * @param {'human'|'ai'|'system'} speaker - The speaker of the content. Default is `ai`.
  *
  * @example
  * ```xml
@@ -809,8 +810,9 @@ export interface ToolResponseProps extends PropsSyntaxBase, MultiMedia.ToolRespo
 export const ToolRequest = component('ToolRequest', { aliases: ['toolRequest'] })((
   props: ToolRequestProps
 ) => {
-  const { syntax, id, name, parameters, ...others } = props;
-  const presentation = computeSyntaxContext(props, 'multimedia', []);
+  let { syntax, id, name, parameters, speaker, ...others } = props;
+  syntax = syntax ?? 'multimedia';
+  const presentation = computeSyntaxContext({ ...props, syntax }, 'multimedia', []);
 
   if (presentation === 'multimedia') {
     return (
@@ -819,11 +821,19 @@ export const ToolRequest = component('ToolRequest', { aliases: ['toolRequest'] }
         id={id}
         name={name}
         parameters={parameters}
+        speaker={speaker ?? 'ai'}
         {...others}
       />
     );
   } else {
-    return <Object syntax={syntax} data={{ id, name, parameters }} {...others} />;
+    return (
+      <Object
+        syntax={syntax}
+        speaker={speaker ?? 'ai'}
+        data={{ id, name, parameters }}
+        {...others}
+      />
+    );
   }
 });
 
@@ -836,6 +846,7 @@ export const ToolRequest = component('ToolRequest', { aliases: ['toolRequest'] }
  *   If not specified, it will inherit from the parent context.
  * @param {string} id - Tool call ID to respond to
  * @param {string} name - Tool name
+ * @param {'human'|'ai'|'system'|'tool'} speaker - The speaker of the content. Default is `tool`.
  * @param children - Tool output (nested rich content)
  *
  * @example
@@ -852,14 +863,30 @@ export const ToolRequest = component('ToolRequest', { aliases: ['toolRequest'] }
 export const ToolResponse = component('ToolResponse', { aliases: ['toolResponse'] })((
   props: React.PropsWithChildren<ToolResponseProps>
 ) => {
-  const { syntax, id, name, children, ...others } = props;
+  const { syntax, id, name, children, speaker, ...others } = props;
   const presentation = computeSyntaxContext(props);
-
-  if (presentation === 'multimedia') {
-    return (
-      <MultiMedia.ToolResponse presentation={'multimedia'} id={id} name={name} {...others}>
-        <Inline syntax={syntax}>{children}</Inline>
-      </MultiMedia.ToolResponse>
-    );
+  let syntaxFromContext = syntax;
+  if (syntaxFromContext === undefined) {
+    if (presentation === 'markup') {
+      syntaxFromContext = 'markdown';
+    } else if (presentation === 'serialize') {
+      syntaxFromContext = 'json';
+    } else if (presentation === 'free') {
+      syntaxFromContext = 'text';
+    } else if (presentation === 'multimedia') {
+      syntaxFromContext = 'multimedia';
+    }
   }
+
+  return (
+    <MultiMedia.ToolResponse
+      presentation={'multimedia'}
+      id={id}
+      name={name}
+      speaker={speaker ?? 'tool'}
+      {...others}
+    >
+      <Inline syntax={syntaxFromContext}>{children}</Inline>
+    </MultiMedia.ToolResponse>
+  );
 });

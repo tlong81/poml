@@ -29,10 +29,10 @@ type PositionalContentMultiMedia = ContentMultiMedia & { position: Position; ind
 type StringTableRow = string[];
 
 interface MappingNode {
-  originalStart?: number;  // Original start index in the input source code
-  originalEnd?: number;  // Original end index in the input source code
-  inputStart: number;  // Start index in the IR
-  inputEnd: number;  // End index in the IR
+  originalStart?: number; // Original start index in the input source code
+  originalEnd?: number; // Original end index in the input source code
+  inputStart: number; // Start index in the IR
+  inputEnd: number; // End index in the IR
   outputStart: number;
   outputEnd: number;
 }
@@ -382,7 +382,13 @@ class Writer<WriterOptions> {
   public writeWithSourceMap(ir: string): SourceMapRichContent[] {
     const result = this.generateWriterResult(ir);
     const segments = this.buildSourceMap(result);
-    return segments.map(s => ({ startIndex: s.inputStart, endIndex: s.inputEnd, irStartIndex: s.irStart, irEndIndex: s.irEnd, content: s.content }));
+    return segments.map(s => ({
+      startIndex: s.inputStart,
+      endIndex: s.inputEnd,
+      irStartIndex: s.irStart,
+      irEndIndex: s.irEnd,
+      content: s.content
+    }));
   }
 
   /**
@@ -392,36 +398,44 @@ class Writer<WriterOptions> {
   public writeMessagesWithSourceMap(ir: string): SourceMapMessage[] {
     const result = this.generateWriterResult(ir);
     const segments = this.buildSourceMap(result);
-    return result.speakers.map(sp => {
-      const msgSegs = segments.filter(seg => seg.outStart >= sp.start && seg.outEnd <= sp.end);
-      const nonWs = msgSegs.filter(seg => !(typeof seg.content === 'string' && seg.content.trim() === ''));
-      // Use only non-whitespace segments when computing the overall source range
-      // for this message so that trailing or leading padding does not expand the
-      // reported span. If the message contains nothing but whitespace we fall
-      // back to considering all segments.
-      const relevant = nonWs.length ? nonWs : msgSegs;
-      if (!relevant.length) {
-        // If there are no relevant segments, we cannot produce an empty message.
-        return {
-          startIndex: 0,  // in this case, we cannot determine the start index
-          endIndex: 0,
-          irStartIndex: 0,
-          irEndIndex: 0,
-          speaker: sp.speaker,
-          content: []
+    return result.speakers
+      .map(sp => {
+        const msgSegs = segments.filter(seg => seg.outStart >= sp.start && seg.outEnd <= sp.end);
+        const nonWs = msgSegs.filter(
+          seg => !(typeof seg.content === 'string' && seg.content.trim() === '')
+        );
+        // Use only non-whitespace segments when computing the overall source range
+        // for this message so that trailing or leading padding does not expand the
+        // reported span. If the message contains nothing but whitespace we fall
+        // back to considering all segments.
+        const relevant = nonWs.length ? nonWs : msgSegs;
+        if (!relevant.length) {
+          // If there are no relevant segments, we cannot produce an empty message.
+          return {
+            startIndex: 0, // in this case, we cannot determine the start index
+            endIndex: 0,
+            irStartIndex: 0,
+            irEndIndex: 0,
+            speaker: sp.speaker,
+            content: []
+          };
         }
-      }
-      return {
-        startIndex: Math.min(...relevant.map(seg => seg.inputStart)),
-        endIndex: Math.max(...relevant.map(seg => seg.inputEnd)),
-        irStartIndex: Math.min(...relevant.map(seg => seg.irStart)),
-        irEndIndex: Math.max(...relevant.map(seg => seg.irEnd)),
-        speaker: sp.speaker,
-        content: msgSegs.map(seg => ({
-          startIndex: seg.inputStart, endIndex: seg.inputEnd, irStartIndex: seg.irStart, irEndIndex: seg.irEnd, content: seg.content
-        }))
-      };
-    }).filter(msg => msg !== undefined);
+        return {
+          startIndex: Math.min(...relevant.map(seg => seg.inputStart)),
+          endIndex: Math.max(...relevant.map(seg => seg.inputEnd)),
+          irStartIndex: Math.min(...relevant.map(seg => seg.irStart)),
+          irEndIndex: Math.max(...relevant.map(seg => seg.irEnd)),
+          speaker: sp.speaker,
+          content: msgSegs.map(seg => ({
+            startIndex: seg.inputStart,
+            endIndex: seg.inputEnd,
+            irStartIndex: seg.irStart,
+            irEndIndex: seg.irEnd,
+            content: seg.content
+          }))
+        };
+      })
+      .filter(msg => msg !== undefined);
   }
 
   /**
@@ -430,7 +444,7 @@ class Writer<WriterOptions> {
    * The segments are ordered so that rich content can be reconstructed in
    * the correct visual order while preserving multimedia positioning.
    */
-  private buildSourceMap(result: WriterResult): SourceSegment[] {
+  protected buildSourceMap(result: WriterResult): SourceSegment[] {
     // Collect every boundary within the output that could signify a change in
     // source location.  These come from the input/output mappings as well as
     // multimedia positions.  Splitting the output on these boundaries ensures
@@ -455,8 +469,11 @@ class Writer<WriterOptions> {
     const middleSegments: SourceSegment[] = [];
     const bottomSegments: SourceSegment[] = [];
 
-    const originalStartIndices = result.mappings.map(m => m.originalStart).filter(m => m !== undefined);
-    const sourceStartIndex = originalStartIndices.length > 0 ? Math.min(...originalStartIndices) : 0;
+    const originalStartIndices = result.mappings
+      .map(m => m.originalStart)
+      .filter(m => m !== undefined);
+    const sourceStartIndex =
+      originalStartIndices.length > 0 ? Math.min(...originalStartIndices) : 0;
     const originalEndIndices = result.mappings.map(m => m.originalEnd).filter(m => m !== undefined);
     const sourceEndIndex = originalEndIndices.length > 0 ? Math.max(...originalEndIndices) : 0;
 
@@ -482,8 +499,13 @@ class Writer<WriterOptions> {
           if (!chosen || m.outputEnd - m.outputStart < chosen.outputEnd - chosen.outputStart) {
             chosen = m;
           }
-          if ((m.originalStart !== undefined && m.originalEnd !== undefined) && (
-            !chosenOriginal || m.originalEnd - m.originalStart < chosenOriginal.originalEnd! - chosenOriginal.originalStart!)) {
+          if (
+            m.originalStart !== undefined &&
+            m.originalEnd !== undefined &&
+            (!chosenOriginal ||
+              m.originalEnd - m.originalStart <
+                chosenOriginal.originalEnd! - chosenOriginal.originalStart!)
+          ) {
             chosenOriginal = m;
           }
         }
@@ -803,10 +825,7 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
     return current;
   }
 
-  private concatMarkdownBoxes(
-    boxes: MarkdownBox[],
-    element?: cheerio.Cheerio<any>
-  ): MarkdownBox {
+  private concatMarkdownBoxes(boxes: MarkdownBox[], element?: cheerio.Cheerio<any>): MarkdownBox {
     const charLimitAttr = element?.attr('char-limit');
     const tokenLimitAttr = element?.attr('token-limit');
     const charLimit = charLimitAttr !== undefined ? parseInt(charLimitAttr, 10) : undefined;
@@ -820,11 +839,12 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
 
     while (true) {
       let afterRemoveSpace = removedSpace.filter((child, i) => {
-        const afterBlock = i > 0 && (
-          removedSpace[i - 1].after.includes('\n') || /^\n+$/.test(removedSpace[i - 1].text));
+        const afterBlock =
+          i > 0 &&
+          (removedSpace[i - 1].after.includes('\n') || /^\n+$/.test(removedSpace[i - 1].text));
         const beforeBlock =
-          i < removedSpace.length - 1 && (
-            removedSpace[i + 1].before.includes('\n') || /^\n+$/.test(removedSpace[i + 1].text));
+          i < removedSpace.length - 1 &&
+          (removedSpace[i + 1].before.includes('\n') || /^\n+$/.test(removedSpace[i + 1].text));
         // When a whitespace-only box is sandwiched between two multimedia
         // boxes (e.g., two consecutive images), we treat it like the spaces
         // around a block element so it doesn't generate a blank line.
@@ -836,7 +856,10 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
           i < removedSpace.length - 1 &&
           removedSpace[i + 1].multimedia.length > 0 &&
           removedSpace[i + 1].multimedia.length === removedSpace[i + 1].text.length;
-        return !((afterBlock || beforeBlock || afterMedia || beforeMedia) && /^[ \t]*$/.test(child.text));
+        return !(
+          (afterBlock || beforeBlock || afterMedia || beforeMedia) &&
+          /^[ \t]*$/.test(child.text)
+        );
       });
       if (afterRemoveSpace.length === removedSpace.length) {
         break;
@@ -1040,11 +1063,17 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
       );
     };
 
-    const items = listSelf.contents().toArray().map(item => renderListItem(item));
+    const items = listSelf
+      .contents()
+      .toArray()
+      .map(item => renderListItem(item));
     return this.handleParagraph(this.concatMarkdownBoxes(items, listSelf), listSelf);
   }
 
-  protected processMultipleTableRows(elements: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): StringTableRow[] {
+  protected processMultipleTableRows(
+    elements: cheerio.Cheerio<any>,
+    $: cheerio.CheerioAPI
+  ): StringTableRow[] {
     const escapeInTable = (text: string) => {
       return text.replace(/\|/g, '\\|');
     };
@@ -1132,7 +1161,11 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
       let paragraphs = this.writeElementTrees(element.contents(), $, element);
       return this.handleParagraph(paragraphs, element);
     } else if (element.is('span')) {
-      return this.makeBox(this.writeElementTrees(element.contents(), $, element), 'inline', element);
+      return this.makeBox(
+        this.writeElementTrees(element.contents(), $, element),
+        'inline',
+        element
+      );
     } else if (element.is('nl')) {
       const nlText = '\n'.repeat(parseInt(element.attr('count') || '1'));
       return {
@@ -1151,13 +1184,33 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         element
       );
     } else if (element.is('b')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '**', '**', element);
+      return this.wrapBox(
+        this.writeElementTrees(element.contents(), $, element),
+        '**',
+        '**',
+        element
+      );
     } else if (element.is('i')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '*', '*', element);
+      return this.wrapBox(
+        this.writeElementTrees(element.contents(), $, element),
+        '*',
+        '*',
+        element
+      );
     } else if (element.is('s')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '~~', '~~', element);
+      return this.wrapBox(
+        this.writeElementTrees(element.contents(), $, element),
+        '~~',
+        '~~',
+        element
+      );
     } else if (element.is('u')) {
-      return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '__', '__', element);
+      return this.wrapBox(
+        this.writeElementTrees(element.contents(), $, element),
+        '__',
+        '__',
+        element
+      );
     } else if (element.is('code')) {
       let paragraphs;
       if (element.attr('inline') === 'false') {
@@ -1170,7 +1223,12 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         return this.handleParagraph(paragraphs, element);
       } else {
         // inline = true or undefined
-        return this.wrapBox(this.writeElementTrees(element.contents(), $, element), '`', '`', element);
+        return this.wrapBox(
+          this.writeElementTrees(element.contents(), $, element),
+          '`',
+          '`',
+          element
+        );
       }
     } else if (element.is('table')) {
       const contents = element.contents();
@@ -1211,7 +1269,11 @@ export class MarkdownWriter extends Writer<MarkdownOptions> {
         element.attr('presentation') === 'markup' &&
         element.attr('markup-lang') === this.markupLanguage()
       ) {
-        return this.makeBox(this.writeElementTrees(element.contents(), $, element), 'inline', element);
+        return this.makeBox(
+          this.writeElementTrees(element.contents(), $, element),
+          'inline',
+          element
+        );
       } else {
         const content = new EnvironmentDispatcher(this.ir).writeElementTree(element, $);
         const { output, mappings, multimedia } = content;
@@ -1265,7 +1327,9 @@ export class HtmlWriter extends Writer<HtmlOptions> {
     element: cheerio.Cheerio<any>,
     $: cheerio.CheerioAPI
   ) {
-    if (!(element.is('thead') || element.is('tbody') || element.is('tcell') || element.is('trow'))) {
+    if (
+      !(element.is('thead') || element.is('tbody') || element.is('tcell') || element.is('trow'))
+    ) {
       this.raiseError(`Only thead, tbody and tcell should be handled, not ${element}`, element);
       return;
     }
@@ -1317,7 +1381,12 @@ export class HtmlWriter extends Writer<HtmlOptions> {
       for (let i = 0; i < count; i++) {
         document.ele('br');
       }
-    } else if (element.is('thead') || element.is('tbody') || element.is('trow') || element.is('tcell')) {
+    } else if (
+      element.is('thead') ||
+      element.is('tbody') ||
+      element.is('trow') ||
+      element.is('tcell')
+    ) {
       this.handleTableHeadBody(document, element, $);
     } else if (element.is('env')) {
       if (element.attr('presentation') === 'markup' && element.attr('markup-lang') === 'html') {
@@ -1707,7 +1776,10 @@ export class XmlWriter extends SerializeWriter<XmlOptions> {
     } else if (typeof object === 'object') {
       if (Array.isArray(object)) {
         for (const item of object) {
-          if ((typeof item === 'object' && item && Object.keys(item).length > 1) || typeof item !== 'object') {
+          if (
+            (typeof item === 'object' && item && Object.keys(item).length > 1) ||
+            typeof item !== 'object'
+          ) {
             this.addNode(document.ele(this.options.xmlListItemName), item);
           } else {
             this.addNode(document, item);
@@ -1812,9 +1884,15 @@ export class MultiMediaWriter extends Writer<MultiMediaOptions> {
     return {};
   }
 
-  private handleImageOrAudio(element: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): WriterPartialResult {
+  private handleImageOrAudio(
+    element: cheerio.Cheerio<any>,
+    $: cheerio.CheerioAPI
+  ): WriterPartialResult {
     if (!element.is('img') && !element.is('audio')) {
-      return this.raiseError(`Invalid element: Only <img> or <audio> tags are allowed. Found: ${element}`, element);
+      return this.raiseError(
+        `Invalid element: Only <img> or <audio> tags are allowed. Found: ${element}`,
+        element
+      );
     }
     const base64 = element.attr('base64');
     const alt = element.attr('alt');
@@ -1838,6 +1916,102 @@ export class MultiMediaWriter extends Writer<MultiMediaOptions> {
     } else {
       return this.raiseError('No base64 or alt attribute in multimedia.', element);
     }
+  }
+
+  private handleToolRequest(
+    element: cheerio.Cheerio<any>,
+    $: cheerio.CheerioAPI
+  ): WriterPartialResult {
+    if (!element.is('toolrequest')) {
+      return this.raiseError(
+        `Invalid element: Only <toolrequest> tags are allowed. Found: ${element}`,
+        element
+      );
+    }
+    const id = element.attr('id');
+    const name = element.attr('name');
+    const content = element.attr('content');
+
+    if (!id || !name) {
+      return this.raiseError('Tool request must have id and name attributes.', element);
+    }
+
+    let parameters: any;
+    try {
+      parameters = content ? JSON.parse(content) : {};
+    } catch (e) {
+      return this.raiseError(`Invalid JSON content in tool request: ${content}`, element);
+    }
+
+    return {
+      output: SPECIAL_CHARACTER,
+      mappings: [this.createMappingNode(element, 1)],
+      multimedia: [
+        {
+          type: 'application/vnd.poml.toolrequest',
+          position: 'here' as Position,
+          index: 0,
+          content: parameters,
+          id,
+          name
+        }
+      ]
+    };
+  }
+
+  private handleToolResponse(
+    element: cheerio.Cheerio<any>,
+    $: cheerio.CheerioAPI
+  ): WriterPartialResult {
+    if (!element.is('toolresponse')) {
+      return this.raiseError(
+        `Invalid element: Only <toolresponse> tags are allowed. Found: ${element}`,
+        element
+      );
+    }
+    const id = element.attr('id');
+    const name = element.attr('name');
+
+    if (!id || !name) {
+      return this.raiseError('Tool response must have id and name attributes.', element);
+    }
+
+    // Extract children content using source indices.
+    // This is a bit hacky and we will lose all the mappings from the children.
+    // But make it work without hack requires a refactor of multimedia processing.
+    const childrenContentPartial = this.writeElementTrees(element.contents(), $);
+    const resultWithSourceMap = this.buildSourceMap({
+      input: this.ir,
+      output: childrenContentPartial.output,
+      mappings: childrenContentPartial.mappings,
+      multimedia: childrenContentPartial.multimedia,
+      speakers: []
+    }).map(s => ({
+      startIndex: s.inputStart,
+      endIndex: s.inputEnd,
+      irStartIndex: s.irStart,
+      irEndIndex: s.irEnd,
+      content: s.content
+    }));
+    const childrenContent = richContentFromSourceMap(resultWithSourceMap);
+    if (childrenContent === '' || (Array.isArray(childrenContent) && childrenContent.length === 0)) {
+      return this.raiseError('Tool response must have children content.', element);
+    }
+
+    return {
+      output: SPECIAL_CHARACTER,
+      mappings: [this.createMappingNode(element, 1)],
+      multimedia: [
+        {
+          type: 'application/vnd.poml.toolresponse',
+          position: 'here' as Position,
+          index: 0,
+          content: childrenContent,
+          id,
+          name
+        }
+      ]
+    };
   }
 
   public writeElementTrees(
@@ -1872,6 +2046,10 @@ export class MultiMediaWriter extends Writer<MultiMediaOptions> {
       }
     } else if (element.is('img') || element.is('audio')) {
       return this.handleImageOrAudio(element, $);
+    } else if (element.is('toolrequest')) {
+      return this.handleToolRequest(element, $);
+    } else if (element.is('toolresponse')) {
+      return this.handleToolResponse(element, $);
     } else {
       return this.raiseError('Multimedia writer is unable to process this element.', element);
     }
