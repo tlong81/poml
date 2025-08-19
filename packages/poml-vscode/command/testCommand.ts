@@ -436,8 +436,9 @@ export class TestCommand implements Command {
     const speakerToRole = {
       ai: 'assistant',
       human: 'user',
-      system: 'system'
-    }
+      system: 'system',
+      tool: 'tool'
+    };
     const result: ModelMessage[] = [];
     for (const msg of messages) {
       if (!msg.speaker) {

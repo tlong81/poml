@@ -1451,8 +1451,12 @@ const compareVersions = (a: string, b: string): number => {
   for (let i = 0; i < Math.max(versionA.parts.length, versionB.parts.length); i++) {
     const na = versionA.parts[i] || 0;
     const nb = versionB.parts[i] || 0;
-    if (na > nb) return 1;
-    if (na < nb) return -1;
+    if (na > nb) {
+      return 1;
+    }
+    if (na < nb) {
+      return -1;
+    }
   }
 
   // If base versions are equal, handle prerelease comparison
@@ -1464,8 +1468,12 @@ const compareVersions = (a: string, b: string): number => {
   }
   if (versionA.isPrerelease && versionB.isPrerelease) {
     // Both are prereleases, compare timestamps
-    if (versionA.timestamp > versionB.timestamp) return 1;
-    if (versionA.timestamp < versionB.timestamp) return -1;
+    if (versionA.timestamp > versionB.timestamp) {
+      return 1;
+    }
+    if (versionA.timestamp < versionB.timestamp) {
+      return -1;
+    }
   }
 
   return 0;
