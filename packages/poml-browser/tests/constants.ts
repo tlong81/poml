@@ -9,10 +9,10 @@ export const htmlPages = [
 ];
 
 export const pdfFiles = [
-  "test/assets/google-doc-document.pdf",
-  "test/assets/linenumber-with-subfigures.pdf",
-  "test/assets/multicolumn.pdf",
-  "test/assets/pdflatex-4-pages.pdf",
-  "test/assets/pdflatex-image.pdf",
-  "test/assets/trivial-libre-office-writer.pdf",
+  "tests/assets/google-doc-document.pdf",
+  "tests/assets/linenumber-with-subfigures.pdf",
+  "tests/assets/multicolumn.pdf",
+  "tests/assets/pdflatex-4-pages.pdf",
+  "tests/assets/pdflatex-image.pdf",
+  "tests/assets/trivial-libre-office-writer.pdf",
 ];
