@@ -11,14 +11,15 @@ import {
   Badge,
   Box,
   ActionIcon,
-  Select,
   TextInput,
-  Tooltip,
   Image,
-  Switch
+  Switch,
+  Menu
 } from '@mantine/core';
 import {
   IconTrash,
+  IconEdit,
+  IconEditOff,
   IconChevronDown,
   IconChevronRight,
   IconFile,
@@ -138,7 +139,7 @@ export const CardItem: React.FC<CardItemProps> = ({
           >
             <>
                 <Group justify="space-between" mb="xs">
-                  <Group gap="xs">
+                  <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
                     {isNestedContent(card.content) && (
                       <ActionIcon
                         size="sm"
@@ -154,8 +155,21 @@ export const CardItem: React.FC<CardItemProps> = ({
                         value={titleEditValue}
                         onChange={(e) => setTitleEditValue(e.target.value)}
                         placeholder="Card title"
-                        size="xs"
-                        style={{ width: '200px' }}
+                        size="sm"
+                        fw={600}
+                        variant="unstyled"
+                        style={{ flex: 1, minWidth: 0 }}
+                        styles={{
+                          input: {
+                            fontWeight: 600,
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '4px',
+                            padding: '2px 4px',
+                            '&:focus': {
+                              borderColor: '#228be6'
+                            }
+                          }
+                        }}
                       />
                     ) : (
                       card.title && (
@@ -166,19 +180,33 @@ export const CardItem: React.FC<CardItemProps> = ({
                     )}
                     
                     {isEditMode ? (
-                      <Select
-                        size="xs"
-                        value={card.componentType || getDefaultComponentType(card)}
-                        onChange={(value) => onUpdate({ 
-                          ...card, 
-                          componentType: value as POMLComponentType 
-                        })}
-                        data={validComponentTypes.map(type => ({
-                          value: type,
-                          label: type
-                        }))}
-                        style={{ width: '120px' }}
-                      />
+                      <Menu shadow="md" width={150}>
+                        <Menu.Target>
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            leftSection={ComponentIcons[card.componentType || getDefaultComponentType(card)]}
+                            rightSection={<IconChevronDown size={12} />}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            {card.componentType || getDefaultComponentType(card)}
+                          </Badge>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          {validComponentTypes.map(type => (
+                            <Menu.Item
+                              key={type}
+                              leftSection={ComponentIcons[type]}
+                              onClick={() => onUpdate({ 
+                                ...card, 
+                                componentType: type as POMLComponentType 
+                              })}
+                            >
+                              {type}
+                            </Menu.Item>
+                          ))}
+                        </Menu.Dropdown>
+                      </Menu>
                     ) : (
                       <Badge
                         size="sm"
@@ -191,9 +219,9 @@ export const CardItem: React.FC<CardItemProps> = ({
                   </Group>
                   
                   {editable && (
-                    <Group gap="xs">
+                    <Group gap="xs" style={{ flexShrink: 0 }}>
                       <Switch
-                        size="xs"
+                        size="sm"
                         checked={isEditMode}
                         onChange={(event) => {
                           const newEditMode = event.currentTarget.checked;
@@ -203,10 +231,8 @@ export const CardItem: React.FC<CardItemProps> = ({
                             handleEditModeConfirm();
                           }
                         }}
-                        label="Edit"
-                        styles={{
-                          label: { fontSize: '12px' }
-                        }}
+                        onLabel={<IconEdit size={12} stroke={2.5} />}
+                        offLabel={<IconEditOff size={12} stroke={2.5} />}
                       />
                       
                       <ActionIcon
