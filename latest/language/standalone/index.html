@@ -1886,49 +1886,56 @@
 <p>The <code>&lt;let&gt;</code> tag allows you to define variables, import data from external files, and set values within your POML template.</p>
 <h4 id="syntax-1-setting-a-variable-from-a-value">Syntax 1: Setting a variable from a value<a class="headerlink" href="#syntax-1-setting-a-variable-from-a-value" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;greeting&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;Hello, world!&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;greeting&quot;</span><span class="nt">&gt;</span>Hello,<span class="w"> </span>world!<span class="nt">&lt;/let&gt;</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>{{greeting}}<span class="nt">&lt;/p&gt;</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
-<p>This will output "Hello, world!".  The <code>value</code> attribute can contain a string, number, or a POML expression.</p>
-<h4 id="syntax-2-importing-data-from-a-file">Syntax 2: Importing data from a file<a class="headerlink" href="#syntax-2-importing-data-from-a-file" title="Permanent link">&para;</a></h4>
+<p>This will output "Hello, world!". When using the content approach (as shown above), the text is treated as a literal string.</p>
+<p>Alternatively, you can use the <code>value</code> attribute which must contain an evaluatable JavaScript expression:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;users&quot;</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;users.json&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>First<span class="w"> </span>user:<span class="w"> </span>{{users[0].name}}<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;greeting&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;&#39;Hello, world!&#39;&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>{{greeting}}<span class="nt">&lt;/p&gt;</span>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nt">&lt;/poml&gt;</span>
+</code></pre></div>
+<p>Note that when using the <code>value</code> attribute, string literals must be properly quoted (e.g., <code>"'Hello, world!'"</code> or <code>'"Hello, world!"'</code>) since the value is evaluated as JavaScript. The <code>value</code> attribute can contain strings, numbers, arrays, objects, or any valid JavaScript expression.</p>
+<h4 id="syntax-2-importing-data-from-a-file">Syntax 2: Importing data from a file<a class="headerlink" href="#syntax-2-importing-data-from-a-file" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;users&quot;</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;users.json&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>First<span class="w"> </span>user:<span class="w"> </span>{{users[0].name}}<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>This imports the contents of <code>users.json</code> and assigns it to the <code>users</code> variable.  The <code>src</code> attribute specifies the path to the file (relative to the POML file). The optional <code>type</code> attribute can specify the file type (e.g., "json", "text", "csv"). If not provided, POML attempts to infer it from the file extension.</p>
 <h4 id="syntax-3-importing-data-from-a-file-without-a-name">Syntax 3: Importing data from a file without a name<a class="headerlink" href="#syntax-3-importing-data-from-a-file-without-a-name" title="Permanent link">&para;</a></h4>
-<p><div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;config.json&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>API<span class="w"> </span>Key:<span class="w"> </span>{{apiKey}}<span class="nt">&lt;/p&gt;</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nt">&lt;/poml&gt;</span>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;config.json&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>API<span class="w"> </span>Key:<span class="w"> </span>{{apiKey}}<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 If <code>config.json</code> contains <code>{ "apiKey": "your_api_key" }</code>, this will output "API Key: your_api_key". When you use <code>src</code> without <code>name</code>, and the file content is a JSON object, the properties of that object are directly added to the context.</p>
 <h4 id="syntax-4-setting-a-variable-using-inline-json">Syntax 4: Setting a variable using inline JSON<a class="headerlink" href="#syntax-4-setting-a-variable-using-inline-json" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;person&quot;</span><span class="nt">&gt;</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>{
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">      </span>&quot;name&quot;:<span class="w"> </span>&quot;Alice&quot;,
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span>&quot;age&quot;:<span class="w"> </span>30
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>}
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nt">&lt;/let&gt;</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>Name:<span class="w"> </span>{{person.name}},<span class="w"> </span>Age:<span class="w"> </span>{{person.age}}<span class="nt">&lt;/p&gt;</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;person&quot;</span><span class="nt">&gt;</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>{
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">      </span>&quot;name&quot;:<span class="w"> </span>&quot;Alice&quot;,
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span>&quot;age&quot;:<span class="w"> </span>30
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>}
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="nt">&lt;/let&gt;</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>Name:<span class="w"> </span>{{person.name}},<span class="w"> </span>Age:<span class="w"> </span>{{person.age}}<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>This defines a <code>person</code> variable with the given JSON object. You can also specify the <code>type</code> attribute:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;count&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;integer&quot;</span><span class="nt">&gt;</span>5<span class="nt">&lt;/let&gt;</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>Count:<span class="w"> </span>{{count}}<span class="nt">&lt;/p&gt;</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;count&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;integer&quot;</span><span class="nt">&gt;</span>5<span class="nt">&lt;/let&gt;</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>Count:<span class="w"> </span>{{count}}<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <h4 id="syntax-5-setting-a-variable-from-an-expression">Syntax 5: Setting a variable from an expression<a class="headerlink" href="#syntax-5-setting-a-variable-from-an-expression" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;base&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;10&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;increment&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;5&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;total&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;{{ base + increment }}&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>Total:<span class="w"> </span>{{<span class="w"> </span>total<span class="w"> </span>}}<span class="nt">&lt;/p&gt;</span><span class="w">  </span><span class="cm">&lt;!-- Output: Total: 15 --&gt;</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;base&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;10&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;increment&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;5&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;total&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;{{ base + increment }}&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>Total:<span class="w"> </span>{{<span class="w"> </span>total<span class="w"> </span>}}<span class="nt">&lt;/p&gt;</span><span class="w">  </span><span class="cm">&lt;!-- Output: Total: 15 --&gt;</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <h3 id="type-autocasting-in-attributes">Type-Autocasting in Attributes<a class="headerlink" href="#type-autocasting-in-attributes" title="Permanent link">&para;</a></h3>
 <p>The attributes of components will be automatically cast based on their defined types in the component documentation. This means you don't have to worry about manually converting types in many cases.</p>
@@ -1939,22 +1946,22 @@ If <code>config.json</code> contains <code>{ "apiKey": "your_api_key" }</code>, 
 <li><strong>String:</strong> If an attribute is a string, no casting is performed.</li>
 </ul>
 <p>In the following example, the first auto-casting happened at let, where <code>true</code> is converted to boolean at <code>let</code> expression.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;boolVar&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;boolean&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;true&quot;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;numVar&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;number&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;42&quot;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;objVar&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;object&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;{{ { key: &#39;value&#39; } }}&quot;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">&lt;MyComponent</span><span class="w"> </span><span class="na">boolProp=</span><span class="s">&quot;{{boolVar}}&quot;</span><span class="w"> </span><span class="na">numProp=</span><span class="s">&quot;{{numVar}}&quot;</span><span class="w"> </span><span class="na">objProp=</span><span class="s">&quot;{{objVar}}&quot;</span><span class="w"> </span><span class="na">stringProp=</span><span class="s">&quot;hello&quot;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;boolVar&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;boolean&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;true&quot;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;numVar&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;number&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;42&quot;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;objVar&quot;</span><span class="w"> </span><span class="na">type=</span><span class="s">&quot;object&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;{{ { key: &#39;value&#39; } }}&quot;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">&lt;MyComponent</span><span class="w"> </span><span class="na">boolProp=</span><span class="s">&quot;{{boolVar}}&quot;</span><span class="w"> </span><span class="na">numProp=</span><span class="s">&quot;{{numVar}}&quot;</span><span class="w"> </span><span class="na">objProp=</span><span class="s">&quot;{{objVar}}&quot;</span><span class="w"> </span><span class="na">stringProp=</span><span class="s">&quot;hello&quot;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>If MyComponent is defined with <code>boolProp</code> as boolean, <code>numProp</code> as number, <code>objProp</code> as object, and <code>stringProp</code> as string, the values will be interpreted and auto-casted again when <code>MyComponent</code> is used.</p>
 <h3 id="for-attribute">For Attribute<a class="headerlink" href="#for-attribute" title="Permanent link">&para;</a></h3>
 <p>To loop over a list, use the <code>for</code> attribute. The syntax is <code>for="itemName in listName"</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">&lt;list&gt;</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">&lt;item</span><span class="w"> </span><span class="na">for=</span><span class="s">&quot;item in [&#39;apple&#39;, &#39;banana&#39;, &#39;cherry&#39;]&quot;</span><span class="nt">&gt;</span>{{item}}<span class="nt">&lt;/item&gt;</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">&lt;/list&gt;</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">&lt;list&gt;</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">&lt;item</span><span class="w"> </span><span class="na">for=</span><span class="s">&quot;item in [&#39;apple&#39;, &#39;banana&#39;, &#39;cherry&#39;]&quot;</span><span class="nt">&gt;</span>{{item}}<span class="nt">&lt;/item&gt;</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">&lt;/list&gt;</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>This will render a list with "apple", "banana", and "cherry".</p>
 <h4 id="loop-variables">Loop Variables<a class="headerlink" href="#loop-variables" title="Permanent link">&para;</a></h4>
@@ -1966,75 +1973,75 @@ If <code>config.json</code> contains <code>{ "apiKey": "your_api_key" }</code>, 
 <li><code>loop.last</code>: <code>true</code> if it's the last iteration, <code>false</code> otherwise.</li>
 </ul>
 <p>Example:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;all_demos&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&#39;[</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="s">    { &quot;input&quot;: &quot;What is your name?&quot;, &quot;output&quot;: &quot;My name is POML.&quot; },</span>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="s">    { &quot;input&quot;: &quot;What can you do?&quot;, &quot;output&quot;: &quot;I can generate prompts.&quot; }</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="s">]&#39;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="nt">&lt;examples&gt;</span>
-<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">&lt;example</span><span class="w"> </span><span class="na">for=</span><span class="s">&quot;example in all_demos&quot;</span><span class="w"> </span><span class="na">chat=</span><span class="s">&quot;false&quot;</span><span class="w"> </span><span class="na">caption=</span><span class="s">&quot;Example {{ loop.index + 1 }}&quot;</span><span class="w"> </span><span class="na">captionStyle=</span><span class="s">&quot;header&quot;</span><span class="nt">&gt;</span>
-<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">      </span><span class="nt">&lt;input&gt;</span>{{<span class="w"> </span>example.input<span class="w"> </span>}}<span class="nt">&lt;/input&gt;</span>
-<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">      </span><span class="nt">&lt;output&gt;</span>{{<span class="w"> </span>example.output<span class="w"> </span>}}<span class="nt">&lt;/output&gt;</span>
-<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">    </span><span class="nt">&lt;/example&gt;</span>
-<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">  </span><span class="nt">&lt;/examples&gt;</span>
-<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;all_demos&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&#39;[</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="s">    { &quot;input&quot;: &quot;What is your name?&quot;, &quot;output&quot;: &quot;My name is POML.&quot; },</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="s">    { &quot;input&quot;: &quot;What can you do?&quot;, &quot;output&quot;: &quot;I can generate prompts.&quot; }</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="s">]&#39;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="nt">&lt;examples&gt;</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">&lt;example</span><span class="w"> </span><span class="na">for=</span><span class="s">&quot;example in all_demos&quot;</span><span class="w"> </span><span class="na">chat=</span><span class="s">&quot;false&quot;</span><span class="w"> </span><span class="na">caption=</span><span class="s">&quot;Example {{ loop.index + 1 }}&quot;</span><span class="w"> </span><span class="na">captionStyle=</span><span class="s">&quot;header&quot;</span><span class="nt">&gt;</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">      </span><span class="nt">&lt;input&gt;</span>{{<span class="w"> </span>example.input<span class="w"> </span>}}<span class="nt">&lt;/input&gt;</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">      </span><span class="nt">&lt;output&gt;</span>{{<span class="w"> </span>example.output<span class="w"> </span>}}<span class="nt">&lt;/output&gt;</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">    </span><span class="nt">&lt;/example&gt;</span>
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span><span class="nt">&lt;/examples&gt;</span>
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>This will generate two examples, with captions "Example 1" and "Example 2", displaying the input and output from each demo in the <code>all_demos</code> array. Note that we use <code>loop.index + 1</code> because <code>loop.index</code> starts from 0.</p>
 <h3 id="if-condition">If Condition<a class="headerlink" href="#if-condition" title="Permanent link">&para;</a></h3>
 <p>You can conditionally render elements using the <code>if</code> attribute:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;isVisible&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;true&quot;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;isHidden&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;{{ !isVisible }}&quot;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">&lt;p</span><span class="w"> </span><span class="na">if=</span><span class="s">&quot;isVisible&quot;</span><span class="nt">&gt;</span>This<span class="w"> </span>paragraph<span class="w"> </span>is<span class="w"> </span>visible.<span class="nt">&lt;/p&gt;</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">&lt;p</span><span class="w"> </span><span class="na">if=</span><span class="s">&quot;isHidden&quot;</span><span class="nt">&gt;</span>This<span class="w"> </span>paragraph<span class="w"> </span>is<span class="w"> </span>hidden.<span class="nt">&lt;/p&gt;</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;isVisible&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;true&quot;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;isHidden&quot;</span><span class="w"> </span><span class="na">value=</span><span class="s">&quot;{{ !isVisible }}&quot;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">&lt;p</span><span class="w"> </span><span class="na">if=</span><span class="s">&quot;isVisible&quot;</span><span class="nt">&gt;</span>This<span class="w"> </span>paragraph<span class="w"> </span>is<span class="w"> </span>visible.<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">&lt;p</span><span class="w"> </span><span class="na">if=</span><span class="s">&quot;isHidden&quot;</span><span class="nt">&gt;</span>This<span class="w"> </span>paragraph<span class="w"> </span>is<span class="w"> </span>hidden.<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>If <code>isVisible</code> is <code>true</code>, the first paragraph will be rendered. The second paragraph will not be rendered because isHidden is false. The value of <code>if</code> can be a simple variable name (which is treated as a boolean) or a POML expression.</p>
 <h3 id="include-files">Include Files<a class="headerlink" href="#include-files" title="Permanent link">&para;</a></h3>
 <p>You can split prompts into multiple files and include them using the <code>&lt;include&gt;</code> tag.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">&lt;include</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;snippet.poml&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">&lt;include</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;snippet.poml&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>The file specified in <code>src</code> is read and its contents are injected as if they were written in place. Variables from the current context are available inside the included file. The <code>for</code> and <code>if</code> attributes work as expected:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">&lt;include</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;row.poml&quot;</span><span class="w"> </span><span class="na">for=</span><span class="s">&quot;i in [1,2,3]&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">&lt;include</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;footer.poml&quot;</span><span class="w"> </span><span class="na">if=</span><span class="s">&quot;showFooter&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">&lt;include</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;row.poml&quot;</span><span class="w"> </span><span class="na">for=</span><span class="s">&quot;i in [1,2,3]&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">&lt;include</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;footer.poml&quot;</span><span class="w"> </span><span class="na">if=</span><span class="s">&quot;showFooter&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <h2 id="stylesheet">Stylesheet<a class="headerlink" href="#stylesheet" title="Permanent link">&para;</a></h2>
 <p>POML allows you to define styles for your elements using the <code>&lt;stylesheet&gt;</code> tag.  This enables you to apply CSS-like styles (or, more generally, component attributes) to your markup.</p>
 <h3 id="using-stylesheet">Using Stylesheet<a class="headerlink" href="#using-stylesheet" title="Permanent link">&para;</a></h3>
 <p>You can define styles within a <code>&lt;stylesheet&gt;</code> tag. The stylesheet must be a valid JSON object and must be placed directly under the root <code>&lt;poml&gt;</code> element.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">&lt;stylesheet&gt;</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span>{
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">      </span>&quot;p&quot;:<span class="w"> </span>{
-<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">        </span>&quot;syntax&quot;:<span class="w"> </span>&quot;json&quot;
-<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">      </span>}
-<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span>}
-<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">  </span><span class="nt">&lt;/stylesheet&gt;</span>
-<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>This<span class="w"> </span>text<span class="w"> </span>will<span class="w"> </span>be<span class="w"> </span>rendered<span class="w"> </span>as<span class="w"> </span>JSON.<span class="nt">&lt;/p&gt;</span>
-<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">&lt;stylesheet&gt;</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span>{
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">      </span>&quot;p&quot;:<span class="w"> </span>{
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">        </span>&quot;syntax&quot;:<span class="w"> </span>&quot;json&quot;
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">      </span>}
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span>}
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">  </span><span class="nt">&lt;/stylesheet&gt;</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">  </span><span class="nt">&lt;p&gt;</span>This<span class="w"> </span>text<span class="w"> </span>will<span class="w"> </span>be<span class="w"> </span>rendered<span class="w"> </span>as<span class="w"> </span>JSON.<span class="nt">&lt;/p&gt;</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>In this example, all <code>&lt;p&gt;</code> elements will have their <code>syntax</code> attribute set to <code>"json"</code>. You can set any attribute of a component using the stylesheet.</p>
 <h3 id="classname-attribute">ClassName Attribute<a class="headerlink" href="#classname-attribute" title="Permanent link">&para;</a></h3>
 <p>Elements can be identified with a <code>className</code> attribute for styling.  The stylesheet can then target elements with specific class names using a CSS-like selector syntax (using a dot <code>.</code> before the class name).</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">&lt;poml&gt;</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">&lt;table</span><span class="w"> </span><span class="na">className=</span><span class="s">&quot;csv&quot;</span><span class="w"> </span><span class="na">records=</span><span class="s">&quot;[[1,2,3],[4,5,6]]&quot;</span><span class="nt">/&gt;</span>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nt">&lt;stylesheet&gt;</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span>{
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">      </span>&quot;.csv&quot;:<span class="w"> </span>{
-<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">        </span>&quot;syntax&quot;:<span class="w"> </span>&quot;csv&quot;,
-<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">        </span>&quot;writerOptions&quot;:<span class="w"> </span>&quot;{\\&quot;csvSeparator\\&quot;:<span class="w"> </span>\\&quot;;\\&quot;,<span class="w"> </span>\\&quot;csvHeader\\&quot;:<span class="w"> </span>false}&quot;
-<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">      </span>}
-<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">    </span>}
-<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">  </span><span class="nt">&lt;/stylesheet&gt;</span>
-<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="nt">&lt;/poml&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">&lt;poml&gt;</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&lt;table</span><span class="w"> </span><span class="na">className=</span><span class="s">&quot;csv&quot;</span><span class="w"> </span><span class="na">records=</span><span class="s">&quot;[[1,2,3],[4,5,6]]&quot;</span><span class="nt">/&gt;</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">&lt;stylesheet&gt;</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span>{
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">      </span>&quot;.csv&quot;:<span class="w"> </span>{
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">        </span>&quot;syntax&quot;:<span class="w"> </span>&quot;csv&quot;,
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">        </span>&quot;writerOptions&quot;:<span class="w"> </span>&quot;{\\&quot;csvSeparator\\&quot;:<span class="w"> </span>\\&quot;;\\&quot;,<span class="w"> </span>\\&quot;csvHeader\\&quot;:<span class="w"> </span>false}&quot;
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">      </span>}
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">    </span>}
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">  </span><span class="nt">&lt;/stylesheet&gt;</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="nt">&lt;/poml&gt;</span>
 </code></pre></div>
 <p>Here, the <code>&lt;table&gt;</code> element has the class name "csv".  The stylesheet targets elements with the class "csv" (using <code>.csv</code>) and sets their <code>syntax</code> to "csv" and <code>writerOptions</code> to a specific JSON string. Note the escaped backslashes (<code>\\</code>) in the <code>writerOptions</code> value, which are necessary because the stylesheet itself is a JSON string.  This example will render to:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>1;2;3
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>4;5;6
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>1;2;3
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>4;5;6
 </code></pre></div>
 <p><strong>NOTE:</strong> <em>The writerOptions API is experimental and is subject to change.</em></p>
 
