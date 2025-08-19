@@ -22,7 +22,7 @@ Meta elements fall into two categories based on whether they include a `type` at
 - Component management (`components`)
 
 **With type attribute** - Used for specific functionalities:
-- `type="responseSchema"` - Defines structured output format for AI responses
+- `type="schema"` - Defines structured output format for AI responses
 - `type="tool"` - Registers callable functions for AI models
 - `type="runtime"` - Sets language model execution parameters
 
@@ -35,7 +35,7 @@ Response schemas define the expected structure of AI-generated responses, ensuri
 Use the `lang="json"` attribute to specify JSON Schema format:
 
 ```xml
-<meta type="responseSchema" lang="json">
+<meta type="schema" lang="json">
   {
     "type": "object",
     "properties": {
@@ -52,7 +52,7 @@ Use the `lang="json"` attribute to specify JSON Schema format:
 Use the `lang="expr"` attribute (or omit it for auto-detection) to evaluate JavaScript expressions that return schemas:
 
 ```xml
-<meta type="responseSchema" lang="expr">
+<meta type="schema" lang="expr">
   z.object({
     name: z.string(),
     age: z.number().optional()
@@ -72,7 +72,7 @@ JSON schemas support template expressions using `{{ }}` syntax:
 
 ```xml
 <let name="maxAge" value="100" />
-<meta type="responseSchema" lang="json">
+<meta type="schema" lang="json">
   {
     "type": "object",
     "properties": {
@@ -93,7 +93,7 @@ Expression schemas are evaluated as JavaScript code with access to context varia
 
 ```xml
 <let name="fields" value='["name", "email", "age"]' />
-<meta type="responseSchema" lang="expr">
+<meta type="schema" lang="expr">
   z.object(
     Object.fromEntries(fields.map(f => [f, z.string()]))
   )
@@ -105,14 +105,14 @@ The expression can return either:
 - A plain JavaScript object treated as JSON Schema
 
 **Important limitations:**
-- Only one `responseSchema` meta element is allowed per document. Multiple response schemas will result in an error.
+- Only one `schema` meta element is allowed per document. Multiple response schemas will result in an error.
 - Response schemas cannot be used together with tool definitions in the same document. You must choose between structured responses or tool calling capabilities.
 
 ## Tool Registration
 
 Tool registration enables AI models to interact with external functions during conversation. Tools are function definitions that tell the AI model what functions are available, what parameters they expect, and what they do.
 
-**Important:** Tools and response schemas are mutually exclusive. You cannot use both `responseSchema` and `tool` meta elements in the same POML document.
+**Important:** Tools and response schemas are mutually exclusive. You cannot use both `schema` and `tool` meta elements in the same POML document.
 
 ### JSON Schema Format
 

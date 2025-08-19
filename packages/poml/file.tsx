@@ -346,7 +346,7 @@ export class PomlFile {
       if (element.name?.toLowerCase() === 'meta') {
         const langAttr = xmlAttribute(element, 'lang');
         const typeAttr = xmlAttribute(element, 'type');
-        const isSchemaType = typeAttr?.value === 'responseSchema' || typeAttr?.value === 'tool';
+        const isSchemaType = typeAttr?.value === 'schema' || typeAttr?.value === 'tool';
         const text = xmlElementText(element).trim();
 
         // Check if it's an expression (either explicit lang="expr" or auto-detected)
@@ -787,7 +787,7 @@ export class PomlFile {
       return false;
     }
     const metaType = xmlAttribute(element, 'type')?.value;
-    if (metaType === 'responseSchema') {
+    if (metaType === 'schema') {
       if (this.responseSchema) {
         this.reportError(
           'Multiple responseSchema meta elements found. Only one is allowed.',

@@ -249,7 +249,7 @@ describe('expressionEvaluation', () => {
   test('captures expression tokens for meta lang="expr"', () => {
     const text = `<poml>
       <let name="fields" value='["name", "age"]' />
-      <meta type="responseSchema" lang="expr">
+      <meta type="schema" lang="expr">
         z.object({
           name: z.string(),
           age: z.number()
@@ -290,7 +290,7 @@ describe('expressionEvaluation', () => {
     ErrorCollection.clear();
     const text = `<poml>
       <let name="num" value="42" />
-      <meta type="responseSchema" lang="expr">
+      <meta type="schema" lang="expr">
         z.object({ value: z.number().max(num) })
       </meta>
     </poml>`;
@@ -499,7 +499,7 @@ describe('lspFeatures', () => {
 describe('meta elements', () => {
   test('responseSchema with JSON', () => {
     const text = `<poml>
-      <meta type="responseSchema" lang="json">
+      <meta type="schema" lang="json">
         {
           "type": "object",
           "properties": {
@@ -527,7 +527,7 @@ describe('meta elements', () => {
   test('responseSchema with Zod', () => {
     ErrorCollection.clear();
     const text = `<poml>
-      <meta type="responseSchema">
+      <meta type="schema">
         z.object({
           name: z.string(),
           age: z.number().optional()
@@ -595,8 +595,8 @@ describe('meta elements', () => {
   test('multiple responseSchema error', () => {
     ErrorCollection.clear();
     const text = `<poml>
-      <meta type="responseSchema" lang="json">{"type": "string"}</meta>
-      <meta type="responseSchema" lang="json">{"type": "number"}</meta>
+      <meta type="schema" lang="json">{"type": "string"}</meta>
+      <meta type="schema" lang="json">{"type": "number"}</meta>
     </poml>`;
     const file = new PomlFile(text);
     file.react();
@@ -640,7 +640,7 @@ describe('meta elements', () => {
     ErrorCollection.clear();
     const text = `<poml>
       <let name="maxAge" value="100" />
-      <meta type="responseSchema" lang="json">
+      <meta type="schema" lang="json">
         {
           "type": "object",
           "properties": {
@@ -702,7 +702,7 @@ describe('meta elements', () => {
     ErrorCollection.clear();
     const text = `<poml>
       <let name="fields" value='{ "name": "string", "age": "number" }' />
-      <meta type="responseSchema" lang="expr">
+      <meta type="schema" lang="expr">
         z.object({
           name: z.string(),
           age: z.number(),
@@ -723,7 +723,7 @@ describe('meta elements', () => {
   test('malformed JSON syntax error', () => {
     ErrorCollection.clear();
     const text = `<poml>
-      <meta type="responseSchema" lang="json">
+      <meta type="schema" lang="json">
         {
           "type": "object",
           "properties": {
@@ -744,7 +744,7 @@ describe('meta elements', () => {
   test('invalid expression evaluation error', () => {
     ErrorCollection.clear();
     const text = `<poml>
-      <meta type="responseSchema" lang="expr">
+      <meta type="schema" lang="expr">
         z.object({
           name: z.nonexistent(),
           age: z.number()
@@ -762,7 +762,7 @@ describe('meta elements', () => {
   test('invalid OpenAPI schema structure', () => {
     ErrorCollection.clear();
     const text = `<poml>
-      <meta type="responseSchema" lang="json">
+      <meta type="schema" lang="json">
         "not an object"
       </meta>
     </poml>`;

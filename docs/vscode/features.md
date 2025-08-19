@@ -89,7 +89,7 @@ The CodeLens evaluation feature works with:
   
   <p>We have {{ count }} items: {{ items.join(', ') }}</p>
   
-  <meta type="responseSchema" lang="expr">
+  <meta type="schema" lang="expr">
     z.object({
       total: z.number().max(count),
       items: z.array(z.enum(items))
