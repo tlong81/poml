@@ -16,7 +16,6 @@ import {
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import {
   CardModel,
-  isNestedContent,
   createCard
 } from '@functions/cardModel';
 import { CardItem } from './CardItem';
@@ -116,43 +115,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
     onChange(updatedCards);
   }, [cards, onChange]);
   
-  const handleAddChild = useCallback((parentId: string, child: CardModel) => {
-    const updateCardRecursive = (cardList: CardModel[]): CardModel[] => {
-      return cardList.map(card => {
-        if (card.id === parentId) {
-          if (isNestedContent(card.content)) {
-            return {
-              ...card,
-              content: {
-                ...card.content,
-                children: [...card.content.children, child]
-              }
-            };
-          } else {
-            return {
-              ...card,
-              content: {
-                type: 'nested',
-                children: [child]
-              },
-              componentType: 'List'
-            };
-          }
-        } else if (isNestedContent(card.content)) {
-          return {
-            ...card,
-            content: {
-              ...card.content,
-              children: updateCardRecursive(card.content.children)
-            }
-          };
-        }
-        return card;
-      });
-    };
-    
-    onChange(updateCardRecursive(cards));
-  }, [cards, onChange]);
   
   
   return (
@@ -181,7 +143,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
                       onUpdate={handleUpdateCard}
                       onDelete={handleDeleteCard}
                       onCardClick={onCardClick}
-                      onAddChild={nestingLevel < maxNestingLevel ? handleAddChild : undefined}
                       editable={editable}
                       nestingLevel={nestingLevel}
                       maxNestingLevel={maxNestingLevel}

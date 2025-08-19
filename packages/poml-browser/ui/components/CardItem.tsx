@@ -9,21 +9,16 @@ import {
   Text,
   Group,
   Badge,
-  Stack,
   Box,
-  Button,
   ActionIcon,
   Select,
   TextInput,
-  Textarea,
   Tooltip,
-  Image
+  Image,
+  Switch
 } from '@mantine/core';
 import {
   IconTrash,
-  IconEdit,
-  IconPlus,
-  IconGripVertical,
   IconChevronDown,
   IconChevronRight,
   IconFile,
@@ -43,7 +38,6 @@ import {
   isNestedContent,
   getValidComponentTypes,
   getDefaultComponentType,
-  createCard,
   isImageBinaryContent,
   getBinaryContentDataUrl
 } from '@functions/cardModel';
@@ -54,7 +48,6 @@ export interface CardItemProps {
   onUpdate: (card: CardModel) => void;
   onDelete: (id: string) => void;
   onCardClick?: (card: CardModel) => void;
-  onAddChild?: (parentId: string, child: CardModel) => void;
   editable: boolean;
   nestingLevel: number;
   maxNestingLevel: number;
@@ -78,68 +71,24 @@ export const CardItem: React.FC<CardItemProps> = ({
   onUpdate,
   onDelete,
   onCardClick,
-  onAddChild,
   editable,
   nestingLevel,
   maxNestingLevel,
   EditableCardListComponent
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
-  const [editedCard, setEditedCard] = useState(card);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [titleEditValue, setTitleEditValue] = useState(card.title || '');
   
   const validComponentTypes = useMemo(
     () => getValidComponentTypes(card.content),
     [card.content]
   );
   
-  const handleSave = useCallback(() => {
-    onUpdate(editedCard);
-    setIsEditing(false);
-  }, [editedCard, onUpdate]);
+  const handleEditModeConfirm = useCallback(() => {
+    onUpdate({ ...card, title: titleEditValue });
+  }, [card, titleEditValue, onUpdate]);
   
-  const handleCancel = useCallback(() => {
-    setEditedCard(card);
-    setIsEditing(false);
-  }, [card]);
-  
-  const handleContentChange = useCallback((value: string) => {
-    if (isTextContent(editedCard.content)) {
-      setEditedCard({
-        ...editedCard,
-        content: { ...editedCard.content, value }
-      });
-    }
-  }, [editedCard]);
-  
-  const handleAddNestedCard = useCallback(() => {
-    if (!onAddChild || nestingLevel >= maxNestingLevel) return;
-    
-    const newCard = createCard({
-      content: { type: 'text', value: '' },
-      parentId: card.id
-    });
-    
-    if (isNestedContent(card.content)) {
-      onUpdate({
-        ...card,
-        content: {
-          ...card.content,
-          children: [...card.content.children, newCard]
-        }
-      });
-    } else {
-      // Convert to nested content
-      onUpdate({
-        ...card,
-        content: {
-          type: 'nested',
-          children: [newCard]
-        },
-        componentType: 'List'
-      });
-    }
-  }, [card, onAddChild, onUpdate, nestingLevel, maxNestingLevel]);
   
   const contentPreview = useMemo(() => {
     if (isTextContent(card.content)) {
@@ -170,9 +119,11 @@ export const CardItem: React.FC<CardItemProps> = ({
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
+          {...(editable ? provided.dragHandleProps : {})}
           style={{
             ...provided.draggableProps.style,
-            marginLeft: nestingLevel * 20
+            marginLeft: nestingLevel * 20,
+            cursor: editable ? (snapshot.isDragging ? 'grabbing' : 'grab') : 'default'
           }}
         >
           <Card
@@ -185,62 +136,9 @@ export const CardItem: React.FC<CardItemProps> = ({
               backgroundColor: snapshot.isDragging ? '#f0f0f0' : undefined
             }}
           >
-            {isEditing ? (
-              <Stack gap="xs">
-                <TextInput
-                  label="Title"
-                  value={editedCard.title || ''}
-                  onChange={(e) => setEditedCard({ ...editedCard, title: e.target.value })}
-                  placeholder="Optional title"
-                />
-                
-                <Select
-                  label="Component Type"
-                  value={editedCard.componentType || getDefaultComponentType(editedCard)}
-                  onChange={(value) => setEditedCard({ 
-                    ...editedCard, 
-                    componentType: value as POMLComponentType 
-                  })}
-                  data={validComponentTypes.map(type => ({
-                    value: type,
-                    label: type
-                  }))}
-                />
-                
-                {isTextContent(editedCard.content) && (
-                  <Textarea
-                    label="Content"
-                    value={editedCard.content.value}
-                    onChange={(e) => handleContentChange(e.target.value)}
-                    minRows={3}
-                    maxRows={50}
-                    autosize
-                  />
-                )}
-                
-                <Group justify="flex-end">
-                  <Button size="xs" variant="subtle" onClick={handleCancel}>
-                    Cancel
-                  </Button>
-                  <Button size="xs" onClick={handleSave}>
-                    Save
-                  </Button>
-                </Group>
-              </Stack>
-            ) : (
-              <>
+            <>
                 <Group justify="space-between" mb="xs">
                   <Group gap="xs">
-                    <div {...provided.dragHandleProps}>
-                      <IconGripVertical 
-                        size={18} 
-                        style={{ 
-                          cursor: editable ? 'grab' : 'default',
-                          opacity: editable ? 1 : 0.3
-                        }} 
-                      />
-                    </div>
-                    
                     {isNestedContent(card.content) && (
                       <ActionIcon
                         size="sm"
@@ -251,42 +149,65 @@ export const CardItem: React.FC<CardItemProps> = ({
                       </ActionIcon>
                     )}
                     
-                    {card.title && (
-                      <Text fw={600} size="sm">
-                        {card.title}
-                      </Text>
+                    {isEditMode ? (
+                      <TextInput
+                        value={titleEditValue}
+                        onChange={(e) => setTitleEditValue(e.target.value)}
+                        placeholder="Card title"
+                        size="xs"
+                        style={{ width: '200px' }}
+                      />
+                    ) : (
+                      card.title && (
+                        <Text fw={600} size="sm">
+                          {card.title}
+                        </Text>
+                      )
                     )}
                     
-                    <Badge
-                      size="sm"
-                      variant="light"
-                      leftSection={ComponentIcons[card.componentType || getDefaultComponentType(card)]}
-                    >
-                      {card.componentType || getDefaultComponentType(card)}
-                    </Badge>
+                    {isEditMode ? (
+                      <Select
+                        size="xs"
+                        value={card.componentType || getDefaultComponentType(card)}
+                        onChange={(value) => onUpdate({ 
+                          ...card, 
+                          componentType: value as POMLComponentType 
+                        })}
+                        data={validComponentTypes.map(type => ({
+                          value: type,
+                          label: type
+                        }))}
+                        style={{ width: '120px' }}
+                      />
+                    ) : (
+                      <Badge
+                        size="sm"
+                        variant="light"
+                        leftSection={ComponentIcons[card.componentType || getDefaultComponentType(card)]}
+                      >
+                        {card.componentType || getDefaultComponentType(card)}
+                      </Badge>
+                    )}
                   </Group>
                   
                   {editable && (
                     <Group gap="xs">
-                      {nestingLevel < maxNestingLevel && (
-                        <Tooltip label="Add nested card">
-                          <ActionIcon
-                            size="sm"
-                            variant="subtle"
-                            onClick={handleAddNestedCard}
-                          >
-                            <IconPlus size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                      
-                      <ActionIcon
-                        size="sm"
-                        variant="subtle"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        <IconEdit size={16} />
-                      </ActionIcon>
+                      <Switch
+                        size="xs"
+                        checked={isEditMode}
+                        onChange={(event) => {
+                          const newEditMode = event.currentTarget.checked;
+                          setIsEditMode(newEditMode);
+                          if (!newEditMode) {
+                            // Save title changes when exiting edit mode
+                            handleEditModeConfirm();
+                          }
+                        }}
+                        label="Edit"
+                        styles={{
+                          label: { fontSize: '12px' }
+                        }}
+                      />
                       
                       <ActionIcon
                         size="sm"
@@ -349,7 +270,6 @@ export const CardItem: React.FC<CardItemProps> = ({
                   </Box>
                 )}
               </>
-            )}
           </Card>
         </div>
       )}
