@@ -29,22 +29,22 @@ const getNotificationConfig = (type: NotificationType) => {
     success: {
       icon: IconCheck,
       color: 'green',
-      variant: 'outline' as const
+      variant: 'light' as const
     },
     error: {
       icon: IconAlertCircle,
       color: 'red',
-      variant: 'outline' as const
+      variant: 'light' as const
     },
     warning: {
       icon: IconExclamationCircle,
       color: 'yellow',
-      variant: 'outline' as const
+      variant: 'light' as const
     },
     info: {
       icon: IconInfoCircle,
       color: 'blue',
-      variant: 'outline' as const
+      variant: 'light' as const
     }
   };
 
@@ -68,18 +68,27 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onRem
       withCloseButton={false}
       mb="sm"
       style={{
-        backgroundColor: 'white',
-        opacity: 1
+        wordBreak: 'break-word',
+        overflow: 'hidden',
+        backdropFilter: 'blur(12px)'
       }}
     >
-      <Group justify="space-between" align="flex-start">
-        <Box style={{ flex: 1 }}>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <Box style={{ flex: 1, minWidth: 0 }}>
           {notification.title && (
-            <Text fw={600} size="sm" mb={2}>
+            <Text fw={600} size="sm" mb={2} style={{ 
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
               {notification.title}
             </Text>
           )}
-          <Text size="sm">
+          <Text size="sm" style={{ 
+            wordBreak: 'break-word',
+            whiteSpace: 'pre-wrap',
+            overflow: 'hidden'
+          }}>
             {notification.message}
           </Text>
           <Text size="xs" c="dimmed" mt={4}>
@@ -93,6 +102,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onRem
           size="sm"
           onClick={() => onRemove(notification.id)}
           ml="xs"
+          style={{ flexShrink: 0 }}
         >
           <IconX size={14} />
         </ActionIcon>
@@ -112,15 +122,16 @@ export const TopNotifications: React.FC = () => {
     <Portal>
       <Box
         pos="fixed"
-        top={20}
-        right={20}
+        top={16}
+        left="50%"
         style={{ 
           zIndex: 10000,
           maxWidth: '400px',
-          width: '100%',
-          maxHeight: '80vh',
+          width: 'calc(100% - 32px)',
+          maxHeight: '60vh',
           overflowY: 'auto',
-          pointerEvents: 'none'
+          pointerEvents: 'none',
+          transform: 'translateX(-50%)'
         }}
       >
         <Box style={{ pointerEvents: 'auto' }}>

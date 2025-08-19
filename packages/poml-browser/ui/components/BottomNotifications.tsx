@@ -11,7 +11,8 @@ import {
   ActionIcon,
   Stack,
   Alert,
-  Transition
+  Transition,
+  useMantineColorScheme
 } from '@mantine/core';
 import {
   IconX,
@@ -58,6 +59,8 @@ interface NotificationItemProps {
 const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onRemove }) => {
   const config = getNotificationConfig(notification.type);
   const IconComponent = config.icon;
+  const { colorScheme } = useMantineColorScheme();
+  const isDark = colorScheme === 'dark';
 
   return (
     <Alert
@@ -66,6 +69,18 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onRem
       icon={<IconComponent size={16} />}
       withCloseButton={false}
       mb="sm"
+      style={{
+        backdropFilter: 'blur(8px)',
+        backgroundColor: isDark 
+          ? 'rgba(26, 27, 30, 0.7)' 
+          : 'rgba(255, 255, 255, 0.7)',
+        border: isDark 
+          ? '1px solid rgba(255, 255, 255, 0.08)' 
+          : '1px solid rgba(255, 255, 255, 0.15)',
+        boxShadow: isDark 
+          ? '0 4px 16px rgba(0, 0, 0, 0.2)' 
+          : '0 4px 16px rgba(0, 0, 0, 0.05)',
+      }}
     >
       <Group justify="space-between" align="flex-start">
         <Box style={{ flex: 1 }}>
@@ -98,10 +113,25 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onRem
 
 export const BottomNotifications: React.FC = () => {
   const { bottomNotifications, removeNotification, clearAllNotifications } = useNotifications();
+  const { colorScheme } = useMantineColorScheme();
+  const isDark = colorScheme === 'dark';
 
   if (bottomNotifications.length === 0) {
     return null;
   }
+
+  const glassStyle = {
+    backdropFilter: 'blur(8px)',
+    backgroundColor: isDark 
+      ? 'rgba(26, 27, 30, 0.65)' 
+      : 'rgba(255, 255, 255, 0.65)',
+    border: isDark 
+      ? '1px solid rgba(255, 255, 255, 0.06)' 
+      : '1px solid rgba(255, 255, 255, 0.15)',
+    boxShadow: isDark 
+      ? '0 4px 16px rgba(0, 0, 0, 0.15)' 
+      : '0 4px 16px rgba(0, 0, 0, 0.05)',
+  };
 
   return (
     <Box mt="lg">
@@ -111,6 +141,7 @@ export const BottomNotifications: React.FC = () => {
           variant="light"
           color="gray"
           mb="sm"
+          style={glassStyle}
         >
           <Group justify="space-between" align="center">
             <Text size="sm" fw={500}>

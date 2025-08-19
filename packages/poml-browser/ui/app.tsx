@@ -18,7 +18,7 @@ import {
 } from '@functions/clipboard';
 import { contentManager } from '@functions/html';
 import { NotificationProvider, useNotifications } from './contexts/NotificationContext';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import TopNotifications from './components/TopNotifications';
 import BottomNotifications from './components/BottomNotifications';
 

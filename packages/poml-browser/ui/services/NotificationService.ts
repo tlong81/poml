@@ -44,12 +44,10 @@ class NotificationService {
           const notificationType: NotificationType = 
             notificationMsg.notificationType === 'debug' ? 'info' : notificationMsg.notificationType as NotificationType;
           
-          // Add source info to the title if from background or content script
+          // Add source info to the title if from background or content script and title exists
           const options = { ...notificationMsg.options };
-          if (notificationMsg.source !== 'ui') {
-            options.title = options.title 
-              ? `${options.title} [${notificationMsg.source}]`
-              : `[${notificationMsg.source}]`;
+          if (notificationMsg.source !== 'ui' && options.title) {
+            options.title = `${options.title}`;
           }
           
           // Use debug messages at bottom by default

@@ -16,6 +16,7 @@ interface MessageRequest {
   prompt?: string;
   files?: FileData[];
   binary?: boolean;
+  theme?: string;
 }
 
 interface MessageResponse {
@@ -23,6 +24,7 @@ interface MessageResponse {
   content?: string;
   base64Data?: string;
   error?: string;
+  theme?: string;
 }
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
@@ -68,7 +70,28 @@ chrome.runtime.onMessage.addListener(
     // Cast to MessageRequest for action-based messages
     const messageRequest = request as MessageRequest;
     
-    if (messageRequest.action === "readFile") {
+    // Handle theme storage operations
+    if (messageRequest.action === "getTheme") {
+      chrome.storage.local.get(['theme'], (result) => {
+        sendResponse({ success: true, theme: result.theme || 'auto' });
+      });
+      return true;
+    } else if (messageRequest.action === "setTheme") {
+      if (!messageRequest.theme) {
+        sendResponse({ success: false, error: "No theme provided" });
+        return true;
+      }
+      
+      chrome.storage.local.set({ theme: messageRequest.theme }, () => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          sendResponse({ success: false, error: error.message });
+        } else {
+          sendResponse({ success: true });
+        }
+      });
+      return true;
+    } else if (messageRequest.action === "readFile") {
       if (!messageRequest.filePath) {
         sendResponse({ success: false, error: "No file path provided" });
         return true;
