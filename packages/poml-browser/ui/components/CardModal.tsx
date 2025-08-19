@@ -35,13 +35,19 @@ export const CardModal: React.FC<CardModalProps> = ({ content, opened, onClose, 
 
   const handleClose = () => {
     if (hasChanges) {
-      const confirmClose = window.confirm('You have unsaved changes. Are you sure you want to close?');
-      if (!confirmClose) return;
+      const confirmClose = window.confirm(
+        'You have unsaved changes. Are you sure you want to close?'
+      );
+      if (!confirmClose) {
+        return;
+      }
     }
     onClose();
   };
 
-  if (!content) return null;
+  if (!content) {
+    return null;
+  }
 
   return (
     <Modal
@@ -73,12 +79,12 @@ export const CardModal: React.FC<CardModalProps> = ({ content, opened, onClose, 
       <Stack gap="md" style={{ height: '100%' }}>
         <Textarea
           value={editedContent}
-          onChange={(event) => handleContentChange(event.currentTarget.value)}
+          onChange={event => handleContentChange(event.currentTarget.value)}
           placeholder="Enter content here..."
           autosize
           minRows={20}
           maxRows={50}
-          style={{ 
+          style={{
             flex: 1,
             '& textarea': {
               minHeight: 'calc(100vh - 200px)',
@@ -88,20 +94,20 @@ export const CardModal: React.FC<CardModalProps> = ({ content, opened, onClose, 
             }
           }}
         />
-        
+
         <Group justify="space-between">
           <Text size="sm" c="dimmed">
             {editedContent.length} characters
           </Text>
-          
+
           <Group>
             <Button variant="outline" color="primary" onClick={handleClose}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSave}
               disabled={!hasChanges}
-              variant={hasChanges ? "filled" : "light"}
+              variant={hasChanges ? 'filled' : 'light'}
               color="primary"
             >
               {hasChanges ? 'Save Changes' : 'Close'}

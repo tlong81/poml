@@ -1,5 +1,7 @@
 # Prompt Scratchpad (POML browser extension)
 
+**This is still under development. The extension is not yet available in the Chrome Web Store.**
+
 ## One-liner
 
 A WYSIWYG "prompt workspace" in your browser sidebar where you drag in webpages, docs, code, and media, arrange and annotate them, then one-click copy the rendered prompt into ChatGPT, Gemini, etc. Powered by POML under the hood -- no tags required.

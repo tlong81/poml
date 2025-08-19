@@ -9,7 +9,9 @@ class GoogleDocsManager {
    */
   async checkGoogleDocsTab(): Promise<boolean> {
     try {
-      if (!chrome.tabs) { return false; }
+      if (!chrome.tabs) {
+        return false;
+      }
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       return (tab && tab.url && tab.url.includes('docs.google.com/document')) || false;
     } catch (error) {
@@ -29,7 +31,7 @@ class GoogleDocsManager {
 
       notifyInfo('Authenticating with Google');
 
-      const authResponse = await chrome.identity.getAuthToken({ 
+      const authResponse = await chrome.identity.getAuthToken({
         interactive: true,
         scopes: ['https://www.googleapis.com/auth/documents.readonly']
       });
@@ -68,7 +70,7 @@ class GoogleDocsManager {
       }
 
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
+
       if (!tab || !tab.url || !tab.url.includes('docs.google.com/document')) {
         throw new Error('No Google Docs document tab found');
       }
@@ -85,10 +87,10 @@ class GoogleDocsManager {
       }
 
       const apiUrl = `https://docs.googleapis.com/v1/documents/${documentId}`;
-      
+
       const response = await fetch(apiUrl, {
         headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -105,17 +107,19 @@ class GoogleDocsManager {
 
       const document = await response.json();
       const childCards: CardModel[] = [];
-      
+
       // Process document body and extract structured content
       const processContent = (content: any): void => {
-        if (!content || !content.content) return;
-        
+        if (!content || !content.content) {
+          return;
+        }
+
         for (const element of content.content) {
           if (element.paragraph) {
             let paragraphText = '';
             let isHeading = false;
             let headingLevel = 0;
-            
+
             // Check for heading style
             if (element.paragraph.paragraphStyle?.namedStyleType) {
               const styleType = element.paragraph.paragraphStyle.namedStyleType;
@@ -124,33 +128,39 @@ class GoogleDocsManager {
                 headingLevel = parseInt(styleType.replace('HEADING_', ''), 10);
               }
             }
-            
+
             // Extract text from paragraph elements
             for (const paragraphElement of element.paragraph.elements || []) {
               if (paragraphElement.textRun) {
                 paragraphText += paragraphElement.textRun.content || '';
               }
             }
-            
+
             // Only add non-empty paragraphs
             if (paragraphText.trim()) {
-              childCards.push(createCard({
-                content: { type: 'text', value: paragraphText.trim() } as TextContent,
-                componentType: isHeading ? 'Header' : 'Paragraph',
-                metadata: {
-                  source: 'web',
-                  url: tab.url,
-                  tags: isHeading ? [`heading-level-${headingLevel}`, 'google-docs'] : ['paragraph', 'google-docs']
-                }
-              }));
+              childCards.push(
+                createCard({
+                  content: { type: 'text', value: paragraphText.trim() } as TextContent,
+                  componentType: isHeading ? 'Header' : 'Paragraph',
+                  metadata: {
+                    source: 'web',
+                    url: tab.url,
+                    tags: isHeading
+                      ? [`heading-level-${headingLevel}`, 'google-docs']
+                      : ['paragraph', 'google-docs']
+                  }
+                })
+              );
             }
           } else if (element.table) {
             // Create a table card with nested content
             const tableCells: CardModel[] = [];
-            
+
             // Process table rows
             const processTableContent = (tableContent: any): void => {
-              if (!tableContent || !tableContent.content) return;
+              if (!tableContent || !tableContent.content) {
+                return;
+              }
               for (const elem of tableContent.content) {
                 if (elem.paragraph) {
                   let cellText = '';
@@ -160,50 +170,56 @@ class GoogleDocsManager {
                     }
                   }
                   if (cellText.trim()) {
-                    tableCells.push(createCard({
-                      content: { type: 'text', value: cellText.trim() } as TextContent,
-                      componentType: 'Paragraph',
-                      metadata: {
-                        source: 'web',
-                        url: tab.url,
-                        tags: ['table-cell', 'google-docs']
-                      }
-                    }));
+                    tableCells.push(
+                      createCard({
+                        content: { type: 'text', value: cellText.trim() } as TextContent,
+                        componentType: 'Paragraph',
+                        metadata: {
+                          source: 'web',
+                          url: tab.url,
+                          tags: ['table-cell', 'google-docs']
+                        }
+                      })
+                    );
                   }
                 }
               }
             };
-            
+
             for (const row of element.table.tableRows || []) {
               for (const cell of row.tableCells || []) {
                 processTableContent(cell);
               }
             }
-            
+
             // Only add table if it has content
             if (tableCells.length > 0) {
-              childCards.push(createCard({
-                content: { type: 'nested', children: tableCells },
-                componentType: 'Table',
-                metadata: {
-                  source: 'web',
-                  url: tab.url,
-                  tags: ['table', 'google-docs']
-                }
-              }));
+              childCards.push(
+                createCard({
+                  content: { type: 'nested', children: tableCells },
+                  componentType: 'Table',
+                  metadata: {
+                    source: 'web',
+                    url: tab.url,
+                    tags: ['table', 'google-docs']
+                  }
+                })
+              );
             }
           }
         }
       };
 
       processContent(document.body);
-      
+
       // Create a single parent card with all content as nested children
-      const documentTitle = document.title && document.title.trim() ? document.title : 'Google Docs Document';
+      const documentTitle =
+        document.title && document.title.trim() ? document.title : 'Google Docs Document';
       const parentCard = createCard({
-        content: childCards.length > 0 ? 
-          { type: 'nested', children: childCards } : 
-          { type: 'text', value: 'No text content found in document' } as TextContent,
+        content:
+          childCards.length > 0
+            ? { type: 'nested', children: childCards }
+            : ({ type: 'text', value: 'No text content found in document' } as TextContent),
         componentType: 'CaptionedParagraph',
         title: documentTitle,
         metadata: {
@@ -213,8 +229,8 @@ class GoogleDocsManager {
         }
       });
 
-      notifyInfo('Google Docs content extracted successfully', { 
-        childCardsCount: childCards.length 
+      notifyInfo('Google Docs content extracted successfully', {
+        childCardsCount: childCards.length
       });
 
       return [parentCard];
