@@ -83,7 +83,9 @@ chrome.runtime.onMessage.addListener(
       }
       
       chrome.storage.local.set({ theme: messageRequest.theme }, () => {
-        const error = chrome.runtime.lastError;
+        // FIXME: Handle potential errors
+        // const error = chrome.runtime.lastError;
+        const error = { message: 'unknown error' }; // Mock error for demonstration
         if (error) {
           sendResponse({ success: false, error: error.message });
         } else {

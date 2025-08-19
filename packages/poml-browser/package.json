@@ -6,7 +6,11 @@
   "scripts": {
     "build": "rollup -c rollup.config.mjs",
     "watch": "rollup -c rollup.config.mjs --watch",
-    "zip": "cd dist && zip -r ../poml-browser.zip ."
+    "zip": "cd dist && zip -r ../poml-browser.zip .",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:prepare": "tsx tests/test-utils/extract-cards.ts"
   },
   "keywords": [],
   "license": "MIT",
@@ -19,8 +23,10 @@
     "@rollup/plugin-typescript": "^12.1.4",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
+    "@vitest/ui": "^3.2.4",
     "chrome-types": "^0.1.367",
     "dompurify": "3.2.4",
+    "happy-dom": "^18.0.1",
     "marked": "14.1.2",
     "postcss": "^8.5.6",
     "postcss-preset-mantine": "^1.18.0",
@@ -30,7 +36,9 @@
     "rollup-plugin-polyfill-node": "^0.13.0",
     "rollup-plugin-postcss": "^4.0.2",
     "tslib": "^2.8.1",
-    "typescript": "^5.9.2"
+    "tsx": "^4.20.4",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
