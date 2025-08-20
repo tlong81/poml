@@ -690,17 +690,329 @@ describe('meta elements', () => {
 
   test('runtime parameters', () => {
     const text = `<poml>
-      <runtime temperature="0.7" max_tokens="1000" model="gpt-4">
+      <runtime temperature="0.7" max-tokens="1000" model="gpt-4">
       </runtime>
     </poml>`;
     const file = new PomlFile(text);
     file.react();
     const runtimeParams = file.getRuntimeParameters();
     expect(runtimeParams).toEqual({
-      temperature: "0.7",
-      max_tokens: "1000",
+      temperature: 0.7,
+      maxTokens: 1000,
       model: "gpt-4"
     });
+  });
+
+  test('runtime parameters with key conversion', () => {
+    const text = `<poml>
+      <runtime 
+        max-tokens="1500" 
+        top-p="0.9" 
+        frequency-penalty="0.5"
+        presence-penalty="0.3"
+        stop-sequences='["END", "STOP"]'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      maxTokens: 1500,
+      topP: 0.9,
+      frequencyPenalty: 0.5,
+      presencePenalty: 0.3,
+      stopSequences: ["END", "STOP"]
+    });
+  });
+
+  test('runtime parameters with boolean conversion', () => {
+    const text = `<poml>
+      <runtime 
+        stream="true" 
+        debug="false"
+        enable-logging="true"
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      stream: true,
+      debug: false,
+      enableLogging: true
+    });
+  });
+
+  test('runtime parameters with number conversion', () => {
+    const text = `<poml>
+      <runtime 
+        temperature="0.7"
+        max-tokens="2000"
+        seed="12345"
+        timeout="30.5"
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      temperature: 0.7,
+      maxTokens: 2000,
+      seed: 12345,
+      timeout: 30.5
+    });
+  });
+
+  test('runtime parameters with JSON conversion', () => {
+    const text = `<poml>
+      <runtime 
+        stop='["\\n", "END"]'
+        config='{"retry": 3, "timeout": 5000}'
+        metadata='{"user": "test", "session": 123}'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      stop: ["\n", "END"],
+      config: { retry: 3, timeout: 5000 },
+      metadata: { user: "test", session: 123 }
+    });
+  });
+
+  test('runtime parameters with mixed types', () => {
+    const text = `<poml>
+      <runtime 
+        model="gpt-4"
+        temperature="0.8"
+        max-output-tokens="1000"
+        stream="true"
+        stop-sequences='["END", "STOP"]'
+        custom-config='{"advanced": true}'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      model: "gpt-4",
+      temperature: 0.8,
+      maxOutputTokens: 1000,
+      stream: true,
+      stopSequences: ["END", "STOP"],
+      customConfig: { advanced: true }
+    });
+  });
+
+  test('runtime parameters with invalid JSON fallback to string', () => {
+    const text = `<poml>
+      <runtime 
+        valid-json='["test"]'
+        invalid-json='{"missing": quote}'
+        not-json="just a string"
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      validJson: ["test"],
+      invalidJson: '{"missing": quote}',  // Falls back to string
+      notJson: "just a string"
+    });
+  });
+
+  test('runtime parameters with template expressions', () => {
+    const text = `<poml>
+      <let name="temp" value="0.8" />
+      <let name="maxTokens" value="2000" />
+      <let name="modelName">gpt-4</let>
+      <runtime 
+        temperature="{{temp}}"
+        max-tokens="{{maxTokens}}"
+        model="{{modelName}}"
+        debug="{{temp > 0.5}}"
+        stop-sequences='{{JSON.stringify(["END", "STOP"])}}'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      temperature: 0.8,
+      maxTokens: 2000,
+      model: "gpt-4",
+      debug: true,
+      stopSequences: ["END", "STOP"]
+    });
+  });
+
+  test('output schema with template expressions', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="fieldName" value="{{ 'username' }}" />
+      <let name="maxLength" value="50" />
+      <let name="lang">json</let>
+      <output-schema lang="{{ lang }}">
+        {
+          "type": "object",
+          "properties": {
+            "{{fieldName}}": {
+              "type": "string",
+              "maxLength": {{maxLength}}
+            },
+            "email": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "required": ["{{fieldName}}"]
+        }
+      </output-schema>
+      <p>Test content</p>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const schema = file.getResponseSchema();
+    expect(schema).toBeDefined();
+    const openApiSchema = schema?.toOpenAPI();
+    expect(openApiSchema).toEqual({
+      type: "object",
+      properties: {
+        username: {
+          type: "string",
+          maxLength: 50
+        },
+        email: {
+          type: "string",
+          format: "email"
+        }
+      },
+      required: ["username"]
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
+  });
+
+  test('tool definition with template expressions', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="toolName">calculate</let>
+      <let name="toolDescription">Perform mathematical calculations</let>
+      <let name="operations" value='["add", "subtract", "multiply", "divide"]' />
+      <tool-definition name="{{toolName}}" description="{{toolDescription}}" lang="json">
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "enum": {{JSON.stringify(operations)}}
+            },
+            "a": {
+              "type": "number"
+            },
+            "b": {
+              "type": "number"
+            }
+          },
+          "required": ["operation", "a", "b"]
+        }
+      </tool-definition>
+      <p>Test content</p>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const toolsSchema = file.getToolsSchema();
+    expect(toolsSchema).toBeDefined();
+    const tools = toolsSchema?.getTools();
+    expect(tools).toHaveLength(1);
+    expect(tools![0].name).toBe("calculate");
+    expect(tools![0].description).toBe("Perform mathematical calculations");
+    const inputSchema = tools![0].inputSchema.toOpenAPI();
+    expect(inputSchema).toEqual({
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["add", "subtract", "multiply", "divide"]
+        },
+        a: {
+          type: "number"
+        },
+        b: {
+          type: "number"
+        }
+      },
+      required: ["operation", "a", "b"]
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
+  });
+
+  test('tool definition with template attributes from docs', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="toolName">calculate</let>
+      <let name="toolDesc">Perform mathematical calculations</let>
+      <let name="schemaLang">json</let>
+      
+      <tool-definition name="{{toolName}}" description="{{toolDesc}}" lang="{{schemaLang}}">
+        {
+          "type": "object",
+          "properties": {
+            "operation": { "type": "string" }
+          }
+        }
+      </tool-definition>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const toolsSchema = file.getToolsSchema();
+    expect(toolsSchema).toBeDefined();
+    const tools = toolsSchema?.getTools();
+    expect(tools).toHaveLength(1);
+    expect(tools![0].name).toBe("calculate");
+    expect(tools![0].description).toBe("Perform mathematical calculations");
+    const inputSchema = tools![0].inputSchema.toOpenAPI();
+    expect(inputSchema).toEqual({
+      type: "object",
+      properties: {
+        operation: { type: "string" }
+      }
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
+  });
+
+  test('output schema with template content from docs', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="schemaJson">
+      {
+        "type": "object",
+        "properties": {
+          "result": { "type": "string" }
+        }
+      }
+      </let>
+      <output-schema lang="json">
+      {{ schemaJson }}
+      </output-schema>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const schema = file.getResponseSchema();
+    expect(schema).toBeDefined();
+    const openApiSchema = schema?.toOpenAPI();
+    expect(openApiSchema).toEqual({
+      type: "object",
+      properties: {
+        result: { type: "string" }
+      }
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
   });
 
   test('responseSchema with expression evaluation', () => {

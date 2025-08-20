@@ -473,6 +473,41 @@ In expression mode, the `z` variable is automatically available for constructing
 - **description**: Tool description (optional but recommended)
 - **lang**: Schema language, either "json" or "expr" (optional, auto-detected based on content)
 
+### Template Expressions in Attributes
+
+Both schemas and tools support template expressions in their attributes:
+
+```xml
+<let name="toolName">calculate</let>
+<let name="toolDesc">Perform mathematical calculations</let>
+<let name="schemaLang">json</let>
+
+<tool-definition name="{{toolName}}" description="{{toolDesc}}" lang="{{schemaLang}}">
+  {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string" }
+    }
+  }
+</tool-definition>
+```
+
+Similarly for output schemas:
+
+```xml
+<let name="schemaJson">
+{
+  "type": "object",
+  "properties": {
+    "result": { "type": "string" }
+  }
+}
+</let>
+<output-schema lang="json">
+{{ schemaJson }}
+</output-schema>
+```
+
 You can define multiple tools in a single document.
 
 ## Runtime Parameters
@@ -481,12 +516,23 @@ Runtime parameters configure the language model's behavior during execution. The
 
 ```xml
 <runtime temperature="0.7" 
-         maxOutputTokens="1000" 
+         max-output-tokens="1000" 
          model="gpt-5"
-         topP="0.9" />
+         top-p="0.9" />
 ```
 
-All attributes are passed as runtime parameters. Common parameters include:
+All attributes are passed as runtime parameters with automatic type conversion:
+
+### Key Conversion
+- Keys are converted from kebab-case to camelCase
+- Examples: `max-tokens` → `maxTokens`, `top-p` → `topP`, `frequency-penalty` → `frequencyPenalty`
+
+### Value Conversion
+- **Boolean strings**: `"true"` and `"false"` → `true` and `false`
+- **Number strings**: `"1000"`, `"0.7"` → `1000`, `0.7`
+- **JSON strings**: `'["END", "STOP"]'`, `'{"key": "value"}'` → parsed JSON objects/arrays
+
+### Common Parameters
 
 - **temperature**: Controls randomness (0-2, typically 0.3-0.7 for balanced output)
 - **maxOutputTokens**: Maximum response length in tokens
