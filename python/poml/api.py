@@ -29,7 +29,7 @@ _trace_log: List[Dict[str, Any]] = []
 _trace_dir: Optional[Path] = None
 
 Backend = Literal["local", "weave", "agentops", "mlflow"]
-OutputFormat = Literal["raw", "dict", "openai_chat", "langchain", "pydantic"]
+OutputFormat = Literal["raw", "message_dict", "dict", "openai_chat", "langchain", "pydantic"]
 
 
 def set_trace(
@@ -214,6 +214,13 @@ Speaker = Literal["human", "ai", "system", "tool"]
 class PomlMessage(BaseModel):
     speaker: Speaker
     content: RichContent
+
+
+class PomlFrame(BaseModel):
+    messages: List[PomlMessage]
+    output_schema: Optional[Dict[str, Any]] = None  # because schema is taken
+    tools: Optional[List[Dict[str, Any]]] = None
+    runtime: Optional[Dict[str, Any]] = None
 
 
 def _poml_response_to_openai_chat(messages: List[PomlMessage]) -> List[Dict[str, Any]]:
@@ -403,20 +410,28 @@ def _poml_response_to_langchain(messages: List[PomlMessage]) -> List[Dict[str, A
     return langchain_messages
 
 
+def _camel_case_to_snake_case(name: str) -> str:
+    """Convert CamelCase to snake_case."""
+    # Insert one underscore before each uppercase letter, then convert to lowercase
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
 def poml(
     markup: str | Path,
     context: dict | str | Path | None = None,
     stylesheet: dict | str | Path | None = None,
     chat: bool = True,
     output_file: str | Path | None = None,
-    format: OutputFormat = "dict",
+    format: OutputFormat = "message_dict",
     extra_args: Optional[List[str]] = None,
-) -> list | dict | str:
+) -> list | dict | str | PomlFrame:
     """Process POML markup and return the result in the specified format.
 
     POML (Prompt Orchestration Markup Language) is a markup language for creating
     structured prompts and conversations. This function processes POML markup
-    with optional context and styling, returning the result in various formats.
+    with optional context and styling, returning the result in various formats
+    optimized for different LLM frameworks and use cases.
 
     Args:
         markup: POML markup content as a string, or path to a POML file.
@@ -431,19 +446,36 @@ def poml(
         output_file: Optional path to save the output. If not provided,
             output is returned directly without saving to disk.
         format: Output format for the result:
-            - "raw": Return raw string output from POML processor
-            - "dict": Return the core LLM prompt as a dict or list
-            - "openai_chat": Return OpenAI chat completion format
-            - "langchain": Return LangChain message format
-            - "pydantic": Return list of PomlMessage objects
+            - "raw": Raw string output from POML processor
+            - "message_dict": Legacy format returning just messages array (default)
+            - "dict": Full CLI result structure with messages, schema, tools, runtime
+            - "openai_chat": OpenAI Chat Completion API format with tool support
+            - "langchain": LangChain message format with structured data
+            - "pydantic": PomlFrame object with typed Pydantic models
         extra_args: Additional command-line arguments to pass to the POML processor.
 
     Returns:
         The processed result in the specified format:
-        - str: When format="raw"
-        - dict/list: When format="dict"
-        - List[Dict[str, Any]]: When format="openai_chat" or "langchain"
-        - List[PomlMessage]: When format="pydantic"
+        - str when format="raw"
+        - list when format="message_dict" (legacy messages array)
+        - dict when format="dict", "openai_chat", or "langchain"
+        - PomlFrame when format="pydantic"
+
+        For format="message_dict": Returns just the messages array for backward 
+        compatibility. Example: `[{"speaker": "human", "content": "Hello"}]`
+
+        For format="dict": Returns complete structure with all metadata.
+        Example: `{"messages": [...], "schema": {...}, "tools": [...], "runtime": {...}}`
+
+        For format="openai_chat": Returns OpenAI Chat Completion format with tool/schema 
+        support. Includes "messages" in OpenAI format, "tools" if present, "response_format" 
+        for JSON schema if present, and runtime parameters converted to `snake_case`.
+
+        For format="langchain": Returns LangChain format preserving all metadata with
+        "messages" in LangChain format plus schema, tools, and runtime if present.
+
+        For format="pydantic": Returns strongly-typed PomlFrame object containing
+        messages as PomlMessage objects, output_schema, tools, and runtime.
 
     Raises:
         FileNotFoundError: When a specified file path doesn't exist.
@@ -572,24 +604,68 @@ def poml(
                 # Do nothing
                 pass
             else:
-                result = json.loads(result)
-                if isinstance(result, dict) and "messages" in result:
-                    # The new versions will always return a dict with "messages" key.
-                    result = result["messages"]
-                if format != "dict":
-                    # Continue to validate the format.
+                parsed_result = json.loads(result)
+                
+                # Handle the new CLI result format with messages, schema, tools, runtime
+                if isinstance(parsed_result, dict) and "messages" in parsed_result:
+                    cli_result = parsed_result
+                    messages_data = cli_result["messages"]
+                else:
+                    # Legacy format - just messages
+                    cli_result: dict = {"messages": parsed_result}
+                    messages_data = parsed_result
+
+                if format == "message_dict":
+                    # Legacy behavior - return just the messages
+                    return messages_data
+                elif format == "dict":
+                    # Return the full CLI result structure
+                    return cli_result
+                else:
+                    # Convert to pydantic messages for other formats
                     if chat:
-                        pydantic_result = [PomlMessage(**item) for item in result]
+                        pydantic_messages = [PomlMessage(**item) for item in messages_data]
                     else:
                         # TODO: Make it a RichContent object
-                        pydantic_result = [PomlMessage(speaker="human", content=result)]
+                        pydantic_messages = [PomlMessage(speaker="human", content=messages_data)]  # type: ignore
+
+                    # Create PomlFrame with full data
+                    poml_frame = PomlFrame(
+                        messages=pydantic_messages,
+                        output_schema=cli_result.get("schema"),
+                        tools=cli_result.get("tools"), 
+                        runtime=cli_result.get("runtime")
+                    )
 
                     if format == "pydantic":
-                        return pydantic_result
+                        return poml_frame
                     elif format == "openai_chat":
-                        return _poml_response_to_openai_chat(pydantic_result)
+                        # Return OpenAI-compatible format
+                        openai_messages = _poml_response_to_openai_chat(pydantic_messages)
+                        openai_result: dict = {"messages": openai_messages}
+                        
+                        # Add tools if present
+                        if poml_frame.tools:
+                            openai_result["tools"] = poml_frame.tools
+                        if poml_frame.output_schema:
+                            openai_result["response_format"] = {
+                                "type": "json_schema",
+                                "schema": poml_frame.output_schema,
+                                "strict": True,  # Ensure strict validation
+                            }
+                        if poml_frame.runtime:
+                            openai_result.update({
+                                _camel_case_to_snake_case(k): v
+                                for k, v in poml_frame.runtime.items()
+                            })
+
+                        return openai_result
                     elif format == "langchain":
-                        return _poml_response_to_langchain(pydantic_result)
+                        messages_data = _poml_response_to_langchain(pydantic_messages)
+                        return {
+                            "messages": messages_data,
+                            **{k: v for k, v in cli_result.items() if k != "messages"},
+                        }
                     else:
                         raise ValueError(f"Unknown output format: {format}")
 
