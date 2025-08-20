@@ -51,7 +51,7 @@ export type POMLComponentType =
   | 'SystemMessage';
 
 // Content Types
-export type CardContentType = TextContent | BinaryContent | FileContent | NestedContent;
+export type CardContentType<T> = TextContent | BinaryContent | FileContent | NestedContent<T>;
 
 export interface TextContent {
   type: 'text';
@@ -74,20 +74,24 @@ export interface FileContent {
   size?: number;
 }
 
-export interface NestedContent {
+export interface NestedContent<T> {
   type: 'nested';
-  children: CardModel[];
+  children: T[];
+}
+
+export interface CardModelSlim {
+  content: CardContentType<CardModelSlim>;
+  componentType: POMLComponentType;
 }
 
 // Main Card Model
 export interface CardModel {
   id: string;
   title?: string;
-  content: CardContentType;
+  content: CardContentType<CardModel>;
   componentType: POMLComponentType;
   metadata?: CardMetadata;
   timestamp?: Date;
-  order?: number;
   parentId?: string | null;
 }
 
@@ -98,25 +102,24 @@ export interface CardMetadata {
   excerpt?: string;
   tags?: string[];
   fileName?: string;
-  customData?: Record<string, any>;
   debug?: string;
 }
 
 // Type guards for content types
-export const isTextContent = (content: CardContentType): content is TextContent =>
+export const isTextContent = (content: CardContentType<any>): content is TextContent =>
   content.type === 'text';
 
-export const isBinaryContent = (content: CardContentType): content is BinaryContent =>
+export const isBinaryContent = (content: CardContentType<any>): content is BinaryContent =>
   content.type === 'binary';
 
-export const isFileContent = (content: CardContentType): content is FileContent =>
+export const isFileContent = (content: CardContentType<any>): content is FileContent =>
   content.type === 'file';
 
-export const isNestedContent = (content: CardContentType): content is NestedContent =>
+export const isNestedContent = <T>(content: CardContentType<T>): content is NestedContent<T> =>
   content.type === 'nested';
 
 // Component type validation based on content
-export function getValidComponentTypes(content: CardContentType): POMLComponentType[] {
+export function getValidComponentTypes(content: CardContentType<any>): POMLComponentType[] {
   switch (content.type) {
     case 'text':
       return [
@@ -242,7 +245,7 @@ export function serializeCard(card: CardModel): SerializedCardModel {
   return serialized;
 }
 
-function serializeContent(content: CardContentType): SerializedCardContent {
+function serializeContent(content: CardContentType<CardModel>): SerializedCardContent {
   switch (content.type) {
     case 'text':
     case 'file':
@@ -286,7 +289,7 @@ export function deserializeCard(serialized: SerializedCardModel): CardModel {
   return card as CardModel;
 }
 
-function deserializeContent(content: SerializedCardContent): CardContentType {
+function deserializeContent(content: SerializedCardContent): CardContentType<CardModel> {
   switch (content.type) {
     case 'text':
     case 'file':
@@ -355,11 +358,10 @@ export function generateId(): string {
 export function createCard(options: {
   id?: string;
   title?: string;
-  content: CardContentType;
+  content: CardContentType<CardModel>;
   componentType?: POMLComponentType;
   parentId?: string | null;
   timestamp?: Date;
-  order?: number;
   metadata?: CardMetadata;
 }): CardModel {
   const card: CardModel = {
@@ -372,11 +374,47 @@ export function createCard(options: {
     } as CardModel),
     parentId: options.parentId,
     timestamp: options.timestamp || new Date(),
-    order: options.order,
     metadata: options.metadata
   };
 
   return card;
+}
+
+// Helper to convert CardModelSlim to CardModel
+export function createCardFromSlim(slim: CardModelSlim, options?: {
+  id?: string;
+  title?: string;
+  parentId?: string | null;
+  timestamp?: Date;
+  order?: number;
+  metadata?: CardMetadata;
+}): CardModel {
+  const timestamp = options?.timestamp || new Date();
+  const cardId = options?.id || generateId();
+  
+  // Convert nested content recursively
+  const convertContent = (content: CardContentType<CardModelSlim>, parentId: string): CardContentType<CardModel> => {
+    if (isNestedContent(content)) {
+      return {
+        type: 'nested',
+        children: content.children.map(child => createCardFromSlim(child, {
+          parentId,
+          timestamp
+        }))
+      };
+    }
+    return content as CardContentType<CardModel>;
+  };
+
+  return {
+    id: cardId,
+    title: options?.title,
+    content: convertContent(slim.content, cardId),
+    componentType: slim.componentType,
+    parentId: options?.parentId || null,
+    timestamp,
+    metadata: options?.metadata
+  };
 }
 
 // Utility to check if binary content is an image

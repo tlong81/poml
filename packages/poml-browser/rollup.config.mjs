@@ -174,7 +174,7 @@ export default [
       sourcemap: true
     },
     watch: {
-      include: 'contentScript/**',
+      include: ['contentScript/**', 'functions/**'],
       exclude: 'node_modules/**'
     },
     plugins: [

@@ -52,7 +52,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
     // Update order property
     const updatedCards = newCards.map((card, index) => ({
       ...card,
-      order: index
     }));
     
     onChange(updatedCards);
@@ -73,7 +72,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
   const handleAddCard = useCallback(() => {
     const newCard = createCard({
       content: { type: 'text', value: '' },
-      order: cards.length
     });
     onChange([...cards, newCard]);
   }, [cards, onChange]);
@@ -81,7 +79,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
   const handleAddCardAtIndex = useCallback((index: number) => {
     const newCard = createCard({
       content: { type: 'text', value: '' },
-      order: index
     });
     const newCards = [...cards];
     newCards.splice(index, 0, newCard);
@@ -89,7 +86,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
     // Update order property for all cards after insertion
     const updatedCards = newCards.map((card, idx) => ({
       ...card,
-      order: idx
     }));
     
     onChange(updatedCards);
@@ -101,7 +97,6 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
     // Insert all dropped cards at the specified index
     const cardsWithOrder = droppedCards.map((card, idx) => ({
       ...card,
-      order: index + idx
     }));
     
     newCards.splice(index, 0, ...cardsWithOrder);
@@ -109,14 +104,11 @@ export const EditableCardList: React.FC<EditableCardListProps> = ({
     // Update order property for all cards after insertion
     const updatedCards = newCards.map((card, idx) => ({
       ...card,
-      order: idx
     }));
     
     onChange(updatedCards);
   }, [cards, onChange]);
-  
-  
-  
+
   return (
     <Stack gap="sm">
       <DragDropContext onDragEnd={handleDragEnd}>
