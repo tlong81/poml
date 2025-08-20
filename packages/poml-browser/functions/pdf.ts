@@ -14,8 +14,7 @@ import {
  */
 export function isPdfDocument(url?: string): boolean {
   const targetUrl = url || document.location.href;
-  return targetUrl.toLowerCase().includes('.pdf') || 
-         document.contentType === 'application/pdf';
+  return targetUrl.toLowerCase().includes('.pdf') || document.contentType === 'application/pdf';
 }
 
 /**
@@ -156,6 +155,7 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
     ];
   }
 }
+
 // Types
 interface LineItem {
   text: string;
@@ -177,6 +177,12 @@ interface MarginDetectionResult {
   rightThreshold: number;
 }
 
+interface Column {
+  minX: number;
+  maxX: number;
+  lines: LineItem[];
+}
+
 // Main text extraction function with paragraph detection and margin filtering
 async function extractTextBlocks(page: any): Promise<
   Array<{
@@ -188,8 +194,11 @@ async function extractTextBlocks(page: any): Promise<
   const items = textContent.items as TextItem[];
 
   if (items.length === 0) {
+    notifyDebug('No text items found in page');
     return [];
   }
+
+  notifyDebug('Starting text extraction', { itemCount: items.length });
 
   // Get page dimensions and margin info
   const viewport = page.getViewport({ scale: 1.0 });
@@ -197,14 +206,162 @@ async function extractTextBlocks(page: any): Promise<
 
   // Extract and filter lines
   const lines = extractLines(items, marginInfo);
+  notifyDebug('Lines extracted', {
+    lineCount: lines.length,
+    filteredLineNumbers: marginInfo.shouldFilter
+  });
 
-  // Sort lines by Y position (top to bottom)
-  lines.sort((a, b) => b.y - a.y);
+  // Detect columns and process accordingly
+  const columns = detectColumns(lines, viewport.width);
+  notifyDebug('Column detection complete', {
+    columnCount: columns.length,
+    linesPerColumn: columns.map(c => c.lines.length)
+  });
 
-  // Group lines into paragraphs
-  const blocks = groupLinesIntoParagraphs(lines);
+  let blocks: Array<{ text: string; isHeading: boolean }> = [];
 
-  return blocks.filter(block => block.text.length > 0);
+  if (columns.length > 1) {
+    // Multi-column layout detected
+    notifyDebug('Processing multi-column layout');
+    for (const column of columns) {
+      // Sort lines within column by Y position (top to bottom)
+      column.lines.sort((a, b) => b.y - a.y);
+
+      // Group lines into paragraphs for this column
+      const columnBlocks = groupLinesIntoParagraphs(column.lines);
+      blocks = blocks.concat(columnBlocks);
+    }
+  } else {
+    // Single column or no clear columns - use original logic
+    notifyDebug('Processing single-column layout');
+    lines.sort((a, b) => b.y - a.y);
+    blocks = groupLinesIntoParagraphs(lines);
+  }
+
+  const finalBlocks = blocks.filter(block => block.text.length > 0);
+  notifyDebug('Text extraction complete', {
+    blockCount: finalBlocks.length,
+    headingCount: finalBlocks.filter(b => b.isHeading).length
+  });
+
+  return finalBlocks;
+}
+
+// Detect columns in the document
+function detectColumns(lines: LineItem[], pageWidth: number): Column[] {
+  if (lines.length === 0) return [];
+
+  // Collect X positions to find potential column boundaries
+  const xPositions = lines.map(line => line.x).sort((a, b) => a - b);
+
+  // Find gaps in X positions that might indicate column boundaries
+  const gaps: Array<{ start: number; end: number; gap: number }> = [];
+  const minGapSize = pageWidth * 0.05; // Minimum 5% of page width for a column gap
+
+  for (let i = 1; i < xPositions.length; i++) {
+    const gap = xPositions[i] - xPositions[i - 1];
+    if (gap > minGapSize) {
+      gaps.push({
+        start: xPositions[i - 1],
+        end: xPositions[i],
+        gap: gap
+      });
+    }
+  }
+
+  notifyDebug('Gap analysis for columns', {
+    totalGaps: gaps.length,
+    minGapSize: minGapSize,
+    largestGap: gaps.length > 0 ? Math.max(...gaps.map(g => g.gap)) : 0
+  });
+
+  // Cluster lines into columns based on X position
+  const columns = clusterLinesIntoColumns(lines, gaps, pageWidth);
+
+  // Validate columns - need at least 10 lines per column to be considered multi-column
+  const validColumns = columns.filter(col => col.lines.length >= 10);
+
+  if (validColumns.length !== columns.length) {
+    notifyDebug('Column validation', {
+      originalColumns: columns.length,
+      validColumns: validColumns.length,
+      droppedColumns: columns.filter(col => col.lines.length < 10).map(col => col.lines.length)
+    });
+  }
+
+  // If we don't have clear multiple columns, return single column
+  if (validColumns.length <= 1) {
+    return [
+      {
+        minX: 0,
+        maxX: pageWidth,
+        lines: lines
+      }
+    ];
+  }
+
+  return validColumns;
+}
+
+// Cluster lines into columns based on gaps
+function clusterLinesIntoColumns(
+  lines: LineItem[],
+  gaps: Array<{ start: number; end: number; gap: number }>,
+  pageWidth: number
+): Column[] {
+  // If no significant gaps, treat as single column
+  if (gaps.length === 0) {
+    notifyDebug('No significant gaps found - treating as single column');
+    return [
+      {
+        minX: 0,
+        maxX: pageWidth,
+        lines: lines
+      }
+    ];
+  }
+
+  // Find the most significant gap(s) - typically the column separator(s)
+  const avgGap = gaps.reduce((sum, g) => sum + g.gap, 0) / gaps.length;
+  const significantGaps = gaps.filter(g => g.gap > avgGap * 0.8);
+
+  notifyDebug('Significant gaps identified', {
+    avgGap: avgGap.toFixed(1),
+    significantGapCount: significantGaps.length,
+    gapSizes: significantGaps.map(g => g.gap.toFixed(1))
+  });
+
+  // Create column boundaries
+  const boundaries: number[] = [0];
+  for (const gap of significantGaps) {
+    boundaries.push((gap.start + gap.end) / 2);
+  }
+  boundaries.push(pageWidth);
+
+  // Assign lines to columns
+  const columns: Column[] = [];
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const columnLines = lines.filter(line => line.x >= boundaries[i] && line.x < boundaries[i + 1]);
+
+    if (columnLines.length > 0) {
+      columns.push({
+        minX: boundaries[i],
+        maxX: boundaries[i + 1],
+        lines: columnLines
+      });
+    }
+  }
+
+  // Sort columns by X position (left to right)
+  columns.sort((a, b) => a.minX - b.minX);
+
+  notifyDebug('Columns created', {
+    columnCount: columns.length,
+    boundaries: boundaries.map(b => b.toFixed(1)),
+    columnWidths: columns.map(c => (c.maxX - c.minX).toFixed(1))
+  });
+
+  return columns;
 }
 
 // Detect if document has line numbers in margins
@@ -213,6 +370,7 @@ function detectLineNumbersInMargins(items: TextItem[], pageWidth: number): Margi
   const rightThreshold = pageWidth * 0.85;
 
   let marginNumberCount = 0;
+  const marginNumbers: number[] = [];
 
   for (const item of items) {
     const x = item.transform[4];
@@ -221,12 +379,23 @@ function detectLineNumbersInMargins(items: TextItem[], pageWidth: number): Margi
 
     if (isInMargin && /^\d+$/.test(trimmedStr)) {
       marginNumberCount++;
+      marginNumbers.push(parseInt(trimmedStr));
     }
   }
 
   // Only filter line numbers if we found at least 20 numbers in margins
+  const shouldFilter = marginNumberCount >= 20;
+
+  notifyDebug('Margin line number detection', {
+    marginNumberCount,
+    shouldFilter,
+    sampleNumbers: marginNumbers.slice(0, 5),
+    leftThreshold: leftThreshold.toFixed(1),
+    rightThreshold: rightThreshold.toFixed(1)
+  });
+
   return {
-    shouldFilter: marginNumberCount >= 20,
+    shouldFilter,
     leftThreshold,
     rightThreshold
   };
@@ -304,6 +473,11 @@ function groupLinesIntoParagraphs(lines: LineItem[]): Array<{
   let lastY: number | null = null;
   let lastFontSize: number | null = null;
 
+  notifyDebug('Starting paragraph grouping', { totalLines: lines.length });
+
+  let headingCount = 0;
+  let paragraphCount = 0;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const text = line.text.trim();
@@ -312,6 +486,7 @@ function groupLinesIntoParagraphs(lines: LineItem[]): Array<{
 
     // Detect headings
     const isHeading = detectHeading(text, line.fontSize, lastFontSize);
+    if (isHeading) headingCount++;
 
     // Determine if this starts a new paragraph
     const startsNewParagraph = shouldStartNewParagraph(
@@ -328,6 +503,7 @@ function groupLinesIntoParagraphs(lines: LineItem[]): Array<{
         text: joinParagraphLines(currentParagraph),
         isHeading: false
       });
+      paragraphCount++;
       currentParagraph = [];
     }
 
@@ -352,7 +528,14 @@ function groupLinesIntoParagraphs(lines: LineItem[]): Array<{
       text: joinParagraphLines(currentParagraph),
       isHeading: false
     });
+    paragraphCount++;
   }
+
+  notifyDebug('Paragraph grouping complete', {
+    totalBlocks: blocks.length,
+    headings: headingCount,
+    paragraphs: paragraphCount
+  });
 
   return blocks;
 }
