@@ -473,6 +473,41 @@ In expression mode, the `z` variable is automatically available for constructing
 - **description**: Tool description (optional but recommended)
 - **lang**: Schema language, either "json" or "expr" (optional, auto-detected based on content)
 
+### Template Expressions in Attributes
+
+Both schemas and tools support template expressions in their attributes:
+
+```xml
+<let name="toolName">calculate</let>
+<let name="toolDesc">Perform mathematical calculations</let>
+<let name="schemaLang">json</let>
+
+<tool-definition name="{{toolName}}" description="{{toolDesc}}" lang="{{schemaLang}}">
+  {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string" }
+    }
+  }
+</tool-definition>
+```
+
+Similarly for output schemas:
+
+```xml
+<let name="schemaJson">
+{
+  "type": "object",
+  "properties": {
+    "result": { "type": "string" }
+  }
+}
+</let>
+<output-schema lang="json">
+{{ schemaJson }}
+</output-schema>
+```
+
 You can define multiple tools in a single document.
 
 ## Runtime Parameters

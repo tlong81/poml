@@ -823,6 +823,198 @@ describe('meta elements', () => {
     });
   });
 
+  test('runtime parameters with template expressions', () => {
+    const text = `<poml>
+      <let name="temp" value="0.8" />
+      <let name="maxTokens" value="2000" />
+      <let name="modelName">gpt-4</let>
+      <runtime 
+        temperature="{{temp}}"
+        max-tokens="{{maxTokens}}"
+        model="{{modelName}}"
+        debug="{{temp > 0.5}}"
+        stop-sequences='{{JSON.stringify(["END", "STOP"])}}'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      temperature: 0.8,
+      maxTokens: 2000,
+      model: "gpt-4",
+      debug: true,
+      stopSequences: ["END", "STOP"]
+    });
+  });
+
+  test('output schema with template expressions', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="fieldName" value="{{ 'username' }}" />
+      <let name="maxLength" value="50" />
+      <let name="lang">json</let>
+      <output-schema lang="{{ lang }}">
+        {
+          "type": "object",
+          "properties": {
+            "{{fieldName}}": {
+              "type": "string",
+              "maxLength": {{maxLength}}
+            },
+            "email": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "required": ["{{fieldName}}"]
+        }
+      </output-schema>
+      <p>Test content</p>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const schema = file.getResponseSchema();
+    expect(schema).toBeDefined();
+    const openApiSchema = schema?.toOpenAPI();
+    expect(openApiSchema).toEqual({
+      type: "object",
+      properties: {
+        username: {
+          type: "string",
+          maxLength: 50
+        },
+        email: {
+          type: "string",
+          format: "email"
+        }
+      },
+      required: ["username"]
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
+  });
+
+  test('tool definition with template expressions', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="toolName">calculate</let>
+      <let name="toolDescription">Perform mathematical calculations</let>
+      <let name="operations" value='["add", "subtract", "multiply", "divide"]' />
+      <tool-definition name="{{toolName}}" description="{{toolDescription}}" lang="json">
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "enum": {{JSON.stringify(operations)}}
+            },
+            "a": {
+              "type": "number"
+            },
+            "b": {
+              "type": "number"
+            }
+          },
+          "required": ["operation", "a", "b"]
+        }
+      </tool-definition>
+      <p>Test content</p>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const toolsSchema = file.getToolsSchema();
+    expect(toolsSchema).toBeDefined();
+    const tools = toolsSchema?.getTools();
+    expect(tools).toHaveLength(1);
+    expect(tools![0].name).toBe("calculate");
+    expect(tools![0].description).toBe("Perform mathematical calculations");
+    const inputSchema = tools![0].inputSchema.toOpenAPI();
+    expect(inputSchema).toEqual({
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["add", "subtract", "multiply", "divide"]
+        },
+        a: {
+          type: "number"
+        },
+        b: {
+          type: "number"
+        }
+      },
+      required: ["operation", "a", "b"]
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
+  });
+
+  test('tool definition with template attributes from docs', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="toolName">calculate</let>
+      <let name="toolDesc">Perform mathematical calculations</let>
+      <let name="schemaLang">json</let>
+      
+      <tool-definition name="{{toolName}}" description="{{toolDesc}}" lang="{{schemaLang}}">
+        {
+          "type": "object",
+          "properties": {
+            "operation": { "type": "string" }
+          }
+        }
+      </tool-definition>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const toolsSchema = file.getToolsSchema();
+    expect(toolsSchema).toBeDefined();
+    const tools = toolsSchema?.getTools();
+    expect(tools).toHaveLength(1);
+    expect(tools![0].name).toBe("calculate");
+    expect(tools![0].description).toBe("Perform mathematical calculations");
+    const inputSchema = tools![0].inputSchema.toOpenAPI();
+    expect(inputSchema).toEqual({
+      type: "object",
+      properties: {
+        operation: { type: "string" }
+      }
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
+  });
+
+  test('output schema with template content from docs', () => {
+    ErrorCollection.clear();
+    const text = `<poml>
+      <let name="schemaJson">
+      {
+        "type": "object",
+        "properties": {
+          "result": { "type": "string" }
+        }
+      }
+      </let>
+      <output-schema lang="json">
+      {{ schemaJson }}
+      </output-schema>
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const schema = file.getResponseSchema();
+    expect(schema).toBeDefined();
+    const openApiSchema = schema?.toOpenAPI();
+    expect(openApiSchema).toEqual({
+      type: "object",
+      properties: {
+        result: { type: "string" }
+      }
+    });
+    expect(ErrorCollection.empty()).toBe(true);
+    ErrorCollection.clear();
+  });
+
   test('responseSchema with expression evaluation', () => {
     ErrorCollection.clear();
     const text = `<poml>

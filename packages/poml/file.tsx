@@ -719,7 +719,11 @@ export class PomlFile {
   };
 
   private handleSchema = (element: XMLElement, context?: { [key: string]: any }): Schema | undefined => {
-    let lang: 'json' | 'expr' | undefined = xmlAttribute(element, 'lang')?.value as any;
+    const langAttr = xmlAttribute(element, 'lang');
+    let lang: 'json' | 'expr' | undefined = langAttr?.value 
+      ? this.handleTextAsString(langAttr.value, context || {},
+                                this.xmlAttributeValueRange(langAttr)) as 'json' | 'expr'
+      : undefined;
     const text = xmlElementText(element).trim();
     
     // Get the range for the text content (if available)
@@ -808,16 +812,23 @@ export class PomlFile {
       return false;
     }
     
-    const name = xmlAttribute(element, 'name')?.value;
-    if (!name) {
+    const nameAttr = xmlAttribute(element, 'name');
+    if (!nameAttr?.value) {
       this.reportError(
         'name attribute is required for tool definition',
         this.xmlElementRange(element)
       );
       return true;
     }
+    
+    // Process template expressions in name attribute
+    const name = this.handleTextAsString(nameAttr.value, context || {}, this.xmlAttributeValueRange(nameAttr));
 
-    const description = xmlAttribute(element, 'description')?.value;
+    const descriptionAttr = xmlAttribute(element, 'description');
+    // Process template expressions in description attribute if present
+    const description = descriptionAttr?.value 
+      ? this.handleTextAsString(descriptionAttr.value, context || {}, this.xmlAttributeValueRange(descriptionAttr))
+      : undefined;
     const inputSchema = this.handleSchema(element, context);
     if (inputSchema) {
       if (!this.toolsSchema) {
@@ -846,10 +857,13 @@ export class PomlFile {
     const runtimeParams: any = {};
     for (const attribute of element.attributes) {
       if (attribute.key && attribute.value) {
+        // Process template expressions and convert to string
+        const stringValue = this.handleTextAsString(attribute.value, context || {}, this.xmlAttributeValueRange(attribute));
+        
         // Convert key to camelCase (kebab-case to camelCase)
         const camelKey = hyphenToCamelCase(attribute.key);
         // Convert value (auto-convert booleans, numbers, JSON)
-        const convertedValue = this.convertRuntimeValue(attribute.value);
+        const convertedValue = this.convertRuntimeValue(stringValue);
         runtimeParams[camelKey] = convertedValue;
       }
     }
@@ -997,6 +1011,19 @@ export class PomlFile {
     }
 
     return results;
+  };
+
+  private handleTextAsString = (text: string, context: { [key: string]: any }, position?: Range): string => {
+    const results = this.handleText(text, context, position);
+    if (results.length === 1) {
+      if (typeof results[0] === 'string') {
+        return results[0];
+      } else {
+        return results[0].toString();
+      }
+    } else {
+      return JSON.stringify(results);
+    }
   };
 
   private evaluateExpression(
