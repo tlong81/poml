@@ -16,10 +16,16 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
     const targetUrl = pdfUrl || document.location.href;
     notifyDebug('Starting PDF text extraction', { url: targetUrl });
     
-    // Set worker source to use the local worker file
-    pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('external/pdf.worker.min.mjs');
-    
-    notifyDebug('PDF worker configured');
+    // Set worker source to use the local worker file with fallback
+    // Try to use chrome.runtime.getURL if available (extension context)
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('external/pdf.worker.min.mjs');
+    } else {
+      // Fallback for content script or when chrome.runtime.getURL is unavailable
+      // Try to construct the URL using the extension ID if available
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs';
+    }
+    notifyDebug('PDF worker configured: ' + pdfjsLib.GlobalWorkerOptions.workerSrc);
     
     // Handle different PDF loading scenarios
     let loadingTask;

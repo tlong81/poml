@@ -8,11 +8,15 @@ const testFixturesPath = config.metadata!.testFixturesPath;
 
 // Create unique artifact folder for this test run
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-const artifactDir = path.resolve(process.cwd(), 'test-results', `artifacts-${timestamp}`);
 
-// Ensure artifact directory exists
-if (!fs.existsSync(artifactDir)) {
-  fs.mkdirSync(artifactDir, { recursive: true });
+function createArtifactDir() {
+  const artifactDir = path.resolve(process.cwd(), 'test-artifacts', timestamp);
+
+  // Ensure artifact directory exists
+  if (!fs.existsSync(artifactDir)) {
+    fs.mkdirSync(artifactDir, { recursive: true });
+  }
+  return artifactDir;
 }
 
 test.describe('generate cards with pdfs', () => {
@@ -24,6 +28,7 @@ test.describe('generate cards with pdfs', () => {
   for (const pdfFile of pdfFiles) {
     test(`extract content from ${pdfFile}`, async ({ page, browserName }) => {
       test.skip(browserName !== 'chromium', 'This approach is Chromium-only');
+      const artifactDir = createArtifactDir();
       const pdfUrl = `${FIXTURE_ENDPOINT}/pdf/${pdfFile}`;
       await page.goto(pdfUrl);
 
@@ -35,8 +40,6 @@ test.describe('generate cards with pdfs', () => {
         // The content script exposes window.extractContent
         return await (window as any).extractContent();
       });
-
-      console.log(`Extracted content from ${pdfUrl}:`, content);
 
       // Verify extraction was successful
       expect(content).toBeDefined();
@@ -66,6 +69,7 @@ test.describe('generate cards with html pages', () => {
 
   for (const htmlFile of htmlFiles) {
     test(`extract content from ${htmlFile}`, async ({ page }) => {
+      const artifactDir = createArtifactDir();
       const htmlUrl = `${FIXTURE_ENDPOINT}/webpage/${htmlFile}`;
       await page.goto(htmlUrl, { waitUntil: 'networkidle' });
 
@@ -77,8 +81,6 @@ test.describe('generate cards with html pages', () => {
         // The content script exposes window.extractContent
         return await (window as any).extractContent();
       });
-
-      console.log(`Extracted content from ${htmlUrl}:`, content);
 
       // Verify extraction was successful
       expect(content).toBeDefined();
