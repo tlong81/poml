@@ -10,7 +10,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
-    "test:prepare": "playwright test tests/scripts/seed-browser.ts"
+    "test:serve": "serve -s ../../test-fixtures -p 8023",
+    "test:prepare": "playwright test tests/scripts/seed-browser.spec.ts"
   },
   "keywords": [],
   "license": "MIT",
@@ -37,6 +38,7 @@
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-polyfill-node": "^0.13.0",
     "rollup-plugin-postcss": "^4.0.2",
+    "serve": "^14.2.4",
     "tslib": "^2.8.1",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2",

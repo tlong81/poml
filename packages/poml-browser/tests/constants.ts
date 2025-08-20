@@ -1,18 +1,19 @@
 export const htmlPages = [
-  "https://en.wikipedia.org/wiki/Mad_Decent",
-  "https://github.com/google/nsjail/issues/17",
-  "https://github.com/microsoft/nni",
-  "https://stackoverflow.com/questions/39702871/gdb-kind-of-doesnt-work-on-macos-sierra",
-  "https://www.cnbc.com/2025/08/18/intel-is-getting-a-2-billion-investment-from-softbank.html",
-  "https://www.imdb.com/title/tt1182345/",
-  "https://finance.yahoo.com/news/p-affirms-us-credit-rating-040451877.html",
+  "http://localhost:8023/webpage/cnbc.html",
+  "http://localhost:8023/webpage/github-homepage.html",
+  "http://localhost:8023/webpage/github-issue.html",
+  "http://localhost:8023/webpage/imdb.html",
+  "http://localhost:8023/webpage/reddit.html",
+  "http://localhost:8023/webpage/stackoverflow.html",
+  "http://localhost:8023/webpage/wikipedia.html",
+  "http://localhost:8023/webpage/yahoo-finance.html",
 ];
 
 export const pdfFiles = [
-  "tests/assets/google-doc-document.pdf",
-  "tests/assets/linenumber-with-subfigures.pdf",
-  "tests/assets/multicolumn.pdf",
-  "tests/assets/pdflatex-4-pages.pdf",
-  "tests/assets/pdflatex-image.pdf",
-  "tests/assets/trivial-libre-office-writer.pdf",
+  "http://localhost:8023/pdf/google-doc-document.pdf",
+  "http://localhost:8023/pdf/linenumber-with-subfigures.pdf", 
+  "http://localhost:8023/pdf/multicolumn.pdf",
+  "http://localhost:8023/pdf/pdflatex-4-pages.pdf",
+  "http://localhost:8023/pdf/pdflatex-image.pdf",
+  "http://localhost:8023/pdf/trivial-libre-office-writer.pdf",
 ];
