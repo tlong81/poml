@@ -4,13 +4,14 @@ import { POMLWebviewPanelManager } from '../panel/manager';
 import { PanelSettings } from 'poml-vscode/panel/types';
 import { PreviewMethodName, PreviewParams, PreviewResponse } from '../panel/types';
 import { getClient } from '../extension';
-import { Message } from 'poml';
+import { Message, RichContent } from 'poml';
+import { ContentMultiMediaToolRequest, ContentMultiMediaToolResponse } from 'poml/base';
 
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAzure } from '@ai-sdk/azure';
-import { ModelMessage, streamText, tool, jsonSchema, Tool, streamObject, TextStreamPart } from 'ai';
+import { ModelMessage, streamText, tool, jsonSchema, Tool, streamObject, TextStreamPart, TextPart, ImagePart, ToolCallPart, ToolResultPart } from 'ai';
 
 import ModelClient from '@azure-rest/ai-inference';
 import { AzureKeyCredential } from '@azure/core-auth';
@@ -20,6 +21,7 @@ import { LanguageModelSetting } from 'poml-vscode/settings';
 import { IncomingMessage } from 'node:http';
 import { getTelemetryReporter } from 'poml-vscode/util/telemetryClient';
 import { TelemetryEvent } from 'poml-vscode/util/telemetryServer';
+import { ContentMultiMediaBinary } from 'poml/base';
 
 let _globalGenerationController: GenerationController | undefined = undefined;
 
@@ -432,6 +434,35 @@ export class TestCommand implements Command {
     return provider(settings.model);
   }
 
+  private richContentToVercelToolResult(content: RichContent) {
+    if (typeof content === 'string') {
+      return { type: 'text' as const, value: content };
+    }
+    
+    // If it's an array, we need to handle mixed content
+    const convertedContent = content.map(part => {
+      if (typeof part === 'string') {
+        return { type: 'text' as const, text: part };
+      } else if (part.type.startsWith('image/')) {
+        const imagePart = part as ContentMultiMediaBinary;
+        if (!imagePart.base64) {
+          throw new Error(`Image content must have base64 data, found: ${JSON.stringify(part)}`);
+        }
+        return { type: 'media' as const, data: imagePart.base64, mediaType: imagePart.type };
+      } else {
+        throw new Error(`Unsupported content type: ${part.type}`);
+      }
+    });
+
+    // If there's only one text item, return it as text type
+    if (convertedContent.length === 1 && convertedContent[0].type === 'text') {
+      return { type: 'text' as const, value: convertedContent[0].text };
+    }
+    
+    // Otherwise, return the structured content array
+    return { type: 'content' as const, value: convertedContent };
+  }
+
   private pomlMessagesToVercelMessage(messages: Message[]): ModelMessage[] {
     const speakerToRole = {
       ai: 'assistant',
@@ -447,12 +478,29 @@ export class TestCommand implements Command {
       const role = speakerToRole[msg.speaker];
       const contents = typeof msg.content === 'string' ? msg.content : msg.content.map(part => {
         if (typeof part === 'string') {
-          return { type: 'text', text: part };
+          return { type: 'text', text: part } satisfies TextPart;
         } else if (part.type.startsWith('image/')) {
-          if (!part.base64) {
+          const binaryPart = part as ContentMultiMediaBinary;
+          if (!binaryPart.base64) {
             throw new Error(`Image content must have base64 data, found: ${JSON.stringify(part)}`);
           }
-          return { type: 'image', image: part.base64 };
+          return { type: 'image', image: binaryPart.base64 } satisfies ImagePart;
+        } else if (part.type === 'application/vnd.poml.toolrequest') {
+          const toolRequest = part as ContentMultiMediaToolRequest;
+          return {
+            type: 'tool-call',
+            toolCallId: toolRequest.id,
+            toolName: toolRequest.name,
+            input: toolRequest.content
+          } satisfies ToolCallPart;
+        } else if (part.type === 'application/vnd.poml.toolresponse') {
+          const toolResponse = part as ContentMultiMediaToolResponse;
+          return {
+            type: 'tool-result',
+            toolCallId: toolResponse.id,
+            toolName: toolResponse.name,
+            output: this.richContentToVercelToolResult(toolResponse.content)
+          } satisfies ToolResultPart;
         } else {
           throw new Error(`Unsupported content type: ${part.type}`);
         }
@@ -492,7 +540,8 @@ export class TestCommand implements Command {
     const speakerMapping = {
       ai: 'assistant',
       human: 'user',
-      system: 'system'
+      system: 'system',
+      tool: 'tool'
     };
     return messages.map(msg => {
       return {

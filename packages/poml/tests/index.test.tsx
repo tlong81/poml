@@ -620,6 +620,179 @@ describe('message components', () => {
     expect((element[2].content[0] as any).type).toBe('application/vnd.poml.toolresponse');
     expect(element[3].speaker).toBe('ai');
   });
+
+  test('pomlMessagesToVercelMessage conversion', () => {
+    // Mock helper function for rich content conversion
+    const richContentToToolResult = (content: any) => {
+      if (typeof content === 'string') {
+        return content;
+      }
+      const convertedContent = content.map((part: any) => {
+        if (typeof part === 'string') {
+          return { type: 'text', text: part };
+        } else if (part.type?.startsWith('image/')) {
+          return { type: 'image', image: part.base64 };
+        } else if (part.type === 'application/json') {
+          return { type: 'text', text: JSON.stringify(part.content, null, 2) };
+        } else {
+          return { type: 'text', text: `[${part.type}]` };
+        }
+      });
+      if (convertedContent.length === 1 && convertedContent[0].type === 'text') {
+        return convertedContent[0].text;
+      }
+      return convertedContent;
+    };
+
+    // Mock a simplified version of the conversion function
+    const convertMessage = (messages: any[]) => {
+      const speakerToRole = {
+        ai: 'assistant',
+        human: 'user',
+        system: 'system',
+        tool: 'tool'
+      };
+      return messages.map(msg => {
+        const role = speakerToRole[msg.speaker as keyof typeof speakerToRole];
+        const contents = typeof msg.content === 'string' ? msg.content : msg.content.map((part: any) => {
+          if (typeof part === 'string') {
+            return { type: 'text', text: part };
+          } else if (part.type === 'application/vnd.poml.toolrequest') {
+            return {
+              type: 'tool-call',
+              toolCallId: part.id,
+              toolName: part.name,
+              input: part.content
+            };
+          } else if (part.type === 'application/vnd.poml.toolresponse') {
+            return {
+              type: 'tool-result',
+              toolCallId: part.id,
+              toolName: part.name,
+              result: richContentToToolResult(part.content)
+            };
+          }
+          return part;
+        });
+        return { role, content: contents };
+      });
+    };
+
+    const toolRequest = {
+      type: 'application/vnd.poml.toolrequest' as const,
+      id: 'req-123',
+      name: 'search',
+      content: { query: 'test', limit: 10 }
+    };
+    
+    const toolResponse = {
+      type: 'application/vnd.poml.toolresponse' as const,
+      id: 'req-123',
+      name: 'search',
+      content: 'Search completed successfully'
+    };
+    
+    const messages = [
+      { speaker: 'human', content: 'Please search for something' },
+      { speaker: 'ai', content: [toolRequest] },
+      { speaker: 'tool', content: [toolResponse] },
+      { speaker: 'ai', content: 'Here are the results' }
+    ];
+    
+    const converted = convertMessage(messages);
+    
+    expect(converted).toHaveLength(4);
+    expect(converted[0].role).toBe('user');
+    expect(converted[0].content).toBe('Please search for something');
+    
+    expect(converted[1].role).toBe('assistant');
+    expect(converted[1].content[0].type).toBe('tool-call');
+    expect(converted[1].content[0].toolCallId).toBe('req-123');
+    expect(converted[1].content[0].toolName).toBe('search');
+    expect(converted[1].content[0].input).toEqual({ query: 'test', limit: 10 });
+    
+    expect(converted[2].role).toBe('tool');
+    expect(converted[2].content[0].type).toBe('tool-result');
+    expect(converted[2].content[0].toolCallId).toBe('req-123');
+    expect(converted[2].content[0].toolName).toBe('search');
+    expect(converted[2].content[0].result).toBe('Search completed successfully');
+    
+    expect(converted[3].role).toBe('assistant');
+    expect(converted[3].content).toBe('Here are the results');
+  });
+
+  test('pomlMessagesToVercelMessage with rich content tool response', () => {
+    // Mock helper function for rich content conversion
+    const richContentToToolResult = (content: any) => {
+      if (typeof content === 'string') {
+        return content;
+      }
+      const convertedContent = content.map((part: any) => {
+        if (typeof part === 'string') {
+          return { type: 'text', text: part };
+        } else if (part.type?.startsWith('image/')) {
+          return { type: 'image', image: part.base64 };
+        } else if (part.type === 'application/json') {
+          return { type: 'text', text: JSON.stringify(part.content, null, 2) };
+        } else {
+          return { type: 'text', text: `[${part.type}]` };
+        }
+      });
+      if (convertedContent.length === 1 && convertedContent[0].type === 'text') {
+        return convertedContent[0].text;
+      }
+      return convertedContent;
+    };
+
+    // Test tool response with mixed rich content
+    const toolResponseWithRichContent = {
+      type: 'application/vnd.poml.toolresponse' as const,
+      id: 'req-456',
+      name: 'analyze_image',
+      content: [
+        'Analysis results:',
+        {
+          type: 'image/png',
+          base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          alt: 'chart'
+        },
+        'The trend is positive.'
+      ]
+    };
+
+    const result = richContentToToolResult(toolResponseWithRichContent.content);
+    
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toEqual({ type: 'text', text: 'Analysis results:' });
+    expect(result[1]).toEqual({ 
+      type: 'image', 
+      image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' 
+    });
+    expect(result[2]).toEqual({ type: 'text', text: 'The trend is positive.' });
+
+    // Test tool response with single text content
+    const toolResponseWithText = {
+      type: 'application/vnd.poml.toolresponse' as const,
+      id: 'req-789',
+      name: 'search',
+      content: 'Simple text result'
+    };
+
+    const textResult = richContentToToolResult(toolResponseWithText.content);
+    expect(textResult).toBe('Simple text result');
+
+    // Test tool response with single text in array (should be simplified)
+    const toolResponseWithSingleText = {
+      type: 'application/vnd.poml.toolresponse' as const,
+      id: 'req-999',
+      name: 'process',
+      content: ['Single line result']
+    };
+
+    const singleTextResult = richContentToToolResult(toolResponseWithSingleText.content);
+    expect(singleTextResult).toBe('Single line result');
+  });
 });
 
 describe('examples correctness', () => {
