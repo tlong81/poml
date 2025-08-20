@@ -518,7 +518,7 @@ Runtime parameters configure the language model's behavior during execution. The
 <runtime temperature="0.7" 
          max-output-tokens="1000" 
          model="gpt-5"
-         top_p="0.9" />
+         top-p="0.9" />
 ```
 
 All attributes are passed as runtime parameters with automatic type conversion:
