@@ -24,21 +24,22 @@ jobs:
           node-version: '22'
       - name: Create clean test environment
         run: |
-          mkdir -p /tmp/poml_test
-          cp -r examples /tmp/poml_test/
+          mkdir -p ${{ runner.temp }}/poml_test
+          cp -r examples ${{ runner.temp }}/poml_test/
+        shell: bash
       - name: Install POML nightly
         run: |
-          cd /tmp/poml_test
+          cd ${{ runner.temp }}/poml_test
           npm init -y
           npm install pomljs@nightly
       - name: Copy and test API example
         run: |
-          cp examples/401_js_hello_world.mjs /tmp/poml_test/
-          cd /tmp/poml_test
+          cp examples/401_js_hello_world.mjs ${{ runner.temp }}/poml_test/
+          cd ${{ runner.temp }}/poml_test
           node 401_js_hello_world.mjs
       - name: Test all .poml examples
         run: |
-          cd /tmp/poml_test
+          cd ${{ runner.temp }}/poml_test
           set -ex
           for poml_file in examples/*.poml; do
             echo "Testing $poml_file"
@@ -64,18 +65,19 @@ jobs:
           python-version: '3.12'
       - name: Create clean test environment
         run: |
-          mkdir -p /tmp/poml_test
-          cp -r examples /tmp/poml_test/
+          mkdir -p ${{ runner.temp }}/poml_test
+          cp -r examples ${{ runner.temp }}/poml_test/
+        shell: bash
       - run: |
           pip install --upgrade --pre --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
       - name: Copy and test API example
         run: |
-          cp examples/402_py_hello_world.py /tmp/poml_test/
-          cd /tmp/poml_test
+          cp examples/402_py_hello_world.py ${{ runner.temp }}/poml_test/
+          cd ${{ runner.temp }}/poml_test
           python 402_py_hello_world.py
       - name: Test all .poml examples
         run: |
-          cd /tmp/poml_test
+          cd ${{ runner.temp }}/poml_test
           set -ex
           for poml_file in examples/*.poml; do
             echo "Testing $poml_file"
