@@ -158,6 +158,57 @@ describe('endToEnd', () => {
     expect(response.content).toHaveLength(3);
     expect(response.content[1].type).toBe('image/png');
   });
+
+  test('toolResponseComplex', async () => {
+    const text = `<poml>
+<tool name="get_horoscope">
+{
+    "type": "object",
+    "properties": {
+        "sign": {
+            "type": "string",
+            "description": "An astrological sign like Taurus or Aquarius"
+        }
+    },
+    "required": ["sign"]
+}</tool>
+
+<p>What is my horoscope? I am an Aquarius.</p>
+<tool-request name="get_horoscope" id="call_rui1PrufCQS25KZxLkt7hXWA" parameters='{"sign":"Aquarius"}'/>
+<tool-response name="get_horoscope" id="call_rui1PrufCQS25KZxLkt7hXWA" syntax="json">
+<cp caption="horoscope">: Next Tuesday you will befriend a baby otter.</cp>
+</tool-response>
+</poml>`;
+    const result = await write(await read(text), { speaker: true });
+    expect(result).toStrictEqual([
+      {
+        speaker: 'system',
+        content: 'What is my horoscope? I am an Aquarius.'
+      },
+      {
+        speaker: 'ai',
+        content: [
+          {
+            type: 'application/vnd.poml.toolrequest',
+            content: { sign: 'Aquarius' },
+            id: 'call_rui1PrufCQS25KZxLkt7hXWA',
+            name: 'get_horoscope'
+          }
+        ]
+      },
+      {
+        speaker: 'tool',
+        content: [
+          {
+            type: 'application/vnd.poml.toolresponse',
+            content: '{\n  "horoscope": ": Next Tuesday you will befriend a baby otter."\n}',
+            id: 'call_rui1PrufCQS25KZxLkt7hXWA',
+            name: 'get_horoscope'
+          }
+        ]
+      }
+    ]);
+  });
 });
 
 describe('diagnosis', () => {

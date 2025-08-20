@@ -847,7 +847,6 @@ export const ToolRequest = component('ToolRequest', { aliases: ['toolRequest'] }
  * @param {string} id - Tool call ID to respond to
  * @param {string} name - Tool name
  * @param {'human'|'ai'|'system'|'tool'} speaker - The speaker of the content. Default is `tool`.
- * @param children - Tool output (nested rich content)
  *
  * @example
  * ```xml

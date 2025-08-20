@@ -387,7 +387,7 @@ The expression can return either:
 
 ## Tool Registration
 
-Tool registration enables AI models to interact with external functions during conversation. Tools are function definitions that tell the AI model what functions are available, what parameters they expect, and what they do.
+Tool registration enables AI models to interact with external functions during conversation. Tools are function definitions that tell the AI model what functions are available, what parameters they expect, and what they do. Tool registration is done using the `<tool-definition>` or `<tool>` tag (both are equivalent).
 
 **Important:** Tools and response schemas are mutually exclusive. You cannot use both `output-schema` and `tool-definition` elements in the same POML document.
 

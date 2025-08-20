@@ -1275,3 +1275,73 @@ class _TagLib:
             **kwargs,
         )
     
+    def tool_request(
+        self,
+        id: Optional[str] = None,
+        name: Optional[str] = None,
+        parameters: Optional[Any] = None,
+        speaker: Optional[str] = None,
+        **kwargs: Any,
+    ):
+        """ToolRequest represents an AI-generated tool request with parameters.
+        Used to display tool calls made by AI models.
+
+        Args:
+            id (Optional[str]): Tool request ID
+            name (Optional[str]): Tool name
+            parameters (Optional[Any]): Tool input parameters
+            speaker (Optional[str]): The speaker of the content. Default is `ai`. Default is `"ai"`. Choices: `"human"`, `"ai"`, `"system"`.
+
+        Example:
+            ```xml
+            <ToolRequest id="123" name="search" parameters={{ query: "hello" }} />
+            ```
+        """
+        return self.tag(
+            tag_name="ToolRequest",
+            id=id,
+            name=name,
+            parameters=parameters,
+            speaker=speaker,
+            **kwargs,
+        )
+    
+    def tool_response(
+        self,
+        syntax: Optional[str] = None,
+        id: Optional[str] = None,
+        name: Optional[str] = None,
+        speaker: Optional[str] = None,
+        **kwargs: Any,
+    ):
+        """ToolResponse represents the result of a tool execution.
+        Used to display tool execution results with rich content.
+
+        Args:
+            syntax (Optional[str]): The syntax of ToolResponse is special.
+              It is always `multimedia` for itself. The syntax is used to render the content inside.
+              If not specified, it will inherit from the parent context. Choices: `"markdown"`, `"html"`, `"json"`, `"yaml"`, `"xml"`, `"text"`.
+            id (Optional[str]): Tool call ID to respond to
+            name (Optional[str]): Tool name
+            speaker (Optional[str]): The speaker of the content. Default is `tool`. Default is `"tool"`. Choices: `"human"`, `"ai"`, `"system"`, `"tool"`.
+
+        Example:
+            ```xml
+            <ToolResponse id="123" name="search">
+             <Paragraph>Search results for "hello":</Paragraph>
+             <List>
+              <ListItem>Result 1</ListItem>
+              <ListItem>Result 2</ListItem>
+             </List>
+            </ToolResponse>
+            ```
+        """
+        return self.tag(
+            tag_name="ToolResponse",
+            syntax=syntax,
+            id=id,
+            name=name,
+            speaker=speaker,
+            **kwargs,
+        )
+    

@@ -957,6 +957,50 @@ Wrap the contents in a system message.
 - **type**: The type of the content, used in serialization.
 - **writerOptions**: Object. An experimental optional JSON string to customize the format of markdown headers, JSON indents, etc.
 
+### ToolRequest
+
+ToolRequest represents an AI-generated tool request with parameters.
+Used to display tool calls made by AI models.
+
+#### Usages
+
+```xml
+<ToolRequest id="123" name="search" parameters={{ query: "hello" }} />
+```
+
+#### Parameters
+
+- **id**: Tool request ID
+- **name**: Tool name
+- **parameters**: Any. Tool input parameters
+- **speaker**: Can be one of: human, ai, system. The speaker of the content. Default is `ai`.
+
+### ToolResponse
+
+ToolResponse represents the result of a tool execution.
+Used to display tool execution results with rich content.
+
+#### Usages
+
+```xml
+<ToolResponse id="123" name="search">
+ <Paragraph>Search results for "hello":</Paragraph>
+ <List>
+  <ListItem>Result 1</ListItem>
+  <ListItem>Result 2</ListItem>
+ </List>
+</ToolResponse>
+```
+
+#### Parameters
+
+- **syntax**: Can be one of: markdown, html, json, yaml, xml, text. The syntax of ToolResponse is special.
+    It is always `multimedia` for itself. The syntax is used to render the content inside.
+    If not specified, it will inherit from the parent context.
+- **id**: Tool call ID to respond to
+- **name**: Tool name
+- **speaker**: Can be one of: human, ai, system, tool. The speaker of the content. Default is `tool`.
+
 ### Tree
 
 Renders a tree structure in various formats.

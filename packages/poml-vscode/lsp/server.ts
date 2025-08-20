@@ -39,7 +39,8 @@ import {
   ReadError,
   RichContent,
   SystemError,
-  WriteError
+  WriteError,
+  ContentMultiMediaBinary
 } from 'poml/base';
 import { PomlFile, PomlToken } from 'poml/file';
 import { encodingForModel, Tiktoken } from 'js-tiktoken';
@@ -318,10 +319,15 @@ class PomlLspServer {
       for (const part of content) {
         if (typeof part === 'string') {
           total += enc.encode(part).length;
-        } else {
-          const { width, height } = await getImageWidthHeight(part.base64);
+        } else if ((part as any).base64) {
+          const binaryPart = part as ContentMultiMediaBinary;
+          const { width, height } = await getImageWidthHeight(binaryPart.base64);
           // For images, we can use a heuristic based on width and height
           total += estimateImageTokens(width, height, { model: model as any });
+        } else {
+          // estimate the token cost by json serializing the content
+          const jsonContent = JSON.stringify(part);
+          total += enc.encode(jsonContent).length;
         }
       }
       return total;

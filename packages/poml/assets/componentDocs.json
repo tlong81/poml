@@ -1571,5 +1571,95 @@
     ],
     "example": "```xml\n<Audio src=\"path/to/audio.mp3\" />\n```",
     "baseComponents": []
+  },
+  {
+    "name": "ToolRequest",
+    "description": "ToolRequest represents an AI-generated tool request with parameters.\nUsed to display tool calls made by AI models.",
+    "params": [
+      {
+        "name": "id",
+        "type": "string",
+        "choices": [],
+        "description": "Tool request ID",
+        "required": false
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "choices": [],
+        "description": "Tool name",
+        "required": false
+      },
+      {
+        "name": "parameters",
+        "type": "any",
+        "choices": [],
+        "description": "Tool input parameters",
+        "required": false
+      },
+      {
+        "name": "speaker",
+        "type": "string",
+        "choices": [
+          "human",
+          "ai",
+          "system"
+        ],
+        "description": "The speaker of the content. Default is `ai`.",
+        "defaultValue": "ai",
+        "required": false
+      }
+    ],
+    "example": "```xml\n<ToolRequest id=\"123\" name=\"search\" parameters={{ query: \"hello\" }} />\n```",
+    "baseComponents": []
+  },
+  {
+    "name": "ToolResponse",
+    "description": "ToolResponse represents the result of a tool execution.\nUsed to display tool execution results with rich content.",
+    "params": [
+      {
+        "name": "syntax",
+        "type": "string",
+        "choices": [
+          "markdown",
+          "html",
+          "json",
+          "yaml",
+          "xml",
+          "text"
+        ],
+        "description": "The syntax of ToolResponse is special.\n  It is always `multimedia` for itself. The syntax is used to render the content inside.\n  If not specified, it will inherit from the parent context.",
+        "required": false
+      },
+      {
+        "name": "id",
+        "type": "string",
+        "choices": [],
+        "description": "Tool call ID to respond to",
+        "required": false
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "choices": [],
+        "description": "Tool name",
+        "required": false
+      },
+      {
+        "name": "speaker",
+        "type": "string",
+        "choices": [
+          "human",
+          "ai",
+          "system",
+          "tool"
+        ],
+        "description": "The speaker of the content. Default is `tool`.",
+        "defaultValue": "tool",
+        "required": false
+      }
+    ],
+    "example": "```xml\n<ToolResponse id=\"123\" name=\"search\">\n <Paragraph>Search results for \"hello\":</Paragraph>\n <List>\n  <ListItem>Result 1</ListItem>\n  <ListItem>Result 2</ListItem>\n </List>\n</ToolResponse>\n```",
+    "baseComponents": []
   }
 ]

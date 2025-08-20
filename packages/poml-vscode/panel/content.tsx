@@ -195,6 +195,9 @@ function ChatMessages(props: {
     } else if (role === 'ai') {
       role = 'AI';
       icon = 'robot';
+    } else if (role === 'tool') {
+      role = 'Tool';
+      icon = 'tools';
     }
     return (
       <div className={`chat-message chat-message-${message.speaker}`} key={`message-${idx}`} data-line={line}>

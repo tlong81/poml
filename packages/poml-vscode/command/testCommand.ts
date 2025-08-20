@@ -311,7 +311,7 @@ export class TestCommand implements Command {
       return `${newline}[Reasoning]`;
     } else if (chunk.type === 'reasoning-end') {
       return '\n[/Reasoning]';
-    } else if (['start', 'finish', 'start-step', 'finish-step', 'message-metadata'].includes(chunk.type)) {
+    } else if (['start', 'finish', 'text-start', 'text-end', 'start-step', 'finish-step', 'message-metadata'].includes(chunk.type)) {
       return null;
     } else if (chunk.type === 'abort') {
       return `${newline}[Aborted]`;
@@ -516,8 +516,8 @@ export class TestCommand implements Command {
   private toVercelTools(tools: { [key: string]: any }[]) {
     const result: { [key: string]: Tool } = {};
     for (const t of tools) {
-      if (!t.name || !t.description || !t.parameters) {
-        throw new Error(`Tool must have name, description, and parameters: ${JSON.stringify(t)}`);
+      if (!t.name || !t.parameters) {
+        throw new Error(`Tool must have name and parameters: ${JSON.stringify(t)}`);
       }
       if (t.type !== 'function') {
         throw new Error(`Unsupported tool type: ${t.type}. Only 'function' type is supported.`);
