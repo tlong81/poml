@@ -1,0 +1,35 @@
+name: Nightly Packages
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  node-nightly:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20.x, 22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install poml@nightly
+      - run: npx poml@nightly examples/101_explain_character.poml
+      - run: node examples/401_pomljs_hello_world.mjs
+
+  python-nightly:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install poml-nightly
+      - run: poml-cli examples/101_explain_character.poml
+      - run: python examples/402_pomlpy_hello_world.py
