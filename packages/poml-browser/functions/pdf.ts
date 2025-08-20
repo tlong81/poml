@@ -1,4 +1,9 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import type {
+  PDFDocumentProxy,
+  PDFPageProxy,
+  TextItem as PDFTextItem
+} from 'pdfjs-dist/types/src/display/api';
 import { base64ToBinary } from './utils';
 import { notifyDebug, notifyError, notifyInfo } from './notification';
 import {
@@ -30,6 +35,7 @@ export async function extractPdfDocumentContent(): Promise<CardModel[]> {
 }
 
 // Types
+
 interface LineItem {
   text: string;
   y: number;
@@ -38,11 +44,11 @@ interface LineItem {
   width: number;
 }
 
-interface TextItem {
-  str: string;
-  transform: number[];
-  width?: number;
-  height?: number;
+interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 interface PageNumberDetectionResult {
@@ -52,16 +58,8 @@ interface PageNumberDetectionResult {
   yThresholdBottom?: number;
 }
 
-interface ContentBlock {
-  type: 'text' | 'image' | 'vector';
-  y: number; // vertical position for ordering
-  x: number; // horizontal position
-  width?: number;
-  height?: number;
-  content: any; // Text block or image data
-}
-
 interface TextBlock {
+  type: 'text';
   text: string;
   isHeading: boolean;
   x: number;
@@ -70,15 +68,17 @@ interface TextBlock {
   height: number;
 }
 
-interface ImageBlock {
+interface GraphicBlock {
+  type: 'image';
   base64: string;
   mimeType: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  isVector?: boolean;
 }
+
+type ContentBlock = TextBlock | GraphicBlock;
 
 /**
  * Extracts structured content from a PDF document with proper image/text interleaving
@@ -115,7 +115,7 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
       loadingTask = pdfjsLib.getDocument(targetUrl);
     }
 
-    const pdf = await loadingTask.promise;
+    const pdf = (await loadingTask.promise) as PDFDocumentProxy;
     const pageCount = pdf.numPages;
     notifyInfo(`PDF loaded successfully`, { pages: pageCount });
 
@@ -141,20 +141,18 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
       // Convert blocks to cards
       for (const block of contentBlocks) {
         if (block.type === 'text') {
-          const textBlock = block.content as TextBlock;
-          if (textBlock.text.trim()) {
+          if (block.text.trim()) {
             allCards.push({
-              content: { type: 'text', value: textBlock.text } as TextContent,
-              componentType: textBlock.isHeading ? 'Header' : 'Paragraph'
+              content: { type: 'text', value: block.text } as TextContent,
+              componentType: block.isHeading ? 'Header' : 'Paragraph'
             });
           }
-        } else if (block.type === 'image' || block.type === 'vector') {
-          const imageBlock = block.content as ImageBlock;
+        } else if (block.type === 'image') {
           allCards.push({
             content: {
               type: 'binary',
-              value: imageBlock.base64,
-              mimeType: imageBlock.mimeType,
+              value: block.base64,
+              mimeType: block.mimeType,
               encoding: 'base64'
             } as BinaryContent,
             componentType: 'Image'
@@ -218,36 +216,25 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
 /**
  * Extract page content with enhanced graphics region extraction
  */
-async function extractPageContent(page: any, viewport: any): Promise<ContentBlock[]> {
+async function extractPageContent(page: PDFPageProxy, viewport: any): Promise<ContentBlock[]> {
   const contentBlocks: ContentBlock[] = [];
 
   // First, detect graphics regions to use for text filtering
-  const graphicsRegions = await detectGraphicsRegions(page);
-  
-  // Extract text with filtering for embedded graphics text
-  const textBlocks = await extractTextBlocks(page, viewport, graphicsRegions);
-  for (const textBlock of textBlocks) {
-    contentBlocks.push({
-      type: 'text',
-      y: textBlock.y,
-      x: textBlock.x,
-      width: textBlock.width,
-      height: textBlock.height,
-      content: textBlock
+  const graphicBlocks = await detectGraphicsRegions(page);
+  for (const graphicBlock of graphicBlocks) {
+    contentBlocks.push(graphicBlock);
+    notifyDebug('Detected graphics region', {
+      x: graphicBlock.x,
+      y: graphicBlock.y,
+      width: graphicBlock.width,
+      height: graphicBlock.height
     });
   }
 
-  // Extract images and rendered graphics regions
-  const imageBlocks = await extractImagesWithPositions(page, viewport);
-  for (const imageBlock of imageBlocks) {
-    contentBlocks.push({
-      type: imageBlock.isVector ? 'vector' : 'image',
-      y: imageBlock.y,
-      x: imageBlock.x,
-      width: imageBlock.width,
-      height: imageBlock.height,
-      content: imageBlock
-    });
+  // Extract text with filtering for embedded graphics text
+  const textBlocks = await extractTextBlocks(page, viewport, graphicBlocks);
+  for (const textBlock of textBlocks) {
+    contentBlocks.push(textBlock);
   }
 
   return contentBlocks;
@@ -256,23 +243,24 @@ async function extractPageContent(page: any, viewport: any): Promise<ContentBloc
 /**
  * Enhanced text extraction with better filtering
  */
-async function extractTextBlocks(page: any, viewport: any, graphicsRegions?: Array<{x: number, y: number, width: number, height: number}>): Promise<TextBlock[]> {
+async function extractTextBlocks(
+  page: PDFPageProxy,
+  viewport: any,
+  graphicBlocks: GraphicBlock[]
+): Promise<TextBlock[]> {
   const textContent = await page.getTextContent();
-  const items = textContent.items as TextItem[];
+  const items = textContent.items as PDFTextItem[];
 
   if (items.length === 0) {
     notifyDebug('No text items found in page');
     return [];
   }
 
-  // Use provided graphics regions or detect them
-  const regions = graphicsRegions || await detectGraphicsRegions(page);
-  
   // Detect page numbers
   const pageNumberInfo = detectPageNumbers(items, viewport);
 
   // Filter and extract lines
-  const lines = extractFilteredLines(items, viewport, pageNumberInfo, regions);
+  const lines = extractFilteredLines(items, viewport, pageNumberInfo, graphicBlocks);
 
   // Group into text blocks with position info
   const blocks = groupLinesIntoBlocks(lines, viewport);
@@ -281,315 +269,29 @@ async function extractTextBlocks(page: any, viewport: any, graphicsRegions?: Arr
 }
 
 /**
- * Detect regions that contain vector graphics or embedded images
- */
-async function detectGraphicsRegions(page: any): Promise<Array<{x: number, y: number, width: number, height: number}>> {
-  const regions: Array<{x: number, y: number, width: number, height: number}> = [];
-  
-  try {
-    const operators = await page.getOperatorList();
-    const viewport = page.getViewport({ scale: 1.0 });
-    
-    // Track graphics state
-    let graphicsStack: any[] = [];
-    let currentGraphics: {
-      paths: any[];
-      minX: number;
-      minY: number;
-      maxX: number;
-      maxY: number;
-      hasContent: boolean;
-    } | null = null;
-    
-    // OPS enum values
-    const OPS = {
-      save: 91,
-      restore: 92,
-      transform: 44,
-      moveTo: 13,
-      lineTo: 14,
-      curveTo: 15,
-      curveTo2: 16,
-      curveTo3: 17,
-      closePath: 9,
-      rectangle: 83,
-      stroke: 84,
-      fill: 85,
-      fillStroke: 86,
-      beginText: 11,
-      endText: 12,
-      clip: 7,
-      eoClip: 8,
-      paintImageXObject: 82,
-      paintInlineImageXObject: 83,
-      constructPath: 56
-    };
-    
-    let inTextBlock = false;
-    let pathDepth = 0;
-    
-    for (let i = 0; i < operators.fnArray.length; i++) {
-      const fn = operators.fnArray[i];
-      const args = operators.argsArray[i];
-      
-      // Track text blocks to avoid including them
-      if (fn === OPS.beginText) {
-        inTextBlock = true;
-        continue;
-      } else if (fn === OPS.endText) {
-        inTextBlock = false;
-        continue;
-      }
-      
-      // Skip if we're in a text block
-      if (inTextBlock) continue;
-      
-      // Handle save/restore for graphics state
-      if (fn === OPS.save) {
-        if (currentGraphics && currentGraphics.hasContent) {
-          graphicsStack.push(currentGraphics);
-        }
-        currentGraphics = {
-          paths: [],
-          minX: Infinity,
-          minY: Infinity,
-          maxX: -Infinity,
-          maxY: -Infinity,
-          hasContent: false
-        };
-        pathDepth++;
-      } else if (fn === OPS.restore) {
-        pathDepth = Math.max(0, pathDepth - 1);
-        
-        // If we have a complete graphics region, add it
-        if (currentGraphics && currentGraphics.hasContent && 
-            currentGraphics.minX !== Infinity) {
-          const region = {
-            x: currentGraphics.minX,
-            y: currentGraphics.minY,
-            width: currentGraphics.maxX - currentGraphics.minX,
-            height: currentGraphics.maxY - currentGraphics.minY
-          };
-          
-          // Only add meaningful regions (not too small)
-          if (region.width > 5 && region.height > 5) {
-            regions.push(region);
-          }
-        }
-        
-        currentGraphics = graphicsStack.pop() || null;
-      }
-      
-      // Track path operations to find graphics bounds
-      if (currentGraphics) {
-        if (fn === OPS.moveTo || fn === OPS.lineTo) {
-          if (args && args.length >= 2) {
-            updateBounds(currentGraphics, args[0], args[1]);
-            currentGraphics.hasContent = true;
-          }
-        } else if (fn === OPS.curveTo || fn === OPS.curveTo2 || fn === OPS.curveTo3) {
-          if (args && args.length >= 2) {
-            // For curves, check all control points
-            for (let j = 0; j < args.length; j += 2) {
-              if (j + 1 < args.length) {
-                updateBounds(currentGraphics, args[j], args[j + 1]);
-              }
-            }
-            currentGraphics.hasContent = true;
-          }
-        } else if (fn === OPS.rectangle) {
-          if (args && args.length >= 4) {
-            const [x, y, width, height] = args;
-            updateBounds(currentGraphics, x, y);
-            updateBounds(currentGraphics, x + width, y + height);
-            currentGraphics.hasContent = true;
-          }
-        } else if (fn === OPS.constructPath) {
-          // Handle complex path construction
-          if (args && args[0] && Array.isArray(args[0])) {
-            const ops = args[0];
-            const data = args[1];
-            let dataIndex = 0;
-            
-            for (const op of ops) {
-              switch (op) {
-                case OPS.moveTo:
-                case OPS.lineTo:
-                  if (dataIndex + 1 < data.length) {
-                    updateBounds(currentGraphics, data[dataIndex], data[dataIndex + 1]);
-                    dataIndex += 2;
-                    currentGraphics.hasContent = true;
-                  }
-                  break;
-                case OPS.curveTo:
-                  if (dataIndex + 5 < data.length) {
-                    for (let k = 0; k < 6; k += 2) {
-                      updateBounds(currentGraphics, data[dataIndex + k], data[dataIndex + k + 1]);
-                    }
-                    dataIndex += 6;
-                    currentGraphics.hasContent = true;
-                  }
-                  break;
-                case OPS.rectangle:
-                  if (dataIndex + 3 < data.length) {
-                    const x = data[dataIndex];
-                    const y = data[dataIndex + 1];
-                    const w = data[dataIndex + 2];
-                    const h = data[dataIndex + 3];
-                    updateBounds(currentGraphics, x, y);
-                    updateBounds(currentGraphics, x + w, y + h);
-                    dataIndex += 4;
-                    currentGraphics.hasContent = true;
-                  }
-                  break;
-                case OPS.closePath:
-                  // No data consumed
-                  break;
-              }
-            }
-          }
-        } else if (fn === OPS.stroke || fn === OPS.fill || fn === OPS.fillStroke) {
-          // These operations indicate actual drawing
-          if (currentGraphics) {
-            currentGraphics.hasContent = true;
-          }
-        }
-      }
-    }
-    
-    // Add any remaining graphics region
-    if (currentGraphics && currentGraphics.hasContent && 
-        currentGraphics.minX !== Infinity) {
-      const region = {
-        x: currentGraphics.minX,
-        y: currentGraphics.minY,
-        width: currentGraphics.maxX - currentGraphics.minX,
-        height: currentGraphics.maxY - currentGraphics.minY
-      };
-      
-      if (region.width > 5 && region.height > 5) {
-        regions.push(region);
-      }
-    }
-    
-    // Merge overlapping regions
-    const mergedRegions = mergeOverlappingRegions(regions);
-    
-    notifyDebug('Graphics regions detected', {
-      rawCount: regions.length,
-      mergedCount: mergedRegions.length,
-      samples: mergedRegions.slice(0, 3).map(r => ({
-        x: r.x.toFixed(1),
-        y: r.y.toFixed(1),
-        w: r.width.toFixed(1),
-        h: r.height.toFixed(1)
-      }))
-    });
-    
-    return mergedRegions;
-  } catch (error) {
-    notifyDebug('Could not detect graphics regions', error);
-  }
-  
-  return regions;
-}
-
-/**
- * Update bounds for a graphics region
- */
-function updateBounds(graphics: any, x: number, y: number): void {
-  graphics.minX = Math.min(graphics.minX, x);
-  graphics.minY = Math.min(graphics.minY, y);
-  graphics.maxX = Math.max(graphics.maxX, x);
-  graphics.maxY = Math.max(graphics.maxY, y);
-}
-
-/**
- * Merge overlapping regions to avoid duplicates
- */
-function mergeOverlappingRegions(
-  regions: Array<{x: number, y: number, width: number, height: number}>
-): Array<{x: number, y: number, width: number, height: number}> {
-  if (regions.length <= 1) return regions;
-  
-  const merged: Array<{x: number, y: number, width: number, height: number}> = [];
-  const used = new Set<number>();
-  
-  for (let i = 0; i < regions.length; i++) {
-    if (used.has(i)) continue;
-    
-    let current = { ...regions[i] };
-    let didMerge = true;
-    
-    while (didMerge) {
-      didMerge = false;
-      
-      for (let j = i + 1; j < regions.length; j++) {
-        if (used.has(j)) continue;
-        
-        if (regionsOverlap(current, regions[j])) {
-          // Merge regions
-          const minX = Math.min(current.x, regions[j].x);
-          const minY = Math.min(current.y, regions[j].y);
-          const maxX = Math.max(current.x + current.width, regions[j].x + regions[j].width);
-          const maxY = Math.max(current.y + current.height, regions[j].y + regions[j].height);
-          
-          current = {
-            x: minX,
-            y: minY,
-            width: maxX - minX,
-            height: maxY - minY
-          };
-          
-          used.add(j);
-          didMerge = true;
-        }
-      }
-    }
-    
-    merged.push(current);
-  }
-  
-  return merged;
-}
-
-/**
- * Check if two regions overlap
- */
-function regionsOverlap(
-  r1: {x: number, y: number, width: number, height: number},
-  r2: {x: number, y: number, width: number, height: number}
-): boolean {
-  return !(r1.x + r1.width < r2.x || 
-           r2.x + r2.width < r1.x || 
-           r1.y + r1.height < r2.y || 
-           r2.y + r2.height < r1.y);
-}
-
-/**
  * Detect page numbers in the document
  */
-function detectPageNumbers(items: TextItem[], viewport: any): PageNumberDetectionResult {
+function detectPageNumbers(items: PDFTextItem[], viewport: any): PageNumberDetectionResult {
   const pageHeight = viewport.height;
   const topThreshold = pageHeight * 0.9; // Top 10% of page
   const bottomThreshold = pageHeight * 0.1; // Bottom 10% of page
-  
+
   let topNumbers = 0;
   let bottomNumbers = 0;
-  const pageNumberCandidates: Array<{text: string, y: number}> = [];
+  const pageNumberCandidates: Array<{ text: string; y: number }> = [];
 
   for (const item of items) {
     const y = item.transform[5];
     const text = item.str.trim();
-    
+
     // Check if it looks like a page number
     if (isLikelyPageNumber(text)) {
       if (y > topThreshold) {
         topNumbers++;
-        pageNumberCandidates.push({text, y});
+        pageNumberCandidates.push({ text, y });
       } else if (y < bottomThreshold) {
         bottomNumbers++;
-        pageNumberCandidates.push({text, y});
+        pageNumberCandidates.push({ text, y });
       }
     }
   }
@@ -623,14 +325,14 @@ function detectPageNumbers(items: TextItem[], viewport: any): PageNumberDetectio
 function isLikelyPageNumber(text: string): boolean {
   // Simple page number
   if (/^\d{1,4}$/.test(text)) return true;
-  
+
   // Page number with prefix/suffix: "Page 1", "- 1 -", "1 of 10"
   if (/^(Page\s+)?\d{1,4}(\s+of\s+\d{1,4})?$/i.test(text)) return true;
   if (/^[-–—]\s*\d{1,4}\s*[-–—]$/.test(text)) return true;
-  
+
   // Roman numerals
   if (/^[ivxlcdm]+$/i.test(text) && text.length <= 10) return true;
-  
+
   return false;
 }
 
@@ -638,10 +340,10 @@ function isLikelyPageNumber(text: string): boolean {
  * Extract lines with filtering
  */
 function extractFilteredLines(
-  items: TextItem[], 
+  items: PDFTextItem[],
   viewport: any,
   pageNumberInfo: PageNumberDetectionResult,
-  graphicsRegions: Array<{x: number, y: number, width: number, height: number}>
+  graphicBlocks: GraphicBlock[]
 ): LineItem[] {
   const lines: LineItem[] = [];
   let currentLine: LineItem | null = null;
@@ -650,14 +352,14 @@ function extractFilteredLines(
     const x = item.transform[4];
     const y = item.transform[5];
     const fontSize = Math.abs(item.transform[0]);
-    
+
     // Skip if it's a page number
     if (shouldSkipAsPageNumber(item, y, pageNumberInfo)) {
       continue;
     }
-    
+
     // Skip if it's inside a graphics region (likely embedded text)
-    if (isInsideGraphicsRegion(x, y, graphicsRegions)) {
+    if (isInsideGraphicRegion(x, y, graphicBlocks)) {
       notifyDebug('Skipping text in graphics region', { text: item.str.substring(0, 20) });
       continue;
     }
@@ -694,39 +396,57 @@ function extractFilteredLines(
 /**
  * Check if text should be skipped as page number
  */
-function shouldSkipAsPageNumber(item: TextItem, y: number, pageNumberInfo: PageNumberDetectionResult): boolean {
+function shouldSkipAsPageNumber(
+  item: PDFTextItem,
+  y: number,
+  pageNumberInfo: PageNumberDetectionResult
+): boolean {
   if (!pageNumberInfo.shouldFilter) return false;
-  
+
   const text = item.str.trim();
   if (!isLikelyPageNumber(text)) return false;
-  
-  if (pageNumberInfo.pattern === 'top' && pageNumberInfo.yThresholdTop && y > pageNumberInfo.yThresholdTop) {
+
+  if (
+    pageNumberInfo.pattern === 'top' &&
+    pageNumberInfo.yThresholdTop &&
+    y > pageNumberInfo.yThresholdTop
+  ) {
     return true;
   }
-  if (pageNumberInfo.pattern === 'bottom' && pageNumberInfo.yThresholdBottom && y < pageNumberInfo.yThresholdBottom) {
+  if (
+    pageNumberInfo.pattern === 'bottom' &&
+    pageNumberInfo.yThresholdBottom &&
+    y < pageNumberInfo.yThresholdBottom
+  ) {
     return true;
   }
   if (pageNumberInfo.pattern === 'both') {
-    if ((pageNumberInfo.yThresholdTop && y > pageNumberInfo.yThresholdTop) ||
-        (pageNumberInfo.yThresholdBottom && y < pageNumberInfo.yThresholdBottom)) {
+    if (
+      (pageNumberInfo.yThresholdTop && y > pageNumberInfo.yThresholdTop) ||
+      (pageNumberInfo.yThresholdBottom && y < pageNumberInfo.yThresholdBottom)
+    ) {
       return true;
     }
   }
-  
+
   return false;
 }
 
 /**
  * Check if position is inside a graphics region
  */
-function isInsideGraphicsRegion(
-  x: number, 
-  y: number, 
-  regions: Array<{x: number, y: number, width: number, height: number}>
+function isInsideGraphicRegion(
+  x: number,
+  y: number,
+  graphicBlocks: GraphicBlock[]
 ): boolean {
-  for (const region of regions) {
-    if (x >= region.x && x <= region.x + region.width &&
-        y >= region.y && y <= region.y + region.height) {
+  for (const block of graphicBlocks) {
+    if (
+      x >= block.x &&
+      x <= block.x + block.width &&
+      y >= block.y &&
+      y <= block.y + block.height
+    ) {
       return true;
     }
   }
@@ -787,17 +507,18 @@ function groupLinesIntoBlocks(lines: LineItem[], viewport: any): TextBlock[] {
  */
 function createTextBlock(lines: LineItem[], isHeading: boolean): TextBlock | null {
   if (lines.length === 0) return null;
-  
+
   const text = joinParagraphLines(lines.map(l => l.text));
   if (!text.trim()) return null;
-  
+
   // Calculate bounding box
   const minX = Math.min(...lines.map(l => l.x));
   const maxX = Math.max(...lines.map(l => l.x + l.width));
   const minY = Math.min(...lines.map(l => l.y));
   const maxY = Math.max(...lines.map(l => l.y));
-  
+
   return {
+    type: 'text',
     text,
     isHeading,
     x: minX,
@@ -805,219 +526,6 @@ function createTextBlock(lines: LineItem[], isHeading: boolean): TextBlock | nul
     width: maxX - minX,
     height: maxY - minY
   };
-}
-
-/**
- * Extract images with their positions on the page
- */
-async function extractImagesWithPositions(page: any, viewport: any): Promise<ImageBlock[]> {
-  const images: ImageBlock[] = [];
-
-  try {
-    // First extract regular raster images
-    const rasterImages = await extractRasterImages(page, viewport);
-    images.push(...rasterImages);
-    
-    // Then extract graphics regions as images
-    const graphicsRegions = await detectGraphicsRegions(page);
-    
-    // Render each graphics region to an image
-    for (const region of graphicsRegions) {
-      // Skip very small regions or regions that overlap with raster images
-      if (region.width < 10 || region.height < 10) continue;
-      
-      // Check if this region overlaps with a raster image (to avoid duplicates)
-      const overlapsWithRaster = rasterImages.some(img => 
-        regionsOverlap(region, {
-          x: img.x,
-          y: img.y,
-          width: img.width,
-          height: img.height
-        })
-      );
-      
-      if (overlapsWithRaster) continue;
-      
-      // Render the region to canvas
-      const graphicImage = await renderGraphicsRegion(page, region, viewport);
-      if (graphicImage) {
-        images.push(graphicImage);
-      }
-    }
-    
-    notifyDebug('Total images extracted', {
-      rasterCount: rasterImages.length,
-      graphicsCount: images.length - rasterImages.length,
-      total: images.length
-    });
-  } catch (error) {
-    notifyDebug('Image extraction error:', error);
-  }
-
-  return images;
-}
-
-/**
- * Extract raster images from the page
- */
-async function extractRasterImages(page: any, viewport: any): Promise<ImageBlock[]> {
-  const images: ImageBlock[] = [];
-  
-  try {
-    const operators = await page.getOperatorList();
-    let currentTransform = [1, 0, 0, 1, 0, 0];
-    
-    for (let i = 0; i < operators.fnArray.length; i++) {
-      const fn = operators.fnArray[i];
-      const args = operators.argsArray[i];
-      
-      // Update transformation matrix
-      if (fn === 44) { // OPS.transform
-        currentTransform = multiplyTransforms(currentTransform, args[0]);
-      }
-      
-      // Extract images with position
-      if (fn === 82 || fn === 83) { // paintImageXObject or paintInlineImageXObject
-        const image = await extractSingleImageWithPosition(
-          page, 
-          fn, 
-          args, 
-          currentTransform,
-          viewport
-        );
-        if (image) {
-          images.push(image);
-        }
-      }
-    }
-  } catch (error) {
-    notifyDebug('Raster image extraction error:', error);
-  }
-  
-  return images;
-}
-
-/**
- * Render a graphics region to a PNG image
- */
-async function renderGraphicsRegion(
-  page: any, 
-  region: {x: number, y: number, width: number, height: number},
-  viewport: any
-): Promise<ImageBlock | null> {
-  try {
-    // Create a canvas for the specific region
-    const scale = 2; // Higher scale for better quality
-    const canvas = document.createElement('canvas');
-    canvas.width = region.width * scale;
-    canvas.height = region.height * scale;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) return null;
-    
-    // Set up the rendering context
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Create a custom viewport for this region
-    const customViewport = page.getViewport({
-      scale: scale,
-      offsetX: -region.x * scale,
-      offsetY: -region.y * scale
-    });
-    
-    // Render the page region to canvas
-    const renderContext = {
-      canvasContext: ctx,
-      viewport: customViewport,
-      // Only render the specific region
-      transform: [scale, 0, 0, scale, -region.x * scale, -region.y * scale]
-    };
-    
-    // Use a timeout to prevent hanging on complex graphics
-    const renderTask = page.render(renderContext);
-    await Promise.race([
-      renderTask.promise,
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Render timeout')), 5000)
-      )
-    ]);
-    
-    // Convert to base64
-    const dataUrl = canvas.toDataURL('image/png');
-    const base64 = dataUrl.split(',')[1];
-    
-    if (!base64) return null;
-    
-    return {
-      base64,
-      mimeType: 'image/png',
-      x: region.x,
-      y: region.y,
-      width: region.width,
-      height: region.height,
-      isVector: true
-    };
-  } catch (error) {
-    notifyDebug('Failed to render graphics region', error);
-    return null;
-  }
-}
-
-/**
- * Extract single image with position information
- */
-async function extractSingleImageWithPosition(
-  page: any,
-  fn: number,
-  args: any[],
-  transform: number[],
-  viewport: any
-): Promise<ImageBlock | null> {
-  try {
-    const imageName = args[0];
-    const imageObj = await (page as any).objs.get(imageName);
-
-    if (!imageObj || !imageObj.data || !imageObj.width || !imageObj.height) {
-      return null;
-    }
-
-    const base64 = await convertImageToBase64(imageObj);
-    if (!base64) return null;
-
-    // Calculate position from transform matrix
-    const x = transform[4];
-    const y = transform[5];
-    const width = imageObj.width * Math.abs(transform[0]);
-    const height = imageObj.height * Math.abs(transform[3]);
-
-    return {
-      base64,
-      mimeType: 'image/png',
-      x,
-      y,
-      width,
-      height,
-      isVector: false
-    };
-  } catch (e) {
-    notifyDebug('Failed to extract image with position:', e);
-    return null;
-  }
-}
-
-/**
- * Multiply transformation matrices
- */
-function multiplyTransforms(a: number[], b: number[]): number[] {
-  return [
-    a[0] * b[0] + a[2] * b[1],
-    a[1] * b[0] + a[3] * b[1],
-    a[0] * b[2] + a[2] * b[3],
-    a[1] * b[2] + a[3] * b[3],
-    a[0] * b[4] + a[2] * b[5] + a[4],
-    a[1] * b[4] + a[3] * b[5] + a[5]
-  ];
 }
 
 // Helper functions (keeping the good ones from original)
@@ -1067,11 +575,7 @@ function shouldStartNewParagraph(
 }
 
 function isParagraphBoundary(text: string): boolean {
-  const boundaryPatterns = [
-    /^[\•\-\*\d]+[\.\)]\s/,
-    /^[a-z]\)\s/,
-    /^(Figure|Table|Example)\s/
-  ];
+  const boundaryPatterns = [/^[\•\-\*\d]+[\.\)]\s/, /^[a-z]\)\s/, /^(Figure|Table|Example)\s/];
 
   return boundaryPatterns.some(pattern => pattern.test(text));
 }
@@ -1124,31 +628,324 @@ function isHyphenatedWordSplit(lastWord: string, firstWord: string): boolean {
   );
 }
 
-async function convertImageToBase64(imageObj: any): Promise<string | null> {
+async function detectGraphicsRegions(page: PDFPageProxy): Promise<GraphicBlock[]> {
+  const scale = 1.; // Base scale for rendering
+  const downsampleFactor = 4; // Downsample for region detection
+  const viewport = page.getViewport({ scale });
+  
+  // Create canvas for full resolution rendering
   const canvas = document.createElement('canvas');
-  canvas.width = imageObj.width;
-  canvas.height = imageObj.height;
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) {
-    return null;
+  const context = canvas.getContext('2d', { willReadFrequently: true })!;
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  
+  // Render the page
+  await page.render({
+    canvasContext: context,
+    canvas: canvas,
+    viewport: viewport
+  }).promise;
+  
+  // Get text items for text coverage analysis
+  const textContent = await page.getTextContent();
+  const textBounds = getTextBoundingBoxes(textContent as any, viewport);
+  
+  // Create downsampled canvas for region detection
+  const downsampledCanvas = document.createElement('canvas');
+  const downsampledCtx = downsampledCanvas.getContext('2d', { willReadFrequently: true })!;
+  downsampledCanvas.width = Math.floor(canvas.width / downsampleFactor);
+  downsampledCanvas.height = Math.floor(canvas.height / downsampleFactor);
+  
+  // Downsample the image
+  downsampledCtx.drawImage(
+    canvas, 
+    0, 0, canvas.width, canvas.height,
+    0, 0, downsampledCanvas.width, downsampledCanvas.height
+  );
+  
+  // Find inked regions using flood fill
+  const inkedRegions = findInkedRegions(downsampledCtx, downsampledCanvas.width, downsampledCanvas.height);
+  
+  // Scale regions back to original size and filter
+  const graphicBlocks: GraphicBlock[] = [];
+  
+  for (const region of inkedRegions) {
+    // Scale region back to original coordinates
+    const scaledRegion: BoundingBox = {
+      x: region.x * downsampleFactor,
+      y: region.y * downsampleFactor,
+      width: region.width * downsampleFactor,
+      height: region.height * downsampleFactor
+    };
+    
+    // Calculate text coverage for this region
+    const textCoverage = calculateTextCoverage(scaledRegion, textBounds);
+    
+    // Check if region is mostly text or too simple
+    if (textCoverage > 0.8) {
+      continue; // Skip regions that are mostly text
+    }
+    
+    // Check if the region content outside text is too simple
+    if (isRegionTooSimple(context, scaledRegion, textBounds)) {
+      continue;
+    }
+    
+    // Extract the region as base64
+    const regionCanvas = document.createElement('canvas');
+    const regionCtx = regionCanvas.getContext('2d')!;
+    regionCanvas.width = scaledRegion.width;
+    regionCanvas.height = scaledRegion.height;
+    
+    regionCtx.drawImage(
+      canvas,
+      scaledRegion.x, scaledRegion.y, scaledRegion.width, scaledRegion.height,
+      0, 0, scaledRegion.width, scaledRegion.height
+    );
+    
+    const dataUrl = regionCanvas.toDataURL('image/png');
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+    graphicBlocks.push({
+      type: 'image',
+      x: scaledRegion.x / scale, // Convert to PDF coordinates
+      y: scaledRegion.y / scale,
+      width: scaledRegion.width / scale,
+      height: scaledRegion.height / scale,
+      base64,
+      mimeType: 'image/png'
+    });
   }
+  
+  return graphicBlocks;
+}
 
-  const imageData = ctx.createImageData(imageObj.width, imageObj.height);
-
-  if (imageObj.data instanceof Uint8ClampedArray) {
-    imageData.data.set(imageObj.data);
-  } else {
-    const data = new Uint8ClampedArray(imageObj.data);
-    for (let j = 0; j < data.length; j++) {
-      imageData.data[j] = data[j];
+function findInkedRegions(ctx: CanvasRenderingContext2D, width: number, height: number): BoundingBox[] {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const visited = new Uint8Array(width * height);
+  const regions: BoundingBox[] = [];
+  const luminanceThreshold = 240; // Pixels darker than this are considered "inked"
+  
+  // Helper function to get luminance
+  function getLuminance(idx: number): number {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+  
+  // Flood fill to find connected regions
+  function floodFill(startX: number, startY: number): BoundingBox | null {
+    const stack: [number, number][] = [[startX, startY]];
+    let minX = startX, maxX = startX;
+    let minY = startY, maxY = startY;
+    let pixelCount = 0;
+    
+    while (stack.length > 0) {
+      const [x, y] = stack.pop()!;
+      const idx = y * width + x;
+      
+      if (x < 0 || x >= width || y < 0 || y >= height || visited[idx]) {
+        continue;
+      }
+      
+      const pixelIdx = idx * 4;
+      const luminance = getLuminance(pixelIdx);
+      
+      if (luminance >= luminanceThreshold) {
+        continue; // Too bright, not part of inked region
+      }
+      
+      visited[idx] = 1;
+      pixelCount++;
+      
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      
+      // Add neighbors to stack
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    
+    // Filter out very small regions (likely noise)
+    if (pixelCount < 20) {
+      return null;
+    }
+    
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1
+    };
+  }
+  
+  // Scan for inked regions
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (visited[idx]) continue;
+      
+      const pixelIdx = idx * 4;
+      const luminance = getLuminance(pixelIdx);
+      
+      if (luminance < luminanceThreshold) {
+        const region = floodFill(x, y);
+        if (region) {
+          regions.push(region);
+        }
+      }
     }
   }
+  
+  // Merge overlapping or nearby regions
+  return mergeNearbyRegions(regions);
+}
 
-  ctx.putImageData(imageData, 0, 0);
+function mergeNearbyRegions(regions: BoundingBox[]): BoundingBox[] {
+  if (regions.length <= 1) return regions;
+  
+  const merged: BoundingBox[] = [];
+  const used = new Set<number>();
+  const proximityThreshold = 10; // pixels
+  
+  for (let i = 0; i < regions.length; i++) {
+    if (used.has(i)) continue;
+    
+    let current = { ...regions[i] };
+    let didMerge = true;
+    
+    while (didMerge) {
+      didMerge = false;
+      
+      for (let j = 0; j < regions.length; j++) {
+        if (i === j || used.has(j)) continue;
+        
+        const other = regions[j];
+        
+        // Check if regions are close enough to merge
+        const xOverlap = !(current.x + current.width + proximityThreshold < other.x || 
+                          other.x + other.width + proximityThreshold < current.x);
+        const yOverlap = !(current.y + current.height + proximityThreshold < other.y || 
+                          other.y + other.height + proximityThreshold < current.y);
+        
+        if (xOverlap && yOverlap) {
+          // Merge regions
+          const minX = Math.min(current.x, other.x);
+          const minY = Math.min(current.y, other.y);
+          const maxX = Math.max(current.x + current.width, other.x + other.width);
+          const maxY = Math.max(current.y + current.height, other.y + other.height);
+          
+          current = {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY
+          };
+          
+          used.add(j);
+          didMerge = true;
+        }
+      }
+    }
+    
+    merged.push(current);
+  }
+  
+  return merged;
+}
 
-  const dataUrl = canvas.toDataURL('image/png');
-  const base64 = dataUrl.split(',')[1];
+function getTextBoundingBoxes(textContent: TextContent, viewport: any): BoundingBox[] {
+  const boxes: BoundingBox[] = [];
+  
+  for (const item of (textContent as any).items) {
+    if ('str' in item && item.str.trim()) {
+      const tx = item.transform;
+      const fontSize = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1]);
+      const angle = Math.atan2(tx[1], tx[0]);
+      
+      // Calculate bounding box
+      const x = tx[4];
+      const y = viewport.height - tx[5]; // Flip Y coordinate
+      const width = item.width * fontSize;
+      const height = item.height * fontSize;
+      
+      boxes.push({
+        x: x,
+        y: y - height, // Adjust for top-left origin
+        width: width,
+        height: height
+      });
+    }
+  }
+  
+  return boxes;
+}
 
-  return base64 || null;
+function calculateTextCoverage(region: BoundingBox, textBounds: BoundingBox[]): number {
+  let textArea = 0;
+  const regionArea = region.width * region.height;
+  
+  for (const text of textBounds) {
+    // Calculate intersection
+    const xOverlap = Math.max(0, Math.min(region.x + region.width, text.x + text.width) - Math.max(region.x, text.x));
+    const yOverlap = Math.max(0, Math.min(region.y + region.height, text.y + text.height) - Math.max(region.y, text.y));
+    
+    if (xOverlap > 0 && yOverlap > 0) {
+      textArea += xOverlap * yOverlap;
+    }
+  }
+  
+  return textArea / regionArea;
+}
+
+function isRegionTooSimple(
+  ctx: CanvasRenderingContext2D, 
+  region: BoundingBox, 
+  textBounds: BoundingBox[]
+): boolean {
+  // Sample the region excluding text areas
+  const sampleSize = 10;
+  const samples: [number, number, number][] = [];
+  
+  for (let i = 0; i < sampleSize; i++) {
+    for (let j = 0; j < sampleSize; j++) {
+      const x = region.x + (region.width * i) / sampleSize;
+      const y = region.y + (region.height * j) / sampleSize;
+      
+      // Check if this point is inside any text bound
+      let insideText = false;
+      for (const text of textBounds) {
+        if (x >= text.x && x <= text.x + text.width &&
+            y >= text.y && y <= text.y + text.height) {
+          insideText = true;
+          break;
+        }
+      }
+      
+      if (!insideText) {
+        const pixel = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+        samples.push([pixel[0], pixel[1], pixel[2]]);
+      }
+    }
+  }
+  
+  if (samples.length === 0) return true;
+  
+  // Calculate color variance
+  const avgColor = samples.reduce(
+    (acc, color) => [acc[0] + color[0], acc[1] + color[1], acc[2] + color[2]],
+    [0, 0, 0]
+  ).map(v => v / samples.length);
+  
+  const variance = samples.reduce((acc, color) => {
+    const diff = Math.abs(color[0] - avgColor[0]) + 
+                 Math.abs(color[1] - avgColor[1]) + 
+                 Math.abs(color[2] - avgColor[2]);
+    return acc + diff;
+  }, 0) / samples.length;
+  
+  // If variance is very low, region is too simple (single color background)
+  return variance < 30;
 }
