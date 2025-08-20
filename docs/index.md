@@ -23,6 +23,11 @@ Welcome to the Prompt Orchestration Markup Language (POML) documentation.
 - [TypeScript SDK](./typescript/index.md): Use the POML TypeScript API for building applications.
 - [Python SDK](./python/index.md): Integrate POML into your Python projects.
 
+## Research Papers
+
+- **Prompt Orchestration Markup Language** — Introduces POML with component-based markup, specialized data tags, CSS-like styling, templating, and developer tooling. [arXiv:2508.13948](https://arxiv.org/abs/2508.13948)
+- **Beyond Prompt Content: Enhancing LLM Performance via Content-Format Integrated Prompt Optimization** — Presents an iterative method that jointly optimizes prompt content and formatting, yielding measurable gains across tasks. [arXiv:2502.04295](https://arxiv.org/abs/2502.04295)
+
 ## Ecosystem & Community Projects
 
 - [mini-poml-rs](https://github.com/linmx0130/mini-poml-rs) – Experimental Rust-based POML renderer for environments without JavaScript or Python interpreters.
