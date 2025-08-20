@@ -31,6 +31,11 @@ jobs:
           cd /tmp/poml_test
           npm init -y
           npm install pomljs@nightly
+      - name: Copy and test API example
+        run: |
+          cp examples/401_pomljs_hello_world.mjs /tmp/poml_test/
+          cd /tmp/poml_test
+          node 401_pomljs_hello_world.mjs
       - name: Test all .poml examples
         run: |
           cd /tmp/poml_test
@@ -40,11 +45,6 @@ jobs:
             npx poml "$poml_file"
           done
         shell: bash
-      - name: Copy and test API example
-        run: |
-          cp examples/401_pomljs_hello_world.mjs /tmp/poml_test/
-          cd /tmp/poml_test
-          node 401_pomljs_hello_world.mjs
 
   python-package-test:
     strategy:
@@ -68,6 +68,11 @@ jobs:
           cp -r examples /tmp/poml_test/
       - run: |
           pip install --upgrade --pre --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
+      - name: Copy and test API example
+        run: |
+          cp examples/402_pomlpy_hello_world.py /tmp/poml_test/
+          cd /tmp/poml_test
+          python 402_pomlpy_hello_world.py
       - name: Test all .poml examples
         run: |
           cd /tmp/poml_test
@@ -77,8 +82,3 @@ jobs:
             poml-cli -f "$poml_file"
           done
         shell: bash
-      - name: Copy and test API example
-        run: |
-          cp examples/402_pomlpy_hello_world.py /tmp/poml_test/
-          cd /tmp/poml_test
-          python 402_pomlpy_hello_world.py
