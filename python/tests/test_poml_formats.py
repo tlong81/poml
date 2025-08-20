@@ -2,7 +2,14 @@ import base64
 from pathlib import Path
 
 import poml
-from poml.api import PomlMessage, ContentMultiMedia
+from poml.api import (
+    PomlMessage, 
+    ContentMultiMedia, 
+    ContentMultiMediaToolRequest, 
+    ContentMultiMediaToolResponse,
+    _poml_response_to_openai_chat,
+    _poml_response_to_langchain
+)
 
 
 PNG_DATA = (
@@ -70,3 +77,58 @@ def test_poml_format_langchain(tmp_path: Path):
     assert image["source_type"] == "base64"
     assert image["mime_type"] == "image/png"
     assert image["data"].startswith(BASE64_PREFIX)
+
+
+def test_tool_call_openai_conversion():
+    """Test tool call conversion to OpenAI format"""
+    markup = '''<poml>
+    <human-msg>Search for Python</human-msg>
+    <tool-request id="call_123" name="search" parameters="{{ { query: 'Python' } }}" />
+    <tool-response id="call_123" name="search">Python is a language.</tool-response>
+    </poml>'''
+    
+    result = poml.poml(markup, format="openai_chat")
+    expected = [
+        {"role": "user", "content": "Search for Python"},
+        {
+            "role": "assistant", 
+            "tool_calls": [{
+                "id": "call_123",
+                "type": "function", 
+                "function": {"name": "search", "arguments": '{"query": "Python"}'}
+            }]
+        },
+        {"role": "tool", "content": "Python is a language.", "tool_call_id": "call_123"}
+    ]
+    assert result == expected
+
+
+def test_tool_call_langchain_conversion():
+    """Test tool call conversion to Langchain format"""
+    markup = '''<poml>
+    <tool-request id="call_456" name="calculate" parameters="{{ { expression: '2 + 2' } }}" />
+    <tool-response id="call_456" name="calculate">4</tool-response>
+    </poml>'''
+    
+    result = poml.poml(markup, format="langchain")
+    expected = [
+        {
+            "type": "ai",
+            "data": {
+                "tool_calls": [{
+                    "id": "call_456",
+                    "name": "calculate", 
+                    "args": {"expression": "2 + 2"}
+                }]
+            }
+        },
+        {
+            "type": "tool",
+            "data": {
+                "content": "4",
+                "tool_call_id": "call_456",
+                "name": "calculate"
+            }
+        }
+    ]
+    assert result == expected

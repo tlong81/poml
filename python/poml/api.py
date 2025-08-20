@@ -190,9 +190,25 @@ class ContentMultiMedia(BaseModel):
     alt: Optional[str] = None
 
 
-RichContent = Union[str, List[Union[str, ContentMultiMedia]]]
+class ContentMultiMediaToolRequest(BaseModel):
+    type: Literal["application/vnd.poml.toolrequest"]
+    id: str
+    name: str
+    content: Any  # The parameters/input for the tool
 
-Speaker = Literal["human", "ai", "system"]
+
+class ContentMultiMediaToolResponse(BaseModel):
+    type: Literal["application/vnd.poml.toolresponse"]
+    id: str
+    name: str
+    content: Union[str, List[Union[str, ContentMultiMedia]]]  # Rich content
+
+
+RichContent = Union[
+    str, List[Union[str, ContentMultiMedia, ContentMultiMediaToolRequest, ContentMultiMediaToolResponse]]
+]
+
+Speaker = Literal["human", "ai", "system", "tool"]
 
 
 class PomlMessage(BaseModel):
@@ -207,34 +223,121 @@ def _poml_response_to_openai_chat(messages: List[PomlMessage]) -> List[Dict[str,
         "human": "user",
         "ai": "assistant",
         "system": "system",
+        "tool": "tool",
     }
 
     for msg in messages:
-        if msg.speaker not in speaker_to_role:
+        role = speaker_to_role.get(msg.speaker)
+        if not role:
             raise ValueError(f"Unknown speaker: {msg.speaker}")
-        role = speaker_to_role[msg.speaker]
 
+        # Handle tool messages separately
+        if msg.speaker == "tool":
+            # Tool messages should contain a tool response
+            if isinstance(msg.content, list):
+                for content_part in msg.content:
+                    if isinstance(content_part, ContentMultiMediaToolResponse):
+                        # Convert rich content to text
+                        if isinstance(content_part.content, str):
+                            tool_content = content_part.content
+                        else:
+                            tool_content = _rich_content_to_text(content_part.content)
+
+                        openai_messages.append(
+                            {"role": "tool", "content": tool_content, "tool_call_id": content_part.id}
+                        )
+            elif isinstance(msg.content, str):
+                # Simple tool message (shouldn't normally happen but handle gracefully)
+                openai_messages.append({"role": "tool", "content": msg.content})
+            continue
+
+        # Handle assistant/user/system messages
         if isinstance(msg.content, str):
             openai_messages.append({"role": role, "content": msg.content})
         elif isinstance(msg.content, list):
-            contents = []
+            text_image_contents = []
+            tool_calls = []
+
             for content_part in msg.content:
                 if isinstance(content_part, str):
-                    contents.append({"type": "text", "text": content_part})
+                    text_image_contents.append({"type": "text", "text": content_part})
                 elif isinstance(content_part, ContentMultiMedia):
-                    contents.append(
+                    text_image_contents.append(
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:{content_part.type};base64,{content_part.base64}"},
                         }
                     )
+                elif isinstance(content_part, ContentMultiMediaToolRequest):
+                    # Tool requests are only valid in assistant messages
+                    if role != "assistant":
+                        raise ValueError(f"Tool request found in non-assistant message with speaker: {msg.speaker}")
+
+                    tool_calls.append(
+                        {
+                            "id": content_part.id,
+                            "type": "function",
+                            "function": {
+                                "name": content_part.name,
+                                "arguments": (
+                                    json.dumps(content_part.content)
+                                    if not isinstance(content_part.content, str)
+                                    else content_part.content
+                                ),
+                            },
+                        }
+                    )
+                elif isinstance(content_part, ContentMultiMediaToolResponse):
+                    # Tool responses should be in tool messages, not here
+                    raise ValueError(f"Tool response found in {msg.speaker} message; should be in tool message")
                 else:
-                    raise ValueError(f"Unexpected content part: {content_part}")
-            openai_messages.append({"role": role, "content": contents})
+                    raise ValueError(f"Unexpected content part type: {type(content_part)}")
+
+            # Build the message
+            message: Dict[str, Any] = {"role": role}
+
+            # Add content if present
+            if text_image_contents:
+                if len(text_image_contents) == 1 and text_image_contents[0].get("type") == "text":
+                    message["content"] = text_image_contents[0]["text"]
+                else:
+                    message["content"] = text_image_contents
+
+            # Add tool calls if present (assistant only)
+            if tool_calls:
+                message["tool_calls"] = tool_calls
+            elif not text_image_contents:
+                # If no content and no tool calls, skip this message
+                pass
+
+            # Only add message if it has content or tool_calls
+            if "content" in message or "tool_calls" in message:
+                openai_messages.append(message)
         else:
             raise ValueError(f"Unexpected content type: {type(msg.content)}")
 
     return openai_messages
+
+
+def _rich_content_to_text(content: Union[str, List[Union[str, ContentMultiMedia]]]) -> str:
+    """Convert rich content to text representation."""
+    if isinstance(content, str):
+        return content
+
+    text_parts = []
+    for part in content:
+        if isinstance(part, str):
+            text_parts.append(part)
+        elif isinstance(part, ContentMultiMedia):
+            # For images and other media, use alt text or type description
+            if part.alt:
+                text_parts.append(f"[{part.type}: {part.alt}]")
+            else:
+                text_parts.append(f"[{part.type}]")
+        else:
+            raise ValueError(f"Unexpected content part type: {type(part)}")
+
+    return "\n\n".join(text_parts)
 
 
 def _poml_response_to_langchain(messages: List[PomlMessage]) -> List[Dict[str, Any]]:
@@ -245,6 +348,8 @@ def _poml_response_to_langchain(messages: List[PomlMessage]) -> List[Dict[str, A
             langchain_messages.append({"type": msg.speaker, "data": {"content": msg.content}})
         elif isinstance(msg.content, list):
             content_parts = []
+            tool_calls = []
+
             for content_part in msg.content:
                 if isinstance(content_part, str):
                     content_parts.append({"type": "text", "text": content_part})
@@ -257,9 +362,42 @@ def _poml_response_to_langchain(messages: List[PomlMessage]) -> List[Dict[str, A
                             "mime_type": content_part.type,
                         }
                     )
+                elif isinstance(content_part, ContentMultiMediaToolRequest):
+                    tool_calls.append({"id": content_part.id, "name": content_part.name, "args": content_part.content})
+                elif isinstance(content_part, ContentMultiMediaToolResponse):
+                    # For tool responses in Langchain format
+                    if isinstance(content_part.content, str):
+                        tool_content = content_part.content
+                    else:
+                        tool_content = _rich_content_to_text(content_part.content)
+
+                    langchain_messages.append(
+                        {
+                            "type": "tool",
+                            "data": {
+                                "content": tool_content,
+                                "tool_call_id": content_part.id,
+                                "name": content_part.name,
+                            },
+                        }
+                    )
                 else:
                     raise ValueError(f"Unexpected content part: {content_part}")
-            langchain_messages.append({"type": msg.speaker, "data": {"content": content_parts}})
+
+            # Build the message data
+            message_data: Dict[str, Any] = {}
+            if content_parts:
+                if len(content_parts) == 1 and content_parts[0].get("type") == "text":
+                    message_data["content"] = content_parts[0]["text"]
+                else:
+                    message_data["content"] = content_parts
+
+            if tool_calls:
+                message_data["tool_calls"] = tool_calls
+
+            # Only add message if it has content or tool_calls
+            if message_data:
+                langchain_messages.append({"type": msg.speaker, "data": message_data})
         else:
             raise ValueError(f"Unexpected content type: {type(msg.content)}")
     return langchain_messages
