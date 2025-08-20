@@ -833,6 +833,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#template-expressions-in-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Template Expressions in Attributes
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -844,6 +853,39 @@
       Runtime Parameters
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Runtime Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Conversion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#value-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Value Conversion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Common Parameters
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2070,6 +2112,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#template-expressions-in-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Template Expressions in Attributes
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2081,6 +2132,39 @@
       Runtime Parameters
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Runtime Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Conversion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#value-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Value Conversion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Common Parameters
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2444,15 +2528,55 @@ If <code>config.json</code> contains <code>{ "apiKey": "your_api_key" }</code>, 
 - <strong>name</strong>: Tool identifier (required)
 - <strong>description</strong>: Tool description (optional but recommended)
 - <strong>lang</strong>: Schema language, either "json" or "expr" (optional, auto-detected based on content)</p>
+<h3 id="template-expressions-in-attributes">Template Expressions in Attributes<a class="headerlink" href="#template-expressions-in-attributes" title="Permanent link">&para;</a></h3>
+<p>Both schemas and tools support template expressions in their attributes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;toolName&quot;</span><span class="nt">&gt;</span>calculate<span class="nt">&lt;/let&gt;</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;toolDesc&quot;</span><span class="nt">&gt;</span>Perform<span class="w"> </span>mathematical<span class="w"> </span>calculations<span class="nt">&lt;/let&gt;</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;schemaLang&quot;</span><span class="nt">&gt;</span>json<span class="nt">&lt;/let&gt;</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="nt">&lt;tool-definition</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;{{toolName}}&quot;</span><span class="w"> </span><span class="na">description=</span><span class="s">&quot;{{toolDesc}}&quot;</span><span class="w"> </span><span class="na">lang=</span><span class="s">&quot;{{schemaLang}}&quot;</span><span class="nt">&gt;</span>
+<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="w">  </span>{
+<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="w">    </span>&quot;type&quot;:<span class="w"> </span>&quot;object&quot;,
+<a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a><span class="w">    </span>&quot;properties&quot;:<span class="w"> </span>{
+<a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a><span class="w">      </span>&quot;operation&quot;:<span class="w"> </span>{<span class="w"> </span>&quot;type&quot;:<span class="w"> </span>&quot;string&quot;<span class="w"> </span>}
+<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a><span class="w">    </span>}
+<a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a><span class="w">  </span>}
+<a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a><span class="nt">&lt;/tool-definition&gt;</span>
+</code></pre></div>
+<p>Similarly for output schemas:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nt">&lt;let</span><span class="w"> </span><span class="na">name=</span><span class="s">&quot;schemaJson&quot;</span><span class="nt">&gt;</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>{
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span>&quot;type&quot;:<span class="w"> </span>&quot;object&quot;,
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>&quot;properties&quot;:<span class="w"> </span>{
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span>&quot;result&quot;:<span class="w"> </span>{<span class="w"> </span>&quot;type&quot;:<span class="w"> </span>&quot;string&quot;<span class="w"> </span>}
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">  </span>}
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>}
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="nt">&lt;/let&gt;</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="nt">&lt;output-schema</span><span class="w"> </span><span class="na">lang=</span><span class="s">&quot;json&quot;</span><span class="nt">&gt;</span>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>{{<span class="w"> </span>schemaJson<span class="w"> </span>}}
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="nt">&lt;/output-schema&gt;</span>
+</code></pre></div>
 <p>You can define multiple tools in a single document.</p>
 <h2 id="runtime-parameters">Runtime Parameters<a class="headerlink" href="#runtime-parameters" title="Permanent link">&para;</a></h2>
 <p>Runtime parameters configure the language model's behavior during execution. These parameters are automatically used in <a href="../../vscode/features/">VSCode's test command</a> functionality, which is based on the <a href="https://ai-sdk.dev/">Vercel AI SDK</a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">&lt;runtime</span><span class="w"> </span><span class="na">temperature=</span><span class="s">&quot;0.7&quot;</span><span class="w"> </span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">         </span><span class="na">maxOutputTokens=</span><span class="s">&quot;1000&quot;</span><span class="w"> </span>
-<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">         </span><span class="na">model=</span><span class="s">&quot;gpt-5&quot;</span>
-<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">         </span><span class="na">topP=</span><span class="s">&quot;0.9&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">&lt;runtime</span><span class="w"> </span><span class="na">temperature=</span><span class="s">&quot;0.7&quot;</span><span class="w"> </span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">         </span><span class="na">max-output-tokens=</span><span class="s">&quot;1000&quot;</span><span class="w"> </span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">         </span><span class="na">model=</span><span class="s">&quot;gpt-5&quot;</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">         </span><span class="na">top-p=</span><span class="s">&quot;0.9&quot;</span><span class="w"> </span><span class="nt">/&gt;</span>
 </code></pre></div>
-<p>All attributes are passed as runtime parameters. Common parameters include:</p>
+<p>All attributes are passed as runtime parameters with automatic type conversion:</p>
+<h3 id="key-conversion">Key Conversion<a class="headerlink" href="#key-conversion" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Keys are converted from kebab-case to camelCase</li>
+<li>Examples: <code>max-tokens</code> → <code>maxTokens</code>, <code>top-p</code> → <code>topP</code>, <code>frequency-penalty</code> → <code>frequencyPenalty</code></li>
+</ul>
+<h3 id="value-conversion">Value Conversion<a class="headerlink" href="#value-conversion" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Boolean strings</strong>: <code>"true"</code> and <code>"false"</code> → <code>true</code> and <code>false</code></li>
+<li><strong>Number strings</strong>: <code>"1000"</code>, <code>"0.7"</code> → <code>1000</code>, <code>0.7</code></li>
+<li><strong>JSON strings</strong>: <code>'["END", "STOP"]'</code>, <code>'{"key": "value"}'</code> → parsed JSON objects/arrays</li>
+</ul>
+<h3 id="common-parameters">Common Parameters<a class="headerlink" href="#common-parameters" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>temperature</strong>: Controls randomness (0-2, typically 0.3-0.7 for balanced output)</li>
 <li><strong>maxOutputTokens</strong>: Maximum response length in tokens</li>
