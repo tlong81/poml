@@ -481,12 +481,23 @@ Runtime parameters configure the language model's behavior during execution. The
 
 ```xml
 <runtime temperature="0.7" 
-         maxOutputTokens="1000" 
+         max-output-tokens="1000" 
          model="gpt-5"
-         topP="0.9" />
+         top_p="0.9" />
 ```
 
-All attributes are passed as runtime parameters. Common parameters include:
+All attributes are passed as runtime parameters with automatic type conversion:
+
+### Key Conversion
+- Keys are converted from kebab-case to camelCase
+- Examples: `max-tokens` → `maxTokens`, `top-p` → `topP`, `frequency-penalty` → `frequencyPenalty`
+
+### Value Conversion
+- **Boolean strings**: `"true"` and `"false"` → `true` and `false`
+- **Number strings**: `"1000"`, `"0.7"` → `1000`, `0.7`
+- **JSON strings**: `'["END", "STOP"]'`, `'{"key": "value"}'` → parsed JSON objects/arrays
+
+### Common Parameters
 
 - **temperature**: Controls randomness (0-2, typically 0.3-0.7 for balanced output)
 - **maxOutputTokens**: Maximum response length in tokens

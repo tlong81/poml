@@ -846,11 +846,47 @@ export class PomlFile {
     const runtimeParams: any = {};
     for (const attribute of element.attributes) {
       if (attribute.key && attribute.value) {
-        runtimeParams[attribute.key] = attribute.value;
+        // Convert key to camelCase (kebab-case to camelCase)
+        const camelKey = hyphenToCamelCase(attribute.key);
+        // Convert value (auto-convert booleans, numbers, JSON)
+        const convertedValue = this.convertRuntimeValue(attribute.value);
+        runtimeParams[camelKey] = convertedValue;
       }
     }
     this.runtimeParameters = runtimeParams;
     return true;
+  };
+
+  private convertRuntimeValue = (value: string): any => {
+    // Convert boolean-like values
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+    
+    // Convert number-like values
+    if (/^-?\d*\.?\d+$/.test(value)) {
+      const num = parseFloat(value);
+      if (!isNaN(num)) {
+        return num;
+      }
+    }
+    
+    // Convert JSON-like values (arrays and objects)
+    if ((value.startsWith('[') && value.endsWith(']')) || 
+        (value.startsWith('{') && value.endsWith('}'))) {
+      try {
+        return JSON.parse(value);
+      } catch {
+        // If JSON parsing fails, return as string
+        return value;
+      }
+    }
+    
+    // Return as string for everything else
+    return value;
   };
 
   private handleMeta = (element: XMLElement, context?: { [key: string]: any }): boolean => {

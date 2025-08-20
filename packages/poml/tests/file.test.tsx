@@ -690,16 +690,136 @@ describe('meta elements', () => {
 
   test('runtime parameters', () => {
     const text = `<poml>
-      <runtime temperature="0.7" max_tokens="1000" model="gpt-4">
+      <runtime temperature="0.7" max-tokens="1000" model="gpt-4">
       </runtime>
     </poml>`;
     const file = new PomlFile(text);
     file.react();
     const runtimeParams = file.getRuntimeParameters();
     expect(runtimeParams).toEqual({
-      temperature: "0.7",
-      max_tokens: "1000",
+      temperature: 0.7,
+      maxTokens: 1000,
       model: "gpt-4"
+    });
+  });
+
+  test('runtime parameters with key conversion', () => {
+    const text = `<poml>
+      <runtime 
+        max-tokens="1500" 
+        top-p="0.9" 
+        frequency-penalty="0.5"
+        presence-penalty="0.3"
+        stop-sequences='["END", "STOP"]'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      maxTokens: 1500,
+      topP: 0.9,
+      frequencyPenalty: 0.5,
+      presencePenalty: 0.3,
+      stopSequences: ["END", "STOP"]
+    });
+  });
+
+  test('runtime parameters with boolean conversion', () => {
+    const text = `<poml>
+      <runtime 
+        stream="true" 
+        debug="false"
+        enable-logging="true"
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      stream: true,
+      debug: false,
+      enableLogging: true
+    });
+  });
+
+  test('runtime parameters with number conversion', () => {
+    const text = `<poml>
+      <runtime 
+        temperature="0.7"
+        max-tokens="2000"
+        seed="12345"
+        timeout="30.5"
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      temperature: 0.7,
+      maxTokens: 2000,
+      seed: 12345,
+      timeout: 30.5
+    });
+  });
+
+  test('runtime parameters with JSON conversion', () => {
+    const text = `<poml>
+      <runtime 
+        stop='["\\n", "END"]'
+        config='{"retry": 3, "timeout": 5000}'
+        metadata='{"user": "test", "session": 123}'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      stop: ["\n", "END"],
+      config: { retry: 3, timeout: 5000 },
+      metadata: { user: "test", session: 123 }
+    });
+  });
+
+  test('runtime parameters with mixed types', () => {
+    const text = `<poml>
+      <runtime 
+        model="gpt-4"
+        temperature="0.8"
+        max-output-tokens="1000"
+        stream="true"
+        stop-sequences='["END", "STOP"]'
+        custom-config='{"advanced": true}'
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      model: "gpt-4",
+      temperature: 0.8,
+      maxOutputTokens: 1000,
+      stream: true,
+      stopSequences: ["END", "STOP"],
+      customConfig: { advanced: true }
+    });
+  });
+
+  test('runtime parameters with invalid JSON fallback to string', () => {
+    const text = `<poml>
+      <runtime 
+        valid-json='["test"]'
+        invalid-json='{"missing": quote}'
+        not-json="just a string"
+      />
+    </poml>`;
+    const file = new PomlFile(text);
+    file.react();
+    const runtimeParams = file.getRuntimeParameters();
+    expect(runtimeParams).toEqual({
+      validJson: ["test"],
+      invalidJson: '{"missing": quote}',  // Falls back to string
+      notJson: "just a string"
     });
   });
 
