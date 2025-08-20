@@ -862,7 +862,7 @@ export class PomlFile {
     const metaType = xmlAttribute(element, 'type')?.value;
     if (metaType) {
       this.reportError(
-        `Meta elements with type attribute has been removed. Use <${metaType === 'schema' ? 'output-schema' : metaType === 'tool' ? 'tool-definition' : metaType === 'runtime' ? 'runtime' : metaType}> instead of <meta type="${metaType}">`,
+        `Meta elements with type attribute have been removed. Use <${metaType === 'schema' ? 'output-schema' : metaType === 'tool' ? 'tool-definition' : metaType === 'runtime' ? 'runtime' : metaType}> instead of <meta type="${metaType}">`,
         this.xmlElementRange(element)
       );
       return true;
