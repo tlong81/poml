@@ -29,9 +29,59 @@ export async function extractPdfDocumentContent(): Promise<CardModel[]> {
   }
 }
 
+// Types
+interface LineItem {
+  text: string;
+  y: number;
+  x: number;
+  fontSize: number;
+  width: number;
+}
+
+interface TextItem {
+  str: string;
+  transform: number[];
+  width?: number;
+  height?: number;
+}
+
+interface PageNumberDetectionResult {
+  shouldFilter: boolean;
+  pattern: 'top' | 'bottom' | 'both' | null;
+  yThresholdTop?: number;
+  yThresholdBottom?: number;
+}
+
+interface ContentBlock {
+  type: 'text' | 'image' | 'vector';
+  y: number; // vertical position for ordering
+  x: number; // horizontal position
+  width?: number;
+  height?: number;
+  content: any; // Text block or image data
+}
+
+interface TextBlock {
+  text: string;
+  isHeading: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface ImageBlock {
+  base64: string;
+  mimeType: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isVector?: boolean;
+}
+
 /**
- * Extracts structured content from a PDF document
- * Returns an array of CardModel objects with proper text structure and images
+ * Extracts structured content from a PDF document with proper image/text interleaving
  */
 export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
   try {
@@ -69,52 +119,61 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
     const pageCount = pdf.numPages;
     notifyInfo(`PDF loaded successfully`, { pages: pageCount });
 
-    // Extract content as cards directly
-    const cards: CardModelSlim[] = [];
+    // Process all pages and collect content blocks
+    const allCards: CardModelSlim[] = [];
 
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
       const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.0 });
 
-      // Extract text blocks
-      const textBlocks = await extractTextBlocks(page);
+      // Extract all content blocks with positions
+      const contentBlocks = await extractPageContent(page, viewport);
+
+      // Sort blocks by position (top to bottom, left to right)
+      contentBlocks.sort((a, b) => {
+        // First sort by Y position (with some tolerance for same line)
+        const yDiff = b.y - a.y; // Note: PDF Y coordinates are bottom-up
+        if (Math.abs(yDiff) > 5) return yDiff;
+        // Then by X position for items on same line
+        return a.x - b.x;
+      });
 
       // Convert blocks to cards
-      for (const block of textBlocks) {
-        cards.push({
-          content: { type: 'text', value: block.text } as TextContent,
-          componentType: block.isHeading ? 'Header' : 'Paragraph'
-        });
+      for (const block of contentBlocks) {
+        if (block.type === 'text') {
+          const textBlock = block.content as TextBlock;
+          if (textBlock.text.trim()) {
+            allCards.push({
+              content: { type: 'text', value: textBlock.text } as TextContent,
+              componentType: textBlock.isHeading ? 'Header' : 'Paragraph'
+            });
+          }
+        } else if (block.type === 'image' || block.type === 'vector') {
+          const imageBlock = block.content as ImageBlock;
+          allCards.push({
+            content: {
+              type: 'binary',
+              value: imageBlock.base64,
+              mimeType: imageBlock.mimeType,
+              encoding: 'base64'
+            } as BinaryContent,
+            componentType: 'Image'
+          });
+        }
       }
 
-      // Extract images (simplified)
-      const images = await extractImages(page);
-      for (const imageData of images) {
-        cards.push({
-          content: {
-            type: 'binary',
-            value: imageData.base64,
-            mimeType: imageData.mimeType,
-            encoding: 'base64'
-          } as BinaryContent,
-          componentType: 'Image'
-        });
-      }
-
-      notifyDebug(`Processed page ${pageNum}/${pageCount}`);
+      notifyDebug(`Processed page ${pageNum}/${pageCount}`, {
+        contentBlocks: contentBlocks.length
+      });
     }
 
-    // Filter out empty text cards
-    const cleanCards = cards.filter(card => {
-      return card.content.type !== 'text' || (card.content as TextContent).value.trim().length > 0;
-    });
-
-    notifyInfo('PDF extraction completed', { cardsCount: cleanCards.length, pages: pageCount });
+    notifyInfo('PDF extraction completed', { cardsCount: allCards.length, pages: pageCount });
 
     // Convert slim cards to full CardModel objects
     const timestamp = new Date();
     const finalCards =
-      cleanCards.length > 0
-        ? cleanCards
+      allCards.length > 0
+        ? allCards
         : [
             {
               content: { type: 'text', value: 'No content found in PDF' } as TextContent,
@@ -156,40 +215,48 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
   }
 }
 
-// Types
-interface LineItem {
-  text: string;
-  y: number;
-  x: number;
-  fontSize: number;
+/**
+ * Extract page content with enhanced graphics region extraction
+ */
+async function extractPageContent(page: any, viewport: any): Promise<ContentBlock[]> {
+  const contentBlocks: ContentBlock[] = [];
+
+  // First, detect graphics regions to use for text filtering
+  const graphicsRegions = await detectGraphicsRegions(page);
+  
+  // Extract text with filtering for embedded graphics text
+  const textBlocks = await extractTextBlocks(page, viewport, graphicsRegions);
+  for (const textBlock of textBlocks) {
+    contentBlocks.push({
+      type: 'text',
+      y: textBlock.y,
+      x: textBlock.x,
+      width: textBlock.width,
+      height: textBlock.height,
+      content: textBlock
+    });
+  }
+
+  // Extract images and rendered graphics regions
+  const imageBlocks = await extractImagesWithPositions(page, viewport);
+  for (const imageBlock of imageBlocks) {
+    contentBlocks.push({
+      type: imageBlock.isVector ? 'vector' : 'image',
+      y: imageBlock.y,
+      x: imageBlock.x,
+      width: imageBlock.width,
+      height: imageBlock.height,
+      content: imageBlock
+    });
+  }
+
+  return contentBlocks;
 }
 
-interface TextItem {
-  str: string;
-  transform: number[];
-  width?: number;
-  height?: number;
-}
-
-interface MarginDetectionResult {
-  shouldFilter: boolean;
-  leftThreshold: number;
-  rightThreshold: number;
-}
-
-interface Column {
-  minX: number;
-  maxX: number;
-  lines: LineItem[];
-}
-
-// Main text extraction function with paragraph detection and margin filtering
-async function extractTextBlocks(page: any): Promise<
-  Array<{
-    text: string;
-    isHeading: boolean;
-  }>
-> {
+/**
+ * Enhanced text extraction with better filtering
+ */
+async function extractTextBlocks(page: any, viewport: any, graphicsRegions?: Array<{x: number, y: number, width: number, height: number}>): Promise<TextBlock[]> {
   const textContent = await page.getTextContent();
   const items = textContent.items as TextItem[];
 
@@ -198,241 +265,420 @@ async function extractTextBlocks(page: any): Promise<
     return [];
   }
 
-  notifyDebug('Starting text extraction', { itemCount: items.length });
+  // Use provided graphics regions or detect them
+  const regions = graphicsRegions || await detectGraphicsRegions(page);
+  
+  // Detect page numbers
+  const pageNumberInfo = detectPageNumbers(items, viewport);
 
-  // Get page dimensions and margin info
-  const viewport = page.getViewport({ scale: 1.0 });
-  const marginInfo = detectLineNumbersInMargins(items, viewport.width);
+  // Filter and extract lines
+  const lines = extractFilteredLines(items, viewport, pageNumberInfo, regions);
 
-  // Extract and filter lines
-  const lines = extractLines(items, marginInfo);
-  notifyDebug('Lines extracted', {
-    lineCount: lines.length,
-    filteredLineNumbers: marginInfo.shouldFilter
-  });
+  // Group into text blocks with position info
+  const blocks = groupLinesIntoBlocks(lines, viewport);
 
-  // Detect columns and process accordingly
-  const columns = detectColumns(lines, viewport.width);
-  notifyDebug('Column detection complete', {
-    columnCount: columns.length,
-    linesPerColumn: columns.map(c => c.lines.length)
-  });
-
-  let blocks: Array<{ text: string; isHeading: boolean }> = [];
-
-  if (columns.length > 1) {
-    // Multi-column layout detected
-    notifyDebug('Processing multi-column layout');
-    for (const column of columns) {
-      // Sort lines within column by Y position (top to bottom)
-      column.lines.sort((a, b) => b.y - a.y);
-
-      // Group lines into paragraphs for this column
-      const columnBlocks = groupLinesIntoParagraphs(column.lines);
-      blocks = blocks.concat(columnBlocks);
-    }
-  } else {
-    // Single column or no clear columns - use original logic
-    notifyDebug('Processing single-column layout');
-    lines.sort((a, b) => b.y - a.y);
-    blocks = groupLinesIntoParagraphs(lines);
-  }
-
-  const finalBlocks = blocks.filter(block => block.text.length > 0);
-  notifyDebug('Text extraction complete', {
-    blockCount: finalBlocks.length,
-    headingCount: finalBlocks.filter(b => b.isHeading).length
-  });
-
-  return finalBlocks;
+  return blocks;
 }
 
-// Detect columns in the document
-function detectColumns(lines: LineItem[], pageWidth: number): Column[] {
-  if (lines.length === 0) return [];
-
-  // Collect X positions to find potential column boundaries
-  const xPositions = lines.map(line => line.x).sort((a, b) => a - b);
-
-  // Find gaps in X positions that might indicate column boundaries
-  const gaps: Array<{ start: number; end: number; gap: number }> = [];
-  const minGapSize = pageWidth * 0.05; // Minimum 5% of page width for a column gap
-
-  for (let i = 1; i < xPositions.length; i++) {
-    const gap = xPositions[i] - xPositions[i - 1];
-    if (gap > minGapSize) {
-      gaps.push({
-        start: xPositions[i - 1],
-        end: xPositions[i],
-        gap: gap
-      });
+/**
+ * Detect regions that contain vector graphics or embedded images
+ */
+async function detectGraphicsRegions(page: any): Promise<Array<{x: number, y: number, width: number, height: number}>> {
+  const regions: Array<{x: number, y: number, width: number, height: number}> = [];
+  
+  try {
+    const operators = await page.getOperatorList();
+    const viewport = page.getViewport({ scale: 1.0 });
+    
+    // Track graphics state
+    let graphicsStack: any[] = [];
+    let currentGraphics: {
+      paths: any[];
+      minX: number;
+      minY: number;
+      maxX: number;
+      maxY: number;
+      hasContent: boolean;
+    } | null = null;
+    
+    // OPS enum values
+    const OPS = {
+      save: 91,
+      restore: 92,
+      transform: 44,
+      moveTo: 13,
+      lineTo: 14,
+      curveTo: 15,
+      curveTo2: 16,
+      curveTo3: 17,
+      closePath: 9,
+      rectangle: 83,
+      stroke: 84,
+      fill: 85,
+      fillStroke: 86,
+      beginText: 11,
+      endText: 12,
+      clip: 7,
+      eoClip: 8,
+      paintImageXObject: 82,
+      paintInlineImageXObject: 83,
+      constructPath: 56
+    };
+    
+    let inTextBlock = false;
+    let pathDepth = 0;
+    
+    for (let i = 0; i < operators.fnArray.length; i++) {
+      const fn = operators.fnArray[i];
+      const args = operators.argsArray[i];
+      
+      // Track text blocks to avoid including them
+      if (fn === OPS.beginText) {
+        inTextBlock = true;
+        continue;
+      } else if (fn === OPS.endText) {
+        inTextBlock = false;
+        continue;
+      }
+      
+      // Skip if we're in a text block
+      if (inTextBlock) continue;
+      
+      // Handle save/restore for graphics state
+      if (fn === OPS.save) {
+        if (currentGraphics && currentGraphics.hasContent) {
+          graphicsStack.push(currentGraphics);
+        }
+        currentGraphics = {
+          paths: [],
+          minX: Infinity,
+          minY: Infinity,
+          maxX: -Infinity,
+          maxY: -Infinity,
+          hasContent: false
+        };
+        pathDepth++;
+      } else if (fn === OPS.restore) {
+        pathDepth = Math.max(0, pathDepth - 1);
+        
+        // If we have a complete graphics region, add it
+        if (currentGraphics && currentGraphics.hasContent && 
+            currentGraphics.minX !== Infinity) {
+          const region = {
+            x: currentGraphics.minX,
+            y: currentGraphics.minY,
+            width: currentGraphics.maxX - currentGraphics.minX,
+            height: currentGraphics.maxY - currentGraphics.minY
+          };
+          
+          // Only add meaningful regions (not too small)
+          if (region.width > 5 && region.height > 5) {
+            regions.push(region);
+          }
+        }
+        
+        currentGraphics = graphicsStack.pop() || null;
+      }
+      
+      // Track path operations to find graphics bounds
+      if (currentGraphics) {
+        if (fn === OPS.moveTo || fn === OPS.lineTo) {
+          if (args && args.length >= 2) {
+            updateBounds(currentGraphics, args[0], args[1]);
+            currentGraphics.hasContent = true;
+          }
+        } else if (fn === OPS.curveTo || fn === OPS.curveTo2 || fn === OPS.curveTo3) {
+          if (args && args.length >= 2) {
+            // For curves, check all control points
+            for (let j = 0; j < args.length; j += 2) {
+              if (j + 1 < args.length) {
+                updateBounds(currentGraphics, args[j], args[j + 1]);
+              }
+            }
+            currentGraphics.hasContent = true;
+          }
+        } else if (fn === OPS.rectangle) {
+          if (args && args.length >= 4) {
+            const [x, y, width, height] = args;
+            updateBounds(currentGraphics, x, y);
+            updateBounds(currentGraphics, x + width, y + height);
+            currentGraphics.hasContent = true;
+          }
+        } else if (fn === OPS.constructPath) {
+          // Handle complex path construction
+          if (args && args[0] && Array.isArray(args[0])) {
+            const ops = args[0];
+            const data = args[1];
+            let dataIndex = 0;
+            
+            for (const op of ops) {
+              switch (op) {
+                case OPS.moveTo:
+                case OPS.lineTo:
+                  if (dataIndex + 1 < data.length) {
+                    updateBounds(currentGraphics, data[dataIndex], data[dataIndex + 1]);
+                    dataIndex += 2;
+                    currentGraphics.hasContent = true;
+                  }
+                  break;
+                case OPS.curveTo:
+                  if (dataIndex + 5 < data.length) {
+                    for (let k = 0; k < 6; k += 2) {
+                      updateBounds(currentGraphics, data[dataIndex + k], data[dataIndex + k + 1]);
+                    }
+                    dataIndex += 6;
+                    currentGraphics.hasContent = true;
+                  }
+                  break;
+                case OPS.rectangle:
+                  if (dataIndex + 3 < data.length) {
+                    const x = data[dataIndex];
+                    const y = data[dataIndex + 1];
+                    const w = data[dataIndex + 2];
+                    const h = data[dataIndex + 3];
+                    updateBounds(currentGraphics, x, y);
+                    updateBounds(currentGraphics, x + w, y + h);
+                    dataIndex += 4;
+                    currentGraphics.hasContent = true;
+                  }
+                  break;
+                case OPS.closePath:
+                  // No data consumed
+                  break;
+              }
+            }
+          }
+        } else if (fn === OPS.stroke || fn === OPS.fill || fn === OPS.fillStroke) {
+          // These operations indicate actual drawing
+          if (currentGraphics) {
+            currentGraphics.hasContent = true;
+          }
+        }
+      }
     }
-  }
-
-  notifyDebug('Gap analysis for columns', {
-    totalGaps: gaps.length,
-    minGapSize: minGapSize,
-    largestGap: gaps.length > 0 ? Math.max(...gaps.map(g => g.gap)) : 0
-  });
-
-  // Cluster lines into columns based on X position
-  const columns = clusterLinesIntoColumns(lines, gaps, pageWidth);
-
-  // Validate columns - need at least 10 lines per column to be considered multi-column
-  const validColumns = columns.filter(col => col.lines.length >= 10);
-
-  if (validColumns.length !== columns.length) {
-    notifyDebug('Column validation', {
-      originalColumns: columns.length,
-      validColumns: validColumns.length,
-      droppedColumns: columns.filter(col => col.lines.length < 10).map(col => col.lines.length)
+    
+    // Add any remaining graphics region
+    if (currentGraphics && currentGraphics.hasContent && 
+        currentGraphics.minX !== Infinity) {
+      const region = {
+        x: currentGraphics.minX,
+        y: currentGraphics.minY,
+        width: currentGraphics.maxX - currentGraphics.minX,
+        height: currentGraphics.maxY - currentGraphics.minY
+      };
+      
+      if (region.width > 5 && region.height > 5) {
+        regions.push(region);
+      }
+    }
+    
+    // Merge overlapping regions
+    const mergedRegions = mergeOverlappingRegions(regions);
+    
+    notifyDebug('Graphics regions detected', {
+      rawCount: regions.length,
+      mergedCount: mergedRegions.length,
+      samples: mergedRegions.slice(0, 3).map(r => ({
+        x: r.x.toFixed(1),
+        y: r.y.toFixed(1),
+        w: r.width.toFixed(1),
+        h: r.height.toFixed(1)
+      }))
     });
+    
+    return mergedRegions;
+  } catch (error) {
+    notifyDebug('Could not detect graphics regions', error);
   }
-
-  // If we don't have clear multiple columns, return single column
-  if (validColumns.length <= 1) {
-    return [
-      {
-        minX: 0,
-        maxX: pageWidth,
-        lines: lines
-      }
-    ];
-  }
-
-  return validColumns;
+  
+  return regions;
 }
 
-// Cluster lines into columns based on gaps
-function clusterLinesIntoColumns(
-  lines: LineItem[],
-  gaps: Array<{ start: number; end: number; gap: number }>,
-  pageWidth: number
-): Column[] {
-  // If no significant gaps, treat as single column
-  if (gaps.length === 0) {
-    notifyDebug('No significant gaps found - treating as single column');
-    return [
-      {
-        minX: 0,
-        maxX: pageWidth,
-        lines: lines
+/**
+ * Update bounds for a graphics region
+ */
+function updateBounds(graphics: any, x: number, y: number): void {
+  graphics.minX = Math.min(graphics.minX, x);
+  graphics.minY = Math.min(graphics.minY, y);
+  graphics.maxX = Math.max(graphics.maxX, x);
+  graphics.maxY = Math.max(graphics.maxY, y);
+}
+
+/**
+ * Merge overlapping regions to avoid duplicates
+ */
+function mergeOverlappingRegions(
+  regions: Array<{x: number, y: number, width: number, height: number}>
+): Array<{x: number, y: number, width: number, height: number}> {
+  if (regions.length <= 1) return regions;
+  
+  const merged: Array<{x: number, y: number, width: number, height: number}> = [];
+  const used = new Set<number>();
+  
+  for (let i = 0; i < regions.length; i++) {
+    if (used.has(i)) continue;
+    
+    let current = { ...regions[i] };
+    let didMerge = true;
+    
+    while (didMerge) {
+      didMerge = false;
+      
+      for (let j = i + 1; j < regions.length; j++) {
+        if (used.has(j)) continue;
+        
+        if (regionsOverlap(current, regions[j])) {
+          // Merge regions
+          const minX = Math.min(current.x, regions[j].x);
+          const minY = Math.min(current.y, regions[j].y);
+          const maxX = Math.max(current.x + current.width, regions[j].x + regions[j].width);
+          const maxY = Math.max(current.y + current.height, regions[j].y + regions[j].height);
+          
+          current = {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY
+          };
+          
+          used.add(j);
+          didMerge = true;
+        }
       }
-    ];
-  }
-
-  // Find the most significant gap(s) - typically the column separator(s)
-  const avgGap = gaps.reduce((sum, g) => sum + g.gap, 0) / gaps.length;
-  const significantGaps = gaps.filter(g => g.gap > avgGap * 0.8);
-
-  notifyDebug('Significant gaps identified', {
-    avgGap: avgGap.toFixed(1),
-    significantGapCount: significantGaps.length,
-    gapSizes: significantGaps.map(g => g.gap.toFixed(1))
-  });
-
-  // Create column boundaries
-  const boundaries: number[] = [0];
-  for (const gap of significantGaps) {
-    boundaries.push((gap.start + gap.end) / 2);
-  }
-  boundaries.push(pageWidth);
-
-  // Assign lines to columns
-  const columns: Column[] = [];
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    const columnLines = lines.filter(line => line.x >= boundaries[i] && line.x < boundaries[i + 1]);
-
-    if (columnLines.length > 0) {
-      columns.push({
-        minX: boundaries[i],
-        maxX: boundaries[i + 1],
-        lines: columnLines
-      });
     }
+    
+    merged.push(current);
   }
-
-  // Sort columns by X position (left to right)
-  columns.sort((a, b) => a.minX - b.minX);
-
-  notifyDebug('Columns created', {
-    columnCount: columns.length,
-    boundaries: boundaries.map(b => b.toFixed(1)),
-    columnWidths: columns.map(c => (c.maxX - c.minX).toFixed(1))
-  });
-
-  return columns;
+  
+  return merged;
 }
 
-// Detect if document has line numbers in margins
-function detectLineNumbersInMargins(items: TextItem[], pageWidth: number): MarginDetectionResult {
-  const leftThreshold = pageWidth * 0.15;
-  const rightThreshold = pageWidth * 0.85;
+/**
+ * Check if two regions overlap
+ */
+function regionsOverlap(
+  r1: {x: number, y: number, width: number, height: number},
+  r2: {x: number, y: number, width: number, height: number}
+): boolean {
+  return !(r1.x + r1.width < r2.x || 
+           r2.x + r2.width < r1.x || 
+           r1.y + r1.height < r2.y || 
+           r2.y + r2.height < r1.y);
+}
 
-  let marginNumberCount = 0;
-  const marginNumbers: number[] = [];
+/**
+ * Detect page numbers in the document
+ */
+function detectPageNumbers(items: TextItem[], viewport: any): PageNumberDetectionResult {
+  const pageHeight = viewport.height;
+  const topThreshold = pageHeight * 0.9; // Top 10% of page
+  const bottomThreshold = pageHeight * 0.1; // Bottom 10% of page
+  
+  let topNumbers = 0;
+  let bottomNumbers = 0;
+  const pageNumberCandidates: Array<{text: string, y: number}> = [];
 
   for (const item of items) {
-    const x = item.transform[4];
-    const isInMargin = x < leftThreshold || x > rightThreshold;
-    const trimmedStr = item.str.trim();
-
-    if (isInMargin && /^\d+$/.test(trimmedStr)) {
-      marginNumberCount++;
-      marginNumbers.push(parseInt(trimmedStr));
+    const y = item.transform[5];
+    const text = item.str.trim();
+    
+    // Check if it looks like a page number
+    if (isLikelyPageNumber(text)) {
+      if (y > topThreshold) {
+        topNumbers++;
+        pageNumberCandidates.push({text, y});
+      } else if (y < bottomThreshold) {
+        bottomNumbers++;
+        pageNumberCandidates.push({text, y});
+      }
     }
   }
 
-  // Only filter line numbers if we found at least 20 numbers in margins
-  const shouldFilter = marginNumberCount >= 20;
+  // Determine pattern
+  let pattern: 'top' | 'bottom' | 'both' | null = null;
+  if (topNumbers > 0 && bottomNumbers > 0) pattern = 'both';
+  else if (topNumbers > 0) pattern = 'top';
+  else if (bottomNumbers > 0) pattern = 'bottom';
 
-  notifyDebug('Margin line number detection', {
-    marginNumberCount,
-    shouldFilter,
-    sampleNumbers: marginNumbers.slice(0, 5),
-    leftThreshold: leftThreshold.toFixed(1),
-    rightThreshold: rightThreshold.toFixed(1)
+  const shouldFilter = pattern !== null;
+
+  notifyDebug('Page number detection', {
+    pattern,
+    topNumbers,
+    bottomNumbers,
+    candidates: pageNumberCandidates.slice(0, 3)
   });
 
   return {
     shouldFilter,
-    leftThreshold,
-    rightThreshold
+    pattern,
+    yThresholdTop: topThreshold,
+    yThresholdBottom: bottomThreshold
   };
 }
 
-// Extract lines from PDF items
-function extractLines(items: TextItem[], marginInfo: MarginDetectionResult): LineItem[] {
+/**
+ * Check if text is likely a page number
+ */
+function isLikelyPageNumber(text: string): boolean {
+  // Simple page number
+  if (/^\d{1,4}$/.test(text)) return true;
+  
+  // Page number with prefix/suffix: "Page 1", "- 1 -", "1 of 10"
+  if (/^(Page\s+)?\d{1,4}(\s+of\s+\d{1,4})?$/i.test(text)) return true;
+  if (/^[-–—]\s*\d{1,4}\s*[-–—]$/.test(text)) return true;
+  
+  // Roman numerals
+  if (/^[ivxlcdm]+$/i.test(text) && text.length <= 10) return true;
+  
+  return false;
+}
+
+/**
+ * Extract lines with filtering
+ */
+function extractFilteredLines(
+  items: TextItem[], 
+  viewport: any,
+  pageNumberInfo: PageNumberDetectionResult,
+  graphicsRegions: Array<{x: number, y: number, width: number, height: number}>
+): LineItem[] {
   const lines: LineItem[] = [];
   let currentLine: LineItem | null = null;
 
   for (const item of items) {
     const x = item.transform[4];
     const y = item.transform[5];
-    const fontSize = Math.abs(item.transform[0]); // Approximate font size from transform matrix
-
-    // Skip line numbers if detected
-    if (shouldSkipItem(item, x, marginInfo)) {
+    const fontSize = Math.abs(item.transform[0]);
+    
+    // Skip if it's a page number
+    if (shouldSkipAsPageNumber(item, y, pageNumberInfo)) {
+      continue;
+    }
+    
+    // Skip if it's inside a graphics region (likely embedded text)
+    if (isInsideGraphicsRegion(x, y, graphicsRegions)) {
+      notifyDebug('Skipping text in graphics region', { text: item.str.substring(0, 20) });
       continue;
     }
 
-    // Check if this is a new line (vertical position difference > 2)
+    // Check if this is a new line
     if (!currentLine || Math.abs(y - currentLine.y) > 2) {
-      // Save previous line if it exists
       if (currentLine && currentLine.text.trim()) {
         lines.push(currentLine);
       }
-      // Start new line
       currentLine = {
         text: item.str,
         y: y,
         x: x,
-        fontSize: fontSize
+        fontSize: fontSize,
+        width: item.width || 0
       };
     } else {
       // Append to current line
       if (currentLine) {
         currentLine.text = appendToLine(currentLine.text, item.str);
+        currentLine.width += item.width || 0;
       }
     }
   }
@@ -445,50 +691,62 @@ function extractLines(items: TextItem[], marginInfo: MarginDetectionResult): Lin
   return lines;
 }
 
-// Check if an item should be skipped (e.g., line number)
-function shouldSkipItem(item: TextItem, x: number, marginInfo: MarginDetectionResult): boolean {
-  if (!marginInfo.shouldFilter) {
-    return false;
+/**
+ * Check if text should be skipped as page number
+ */
+function shouldSkipAsPageNumber(item: TextItem, y: number, pageNumberInfo: PageNumberDetectionResult): boolean {
+  if (!pageNumberInfo.shouldFilter) return false;
+  
+  const text = item.str.trim();
+  if (!isLikelyPageNumber(text)) return false;
+  
+  if (pageNumberInfo.pattern === 'top' && pageNumberInfo.yThresholdTop && y > pageNumberInfo.yThresholdTop) {
+    return true;
   }
-
-  const isInMargin = x < marginInfo.leftThreshold || x > marginInfo.rightThreshold;
-  const isLikelyLineNumber = isInMargin && /^\d+$/.test(item.str.trim());
-
-  return isLikelyLineNumber;
+  if (pageNumberInfo.pattern === 'bottom' && pageNumberInfo.yThresholdBottom && y < pageNumberInfo.yThresholdBottom) {
+    return true;
+  }
+  if (pageNumberInfo.pattern === 'both') {
+    if ((pageNumberInfo.yThresholdTop && y > pageNumberInfo.yThresholdTop) ||
+        (pageNumberInfo.yThresholdBottom && y < pageNumberInfo.yThresholdBottom)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
-// Append text to current line with proper spacing
-function appendToLine(currentText: string, newText: string): string {
-  const needsSpace = currentText && !currentText.endsWith(' ') && !newText.startsWith(' ');
-  return currentText + (needsSpace ? ' ' : '') + newText;
+/**
+ * Check if position is inside a graphics region
+ */
+function isInsideGraphicsRegion(
+  x: number, 
+  y: number, 
+  regions: Array<{x: number, y: number, width: number, height: number}>
+): boolean {
+  for (const region of regions) {
+    if (x >= region.x && x <= region.x + region.width &&
+        y >= region.y && y <= region.y + region.height) {
+      return true;
+    }
+  }
+  return false;
 }
 
-// Group lines into paragraphs
-function groupLinesIntoParagraphs(lines: LineItem[]): Array<{
-  text: string;
-  isHeading: boolean;
-}> {
-  const blocks: Array<{ text: string; isHeading: boolean }> = [];
-  let currentParagraph: string[] = [];
+/**
+ * Group lines into text blocks with position information
+ */
+function groupLinesIntoBlocks(lines: LineItem[], viewport: any): TextBlock[] {
+  const blocks: TextBlock[] = [];
+  let currentParagraph: LineItem[] = [];
   let lastY: number | null = null;
   let lastFontSize: number | null = null;
 
-  notifyDebug('Starting paragraph grouping', { totalLines: lines.length });
-
-  let headingCount = 0;
-  let paragraphCount = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (const line of lines) {
     const text = line.text.trim();
-
     if (!text) continue;
 
-    // Detect headings
     const isHeading = detectHeading(text, line.fontSize, lastFontSize);
-    if (isHeading) headingCount++;
-
-    // Determine if this starts a new paragraph
     const startsNewParagraph = shouldStartNewParagraph(
       text,
       isHeading,
@@ -498,24 +756,17 @@ function groupLinesIntoParagraphs(lines: LineItem[]): Array<{
     );
 
     if (startsNewParagraph && currentParagraph.length > 0) {
-      // Save current paragraph
-      blocks.push({
-        text: joinParagraphLines(currentParagraph),
-        isHeading: false
-      });
-      paragraphCount++;
+      // Create block from current paragraph
+      const block = createTextBlock(currentParagraph, false);
+      if (block) blocks.push(block);
       currentParagraph = [];
     }
 
     if (isHeading) {
       // Add heading as its own block
-      blocks.push({
-        text: text,
-        isHeading: true
-      });
+      blocks.push(createTextBlock([line], true)!);
     } else {
-      // Add to current paragraph
-      currentParagraph.push(text);
+      currentParagraph.push(line);
     }
 
     lastY = line.y;
@@ -524,86 +775,311 @@ function groupLinesIntoParagraphs(lines: LineItem[]): Array<{
 
   // Add remaining paragraph
   if (currentParagraph.length > 0) {
-    blocks.push({
-      text: joinParagraphLines(currentParagraph),
-      isHeading: false
-    });
-    paragraphCount++;
+    const block = createTextBlock(currentParagraph, false);
+    if (block) blocks.push(block);
   }
-
-  notifyDebug('Paragraph grouping complete', {
-    totalBlocks: blocks.length,
-    headings: headingCount,
-    paragraphs: paragraphCount
-  });
 
   return blocks;
 }
 
-// Determine if a new paragraph should start
-function shouldStartNewParagraph(
-  text: string,
-  isHeading: boolean,
-  currentY: number,
-  lastY: number | null,
-  currentParagraph: string[]
-): boolean {
-  if (isHeading) return true;
-  if (isParagraphBoundary(text)) return true;
-  if (lastY !== null && Math.abs(currentY - lastY) > 15) return true; // Large vertical gap
-
-  // Check if previous line ended with punctuation
-  if (currentParagraph.length > 0) {
-    const lastLine = currentParagraph[currentParagraph.length - 1];
-    if (endsWithPunctuation(lastLine)) return true;
-  }
-
-  return false;
+/**
+ * Create a text block from lines
+ */
+function createTextBlock(lines: LineItem[], isHeading: boolean): TextBlock | null {
+  if (lines.length === 0) return null;
+  
+  const text = joinParagraphLines(lines.map(l => l.text));
+  if (!text.trim()) return null;
+  
+  // Calculate bounding box
+  const minX = Math.min(...lines.map(l => l.x));
+  const maxX = Math.max(...lines.map(l => l.x + l.width));
+  const minY = Math.min(...lines.map(l => l.y));
+  const maxY = Math.max(...lines.map(l => l.y));
+  
+  return {
+    text,
+    isHeading,
+    x: minX,
+    y: (minY + maxY) / 2, // Use center Y for sorting
+    width: maxX - minX,
+    height: maxY - minY
+  };
 }
 
-// Helper function to detect headings
+/**
+ * Extract images with their positions on the page
+ */
+async function extractImagesWithPositions(page: any, viewport: any): Promise<ImageBlock[]> {
+  const images: ImageBlock[] = [];
+
+  try {
+    // First extract regular raster images
+    const rasterImages = await extractRasterImages(page, viewport);
+    images.push(...rasterImages);
+    
+    // Then extract graphics regions as images
+    const graphicsRegions = await detectGraphicsRegions(page);
+    
+    // Render each graphics region to an image
+    for (const region of graphicsRegions) {
+      // Skip very small regions or regions that overlap with raster images
+      if (region.width < 10 || region.height < 10) continue;
+      
+      // Check if this region overlaps with a raster image (to avoid duplicates)
+      const overlapsWithRaster = rasterImages.some(img => 
+        regionsOverlap(region, {
+          x: img.x,
+          y: img.y,
+          width: img.width,
+          height: img.height
+        })
+      );
+      
+      if (overlapsWithRaster) continue;
+      
+      // Render the region to canvas
+      const graphicImage = await renderGraphicsRegion(page, region, viewport);
+      if (graphicImage) {
+        images.push(graphicImage);
+      }
+    }
+    
+    notifyDebug('Total images extracted', {
+      rasterCount: rasterImages.length,
+      graphicsCount: images.length - rasterImages.length,
+      total: images.length
+    });
+  } catch (error) {
+    notifyDebug('Image extraction error:', error);
+  }
+
+  return images;
+}
+
+/**
+ * Extract raster images from the page
+ */
+async function extractRasterImages(page: any, viewport: any): Promise<ImageBlock[]> {
+  const images: ImageBlock[] = [];
+  
+  try {
+    const operators = await page.getOperatorList();
+    let currentTransform = [1, 0, 0, 1, 0, 0];
+    
+    for (let i = 0; i < operators.fnArray.length; i++) {
+      const fn = operators.fnArray[i];
+      const args = operators.argsArray[i];
+      
+      // Update transformation matrix
+      if (fn === 44) { // OPS.transform
+        currentTransform = multiplyTransforms(currentTransform, args[0]);
+      }
+      
+      // Extract images with position
+      if (fn === 82 || fn === 83) { // paintImageXObject or paintInlineImageXObject
+        const image = await extractSingleImageWithPosition(
+          page, 
+          fn, 
+          args, 
+          currentTransform,
+          viewport
+        );
+        if (image) {
+          images.push(image);
+        }
+      }
+    }
+  } catch (error) {
+    notifyDebug('Raster image extraction error:', error);
+  }
+  
+  return images;
+}
+
+/**
+ * Render a graphics region to a PNG image
+ */
+async function renderGraphicsRegion(
+  page: any, 
+  region: {x: number, y: number, width: number, height: number},
+  viewport: any
+): Promise<ImageBlock | null> {
+  try {
+    // Create a canvas for the specific region
+    const scale = 2; // Higher scale for better quality
+    const canvas = document.createElement('canvas');
+    canvas.width = region.width * scale;
+    canvas.height = region.height * scale;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return null;
+    
+    // Set up the rendering context
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Create a custom viewport for this region
+    const customViewport = page.getViewport({
+      scale: scale,
+      offsetX: -region.x * scale,
+      offsetY: -region.y * scale
+    });
+    
+    // Render the page region to canvas
+    const renderContext = {
+      canvasContext: ctx,
+      viewport: customViewport,
+      // Only render the specific region
+      transform: [scale, 0, 0, scale, -region.x * scale, -region.y * scale]
+    };
+    
+    // Use a timeout to prevent hanging on complex graphics
+    const renderTask = page.render(renderContext);
+    await Promise.race([
+      renderTask.promise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Render timeout')), 5000)
+      )
+    ]);
+    
+    // Convert to base64
+    const dataUrl = canvas.toDataURL('image/png');
+    const base64 = dataUrl.split(',')[1];
+    
+    if (!base64) return null;
+    
+    return {
+      base64,
+      mimeType: 'image/png',
+      x: region.x,
+      y: region.y,
+      width: region.width,
+      height: region.height,
+      isVector: true
+    };
+  } catch (error) {
+    notifyDebug('Failed to render graphics region', error);
+    return null;
+  }
+}
+
+/**
+ * Extract single image with position information
+ */
+async function extractSingleImageWithPosition(
+  page: any,
+  fn: number,
+  args: any[],
+  transform: number[],
+  viewport: any
+): Promise<ImageBlock | null> {
+  try {
+    const imageName = args[0];
+    const imageObj = await (page as any).objs.get(imageName);
+
+    if (!imageObj || !imageObj.data || !imageObj.width || !imageObj.height) {
+      return null;
+    }
+
+    const base64 = await convertImageToBase64(imageObj);
+    if (!base64) return null;
+
+    // Calculate position from transform matrix
+    const x = transform[4];
+    const y = transform[5];
+    const width = imageObj.width * Math.abs(transform[0]);
+    const height = imageObj.height * Math.abs(transform[3]);
+
+    return {
+      base64,
+      mimeType: 'image/png',
+      x,
+      y,
+      width,
+      height,
+      isVector: false
+    };
+  } catch (e) {
+    notifyDebug('Failed to extract image with position:', e);
+    return null;
+  }
+}
+
+/**
+ * Multiply transformation matrices
+ */
+function multiplyTransforms(a: number[], b: number[]): number[] {
+  return [
+    a[0] * b[0] + a[2] * b[1],
+    a[1] * b[0] + a[3] * b[1],
+    a[0] * b[2] + a[2] * b[3],
+    a[1] * b[2] + a[3] * b[3],
+    a[0] * b[4] + a[2] * b[5] + a[4],
+    a[1] * b[4] + a[3] * b[5] + a[5]
+  ];
+}
+
+// Helper functions (keeping the good ones from original)
+
+function appendToLine(currentText: string, newText: string): string {
+  const needsSpace = currentText && !currentText.endsWith(' ') && !newText.startsWith(' ');
+  return currentText + (needsSpace ? ' ' : '') + newText;
+}
+
 function detectHeading(text: string, fontSize: number, lastFontSize: number | null): boolean {
-  // Font size change indicates heading
   const fontSizeIndicatesHeading = lastFontSize !== null && fontSize > lastFontSize * 1.2;
-
-  // Pattern-based heading detection
   const patternIndicatesHeading = isHeadingPattern(text);
-
   return fontSizeIndicatesHeading || patternIndicatesHeading;
 }
 
-// Check if text matches common heading patterns
 function isHeadingPattern(text: string): boolean {
-  if (text.length >= 100) return false; // Too long for a heading
+  if (text.length >= 100) return false;
 
   const headingPatterns = [
-    /^\d+\.?\d*\.?\s/, // "1.2.3 Title" or "1. Title"
-    /^[A-Z][A-Z\s]{3,}$/, // "ALL CAPS TITLE"
-    /^(Chapter|Section|Part|Article|Appendix)\s+\d+/i, // "Chapter 1"
-    /^(Introduction|Conclusion|Abstract|Summary|References|Bibliography)$/i, // Common headings
-    /^[IVXLCDM]+\.\s/ // Roman numerals "IV. Title"
+    /^\d+\.?\d*\.?\s/,
+    /^[A-Z][A-Z\s]{3,}$/,
+    /^(Chapter|Section|Part|Article|Appendix)\s+\d+/i,
+    /^(Introduction|Conclusion|Abstract|Summary|References|Bibliography)$/i,
+    /^[IVXLCDM]+\.\s/
   ];
 
   return headingPatterns.some(pattern => pattern.test(text));
 }
 
-// Helper function to detect paragraph boundaries
+function shouldStartNewParagraph(
+  text: string,
+  isHeading: boolean,
+  currentY: number,
+  lastY: number | null,
+  currentParagraph: LineItem[]
+): boolean {
+  if (isHeading) return true;
+  if (isParagraphBoundary(text)) return true;
+  if (lastY !== null && Math.abs(currentY - lastY) > 15) return true;
+
+  if (currentParagraph.length > 0) {
+    const lastLine = currentParagraph[currentParagraph.length - 1];
+    if (endsWithPunctuation(lastLine.text)) return true;
+  }
+
+  return false;
+}
+
 function isParagraphBoundary(text: string): boolean {
   const boundaryPatterns = [
-    /^[\•\-\*\d]+[\.\)]\s/, // Bullet points or numbered lists
-    /^[a-z]\)\s/, // Lettered lists "a) item"
-    /^(Figure|Table|Example)\s/ // Special elements
+    /^[\•\-\*\d]+[\.\)]\s/,
+    /^[a-z]\)\s/,
+    /^(Figure|Table|Example)\s/
   ];
 
   return boundaryPatterns.some(pattern => pattern.test(text));
 }
 
-// Helper function to check if line ends with punctuation
 function endsWithPunctuation(text: string): boolean {
   return /[.!?:]\s*$/.test(text);
 }
 
-// Helper function to join paragraph lines intelligently
 function joinParagraphLines(lines: string[]): string {
   if (lines.length === 0) return '';
   if (lines.length === 1) return lines[0];
@@ -621,30 +1097,24 @@ function joinParagraphLines(lines: string[]): string {
     }
   }
 
-  // Clean up multiple spaces
   return result.replace(/\s+/g, ' ').trim();
 }
 
-// Join two lines handling hyphenation
 function joinTwoLines(result: string, prevLine: string, currentLine: string): string {
   if (prevLine.endsWith('-')) {
-    // Handle hyphenated words at line breaks
     const lastWord = prevLine.slice(0, -1).split(' ').pop() || '';
     const firstWord = currentLine.split(' ')[0] || '';
 
-    // If it looks like a hyphenated word split across lines, join without space
     if (isHyphenatedWordSplit(lastWord, firstWord)) {
-      return result.slice(0, -1) + currentLine; // Remove hyphen and join
+      return result.slice(0, -1) + currentLine;
     } else {
-      return result + ' ' + currentLine; // Keep hyphen, add space
+      return result + ' ' + currentLine;
     }
   } else {
-    // Normal line join with space
     return result + ' ' + currentLine;
   }
 }
 
-// Check if two words form a hyphenated word split
 function isHyphenatedWordSplit(lastWord: string, firstWord: string): boolean {
   return (
     lastWord.length > 0 &&
@@ -654,62 +1124,6 @@ function isHyphenatedWordSplit(lastWord: string, firstWord: string): boolean {
   );
 }
 
-// Enhanced image extraction with better error handling
-async function extractImages(page: any): Promise<
-  Array<{
-    base64: string;
-    mimeType: string;
-  }>
-> {
-  const images: Array<{ base64: string; mimeType: string }> = [];
-
-  try {
-    const ops = await page.getOperatorList();
-
-    for (let i = 0; i < ops.fnArray.length; i++) {
-      const image = await extractSingleImage(page, ops.fnArray[i], ops.argsArray[i]);
-      if (image) {
-        images.push(image);
-      }
-    }
-  } catch (error) {
-    console.debug('Image extraction not available for this PDF:', error);
-  }
-
-  return images;
-}
-
-// Extract a single image from PDF operations
-async function extractSingleImage(
-  page: any,
-  fn: number,
-  args: any[]
-): Promise<{ base64: string; mimeType: string } | null> {
-  // OPS.paintImageXObject = 82, OPS.paintInlineImageXObject = 83
-  if (fn !== 82 && fn !== 83) {
-    return null;
-  }
-
-  try {
-    const imageName = args[0];
-    const imageObj = await (page as any).objs.get(imageName);
-
-    if (!imageObj || !imageObj.data || !imageObj.width || !imageObj.height) {
-      return null;
-    }
-
-    const base64 = await convertImageToBase64(imageObj);
-    if (base64) {
-      return { base64, mimeType: 'image/png' };
-    }
-  } catch (e) {
-    console.debug('Failed to extract individual image:', e);
-  }
-
-  return null;
-}
-
-// Convert image object to base64
 async function convertImageToBase64(imageObj: any): Promise<string | null> {
   const canvas = document.createElement('canvas');
   canvas.width = imageObj.width;
@@ -720,14 +1134,11 @@ async function convertImageToBase64(imageObj: any): Promise<string | null> {
     return null;
   }
 
-  // Create ImageData object
   const imageData = ctx.createImageData(imageObj.width, imageObj.height);
 
-  // Handle different color spaces
   if (imageObj.data instanceof Uint8ClampedArray) {
     imageData.data.set(imageObj.data);
   } else {
-    // Convert to RGBA if needed
     const data = new Uint8ClampedArray(imageObj.data);
     for (let j = 0; j < data.length; j++) {
       imageData.data[j] = data[j];
@@ -736,7 +1147,6 @@ async function convertImageToBase64(imageObj: any): Promise<string | null> {
 
   ctx.putImageData(imageData, 0, 0);
 
-  // Convert to base64
   const dataUrl = canvas.toDataURL('image/png');
   const base64 = dataUrl.split(',')[1];
 
