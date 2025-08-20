@@ -912,18 +912,18 @@ function getTextBoundingBoxes(textContent: TextContent, viewport: any): Bounding
   for (const item of (textContent as any).items) {
     if ('str' in item && item.str.trim()) {
       const tx = item.transform;
-      const fontSize = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1]);
-      const angle = Math.atan2(tx[1], tx[0]);
+      const fontSize = Math.abs(tx[3]); // Use the correct font size from transform matrix
 
-      // Calculate bounding box
+      // Calculate bounding box - PDF coordinates have origin at bottom-left
       const x = tx[4];
-      const y = viewport.height - tx[5]; // Flip Y coordinate
-      const width = item.width * fontSize;
-      const height = item.height * fontSize;
+      const y = tx[5];
+      const width = item.width || (item.str.length * fontSize * 0.6); // Fallback width estimation
+      const height = fontSize;
 
+      // Convert from PDF coordinates (bottom-left origin) to canvas coordinates (top-left origin)
       boxes.push({
         x: x,
-        y: y - height, // Adjust for top-left origin
+        y: viewport.height - y - height, // Flip Y and adjust for height
         width: width,
         height: height
       });
@@ -1152,8 +1152,13 @@ function drawVisualizationOverlays(
   ctx.strokeStyle = 'rgba(255, 0, 100, 0.4)';
   ctx.lineWidth = 1;
   for (const textBound of textBounds) {
-    ctx.fillRect(textBound.x, textBound.y, textBound.width, textBound.height);
-    ctx.strokeRect(textBound.x, textBound.y, textBound.width, textBound.height);
+    // Scale text bounds for the higher resolution canvas
+    const x = textBound.x * scale;
+    const y = textBound.y * scale;
+    const width = textBound.width * scale;
+    const height = textBound.height * scale;
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeRect(x, y, width, height);
   }
 
   // Add legend
