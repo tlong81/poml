@@ -32,11 +32,13 @@ jobs:
           cd ${{ runner.temp }}/poml_test
           npm init -y
           npm install pomljs@nightly
+        shell: bash
       - name: Copy and test API example
         run: |
           cp examples/401_js_hello_world.mjs ${{ runner.temp }}/poml_test/
           cd ${{ runner.temp }}/poml_test
           node 401_js_hello_world.mjs
+        shell: bash
       - name: Test all .poml examples
         run: |
           cd ${{ runner.temp }}/poml_test
@@ -75,6 +77,7 @@ jobs:
           cp examples/402_py_hello_world.py ${{ runner.temp }}/poml_test/
           cd ${{ runner.temp }}/poml_test
           python 402_py_hello_world.py
+        shell: bash
       - name: Test all .poml examples
         run: |
           cd ${{ runner.temp }}/poml_test
