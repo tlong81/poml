@@ -1,0 +1,56 @@
+name: Test on Nightly Packages
+
+on:
+  schedule:
+    - cron: '0 23 * * *'  # After package publish
+  workflow_dispatch:
+
+jobs:
+  node-nightly:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: windows-latest
+          - os: macos-latest
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install POML nightly
+        run: |
+          npm init -y
+          npm install pomljs@nightly
+      - run: |
+          set -ex
+          npx poml examples/101_explain_character.poml
+      - run: |
+          node examples/401_pomljs_hello_world.mjs
+
+  python-nightly:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: windows-latest
+          - os: macos-latest
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          pip install --upgrade --pre --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
+      - run: |
+          set -ex
+          poml-cli examples/101_explain_character.poml
+      - run: python examples/402_pomlpy_hello_world.py
