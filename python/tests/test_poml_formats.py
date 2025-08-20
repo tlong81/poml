@@ -146,7 +146,9 @@ def test_dict_format_with_schema_tools_runtime():
     """Test dict format returns full structure with schema, tools, and runtime"""
     markup = '''<poml>
     <output-schema>{"type": "object", "properties": {"answer": {"type": "string"}}, "required": ["answer"]}</output-schema>
-    <tools>[{"type": "function", "function": {"name": "search", "parameters": {"type": "object"}}}]</tools>
+    <tool-definition name="search" description="Search for information">
+        {"type": "object", "properties": {"query": {"type": "string"}}}
+    </tool-definition>
     <runtime temperature="0.5" max-tokens="150" />
     <p>What is AI?</p>
     </poml>'''
@@ -155,8 +157,8 @@ def test_dict_format_with_schema_tools_runtime():
     expected = {
         "messages": [{"speaker": "human", "content": "What is AI?"}],
         "schema": {"type": "object", "properties": {"answer": {"type": "string"}}, "required": ["answer"]},
-        "tools": [{"type": "function", "function": {"name": "search", "parameters": {"type": "object"}}}],
-        "runtime": {"temperature": 0.5, "max-tokens": 150}
+        "tools": [{"type": "function", "name": "search", "description": "Search for information", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}}}],
+        "runtime": {"temperature": 0.5, "maxTokens": 150}
     }
     assert result == expected
 
@@ -200,21 +202,15 @@ def test_openai_chat_with_runtime():
 def test_openai_chat_with_tools():
     """Test OpenAI format with tool definitions"""
     markup = '''<poml>
-    <tools>[
+    <tool-definition name="get_weather" description="Get weather information">
         {
-            "type": "function",
-            "function": {
-                "name": "get_weather",
-                "description": "Get weather information",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "location": {"type": "string"}
-                    }
-                }
-            }
+            "type": "object",
+            "properties": {
+                "location": {"type": "string"}
+            },
+            "required": ["location"]
         }
-    ]</tools>
+    </tool-definition>
     <p>What's the weather?</p>
     </poml>'''
     
@@ -223,15 +219,14 @@ def test_openai_chat_with_tools():
         "messages": [{"role": "user", "content": "What's the weather?"}],
         "tools": [{
             "type": "function",
-            "function": {
-                "name": "get_weather",
-                "description": "Get weather information",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "location": {"type": "string"}
-                    }
-                }
+            "name": "get_weather",
+            "description": "Get weather information",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"}
+                },
+                "required": ["location"]
             }
         }]
     }
@@ -242,7 +237,9 @@ def test_langchain_with_schema_tools_runtime():
     """Test LangChain format preserves all metadata"""
     markup = '''<poml>
     <output-schema>{"type": "object", "properties": {"result": {"type": "number"}}, "required": ["result"]}</output-schema>
-    <tools>[{"type": "function", "function": {"name": "calculate"}}]</tools>
+    <tool-definition name="calculate" description="Calculate numbers">
+        {"type": "object", "properties": {"operation": {"type": "string"}}}
+    </tool-definition>
     <runtime temperature="0.7" />
     <p>Calculate something</p>
     </poml>'''
@@ -251,7 +248,7 @@ def test_langchain_with_schema_tools_runtime():
     expected = {
         "messages": [{"type": "human", "data": {"content": "Calculate something"}}],
         "schema": {"type": "object", "properties": {"result": {"type": "number"}}, "required": ["result"]},
-        "tools": [{"type": "function", "function": {"name": "calculate"}}],
+        "tools": [{"type": "function", "name": "calculate", "description": "Calculate numbers", "parameters": {"type": "object", "properties": {"operation": {"type": "string"}}}}],
         "runtime": {"temperature": 0.7}
     }
     assert result == expected
@@ -261,7 +258,9 @@ def test_pydantic_format_with_full_frame():
     """Test pydantic format returns PomlFrame with all fields"""
     markup = '''<poml>
     <output-schema>{"type": "object"}</output-schema>
-    <tools>[{"type": "function", "function": {"name": "test"}}]</tools>
+    <tool-definition name="test" description="Test tool">
+        {"type": "object", "properties": {"input": {"type": "string"}}}
+    </tool-definition>
     <runtime temperature="0.5" />
     <p>Test message</p>
     </poml>'''
@@ -289,7 +288,7 @@ def test_mixed_tool_calls_openai():
     markup = '''<poml>
     <human-msg>Search for Python tutorials</human-msg>
     <ai-msg>I'll search for Python tutorials for you.</ai-msg>
-    <tool-request id="call_001" name="web_search" parameters="{{ {query: 'Python tutorials beginners'} }}" />
+    <tool-request id="call_001" name="web_search" parameters='{"query": "Python tutorials beginners"}' />
     <tool-response id="call_001" name="web_search">Found 5 tutorials: 1. Python Basics, 2. Learn Python...</tool-response>
     <ai-msg>I found 5 Python tutorials for you.</ai-msg>
     </poml>'''
@@ -297,9 +296,9 @@ def test_mixed_tool_calls_openai():
     result = poml.poml(markup, format="openai_chat")["messages"]
     expected = [
         {"role": "user", "content": "Search for Python tutorials"},
-        {"role": "assistant", "content": "I'll search for Python tutorials for you."},
         {
             "role": "assistant",
+            "content": "I'll search for Python tutorials for you.",
             "tool_calls": [{
                 "id": "call_001",
                 "type": "function",
