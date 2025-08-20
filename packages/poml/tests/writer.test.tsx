@@ -4,7 +4,7 @@ import { describe, expect, test } from '@jest/globals';
 import { MarkdownWriter, JsonWriter, MultiMediaWriter, YamlWriter, XmlWriter } from 'poml/writer';
 import * as cheerio from 'cheerio';
 import { readFileSync } from '../util/fs';
-import { ErrorCollection, richContentFromSourceMap } from 'poml/base';
+import { ContentMultiMediaBinary, ContentMultiMediaToolResponse, ErrorCollection, richContentFromSourceMap } from 'poml/base';
 
 describe('markdown', () => {
   test('markdownSimple', () => {
@@ -509,7 +509,7 @@ describe('multimedia', () => {
     expect(result).toHaveLength(1);
     expect(result[0].speaker).toBe('tool');
     expect(result[0].content).toHaveLength(1);
-    const response = result[0].content[0];
+    const response = result[0].content[0] as ContentMultiMediaToolResponse;
     expect(response.type).toBe('application/vnd.poml.toolresponse');
     expect(response.id).toBe('test-123');
     expect(response.name).toBe('analyze');
@@ -517,9 +517,10 @@ describe('multimedia', () => {
     expect(Array.isArray(response.content)).toBe(true);
     expect(response.content).toHaveLength(2);
     expect(response.content[0]).toBe('Analysis results:\n\nSummary: positive trend');
-    expect(response.content[1].type).toBe('image');
-    expect(response.content[1].base64).toBe(base64);
-    expect(response.content[1].alt).toBe('chart');
+    const subResponse = response.content[1] as ContentMultiMediaBinary;
+    expect(subResponse.type).toBe('image');
+    expect(subResponse.base64).toBe(base64);
+    expect(subResponse.alt).toBe('chart');
   });
 
   test('toolResponseEmptyContent', () => {

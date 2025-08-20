@@ -521,6 +521,107 @@ function diffMessages(expected: ExpectMessage[], actual: any): string {
   return '';
 }
 
+describe('message components', () => {
+  test('MessageContent with toolrequest', async () => {
+    const toolRequest = {
+      type: 'application/vnd.poml.toolrequest' as const,
+      id: 'test-123',
+      name: 'search',
+      content: { query: 'hello', limit: 10 }
+    };
+    
+    const text = '<MessageContent content="{{toolRequestContent}}" />';
+    const ir = await read(text, undefined, { toolRequestContent: [toolRequest] });
+    const element = write(ir);
+    expect(element).toHaveLength(1);
+    expect((element[0] as any).type).toBe('application/vnd.poml.toolrequest');
+    expect((element[0] as any).id).toBe('test-123');
+    expect((element[0] as any).name).toBe('search');
+    expect((element[0] as any).content).toEqual({ query: 'hello', limit: 10 });
+  });
+
+  test('MessageContent with toolresponse', async () => {
+    const toolResponse = {
+      type: 'application/vnd.poml.toolresponse' as const,
+      id: 'test-123',
+      name: 'search',
+      content: 'Search completed successfully'
+    };
+    
+    const text = '<MessageContent content="{{toolResponseContent}}" />';
+    const ir = await read(text, undefined, { toolResponseContent: [toolResponse] });
+    const messages = write(ir, { speaker: true });
+    expect(messages).toHaveLength(1);
+    expect(messages[0].speaker).toBe('tool');
+    const element = messages[0].content;
+    expect(element).toHaveLength(1);
+    expect((element[0] as any).type).toBe('application/vnd.poml.toolresponse');
+    expect((element[0] as any).id).toBe('test-123');
+    expect((element[0] as any).name).toBe('search');
+    expect((element[0] as any).content).toBe('Search completed successfully');
+  });
+
+  test('MessageContent with mixed content including tools', async () => {
+    const toolRequest = {
+      type: 'application/vnd.poml.toolrequest' as const,
+      id: 'req-456',
+      name: 'calculate',
+      content: { expression: '2+2' }
+    };
+    
+    const mixedContent = [
+      'Making a calculation: ',
+      toolRequest,
+      ' Please wait...'
+    ];
+    
+    const text = '<MessageContent content="{{mixedContent}}" />';
+    ErrorCollection.clear();
+    const ir = await read(text, undefined, { mixedContent: mixedContent });
+    const element = write(ir);
+    expect(ErrorCollection.empty()).toBe(true);
+    expect(element).toHaveLength(3);
+    expect(element[0]).toBe('Making a calculation:');
+    expect((element[1] as any).type).toBe('application/vnd.poml.toolrequest');
+    expect((element[1] as any).id).toBe('req-456');
+    expect((element[1] as any).name).toBe('calculate');
+    expect(element[2]).toBe('Please wait...');
+  });
+
+  test('Conversation with tool messages', async () => {
+    const toolRequest = {
+      type: 'application/vnd.poml.toolrequest' as const,
+      id: 'search-789',
+      name: 'web_search',
+      content: { query: 'TypeScript', limit: 5 }
+    };
+    
+    const toolResponse = {
+      type: 'application/vnd.poml.toolresponse' as const,
+      id: 'search-789',
+      name: 'web_search',
+      content: 'Found 5 results about TypeScript'
+    };
+    
+    const messages = [
+      { speaker: 'human', content: 'Search for TypeScript information' },
+      { speaker: 'ai', content: [toolRequest] },
+      { speaker: 'tool', content: [toolResponse] },
+      { speaker: 'ai', content: 'Based on the search results, TypeScript is great!' }
+    ];
+    
+    const text = '<Conversation messages="{{messages}}" />';
+    const element = write(await read(text, undefined, { messages }), { speaker: true });
+    expect(element).toHaveLength(4);
+    expect(element[0].speaker).toBe('human');
+    expect(element[1].speaker).toBe('ai');
+    expect((element[1].content[0] as any).type).toBe('application/vnd.poml.toolrequest');
+    expect(element[2].speaker).toBe('tool');
+    expect((element[2].content[0] as any).type).toBe('application/vnd.poml.toolresponse');
+    expect(element[3].speaker).toBe('ai');
+  });
+});
+
 describe('examples correctness', () => {
   beforeAll(() => {
     spyOn(process.stdout, 'write').mockImplementation(() => true);
