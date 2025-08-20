@@ -88,7 +88,7 @@ For detailed information on POML syntax, components, styling, templating, SDKs, 
 
 ## Citation
 
-If you use POML, please cite the following paper:
+If you find POML useful or related to your research, please cite the following paper:
 
 ```bibtex
 @misc{zhang2025promptorchestrationmarkuplanguage,
