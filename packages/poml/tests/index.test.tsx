@@ -391,7 +391,7 @@ describe('cli', () => {
 
   test('contentWithResponseSchema', async () => {
     const text =
-      '<poml>Hello, world!<meta type="schema">z.object({ operation: z.enum(["add", "subtract"]), a: z.number(), b: z.number() })</meta></poml>';
+      '<poml>Hello, world!<output-schema>z.object({ operation: z.enum(["add", "subtract"]), a: z.number(), b: z.number() })</output-schema></poml>';
     await commandLine({ input: text, speakerMode: true });
     expect(process.stdout.write).toHaveBeenCalledWith(
       '{"messages":[{"speaker":"human","content":"Hello, world!"}],"schema":{"type":"object","properties":{"operation":{"type":"string","enum":["add","subtract"]},"a":{"type":"number"},"b":{"type":"number"}},"required":["operation","a","b"],"additionalProperties":false}}'

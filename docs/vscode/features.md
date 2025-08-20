@@ -89,12 +89,12 @@ The CodeLens evaluation feature works with:
   
   <p>We have {{ count }} items: {{ items.join(', ') }}</p>
   
-  <meta type="schema" lang="expr">
+  <output-schema lang="expr">
     z.object({
       total: z.number().max(count),
       items: z.array(z.enum(items))
     })
-  </meta>
+  </output-schema>
 </poml>
 ```
 

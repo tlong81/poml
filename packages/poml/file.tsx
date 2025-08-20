@@ -342,15 +342,14 @@ export class PomlFile {
     const regex = /{{\s*(.+?)\s*}}(?!})/gm;
 
     const visit = (element: XMLElement) => {
-      // Special handling for meta elements with lang="expr"
-      if (element.name?.toLowerCase() === 'meta') {
+      // Special handling for schema and tool definition elements with lang="expr"
+      const elementName = element.name?.toLowerCase();
+      if (elementName === 'output-schema' || elementName === 'outputschema' || elementName === 'tool-definition' || elementName === 'tool-def' || elementName === 'tooldef' || elementName === 'tool') {
         const langAttr = xmlAttribute(element, 'lang');
-        const typeAttr = xmlAttribute(element, 'type');
-        const isSchemaType = typeAttr?.value === 'schema' || typeAttr?.value === 'tool';
         const text = xmlElementText(element).trim();
 
         // Check if it's an expression (either explicit lang="expr" or auto-detected)
-        if (isSchemaType && (langAttr?.value === 'expr' || (!langAttr && !text.trim().startsWith('{')))) {
+        if (langAttr?.value === 'expr' || (!langAttr && !text.trim().startsWith('{'))) {
           const position = this.xmlElementRange(element.textContents[0]);
           tokens.push({
             type: 'expression',
@@ -782,66 +781,94 @@ export class PomlFile {
     return undefined;
   }
 
+  private handleOutputSchema = (element: XMLElement, context?: { [key: string]: any }): boolean => {
+    const elementName = element.name?.toLowerCase();
+    if (elementName !== 'output-schema' && elementName !== 'outputschema') {
+      return false;
+    }
+    
+    if (this.responseSchema) {
+      this.reportError(
+        'Multiple output-schema elements found. Only one is allowed.',
+        this.xmlElementRange(element)
+      );
+      return true;
+    }
+
+    const schema = this.handleSchema(element, context);
+    if (schema) {
+      this.responseSchema = schema;
+    }
+    return true;
+  };
+
+  private handleToolDefinition = (element: XMLElement, context?: { [key: string]: any }): boolean => {
+    const elementName = element.name?.toLowerCase();
+    if (elementName !== 'tool-definition' && elementName !== 'tool-def' && elementName !== 'tooldef' && elementName !== 'tool') {
+      return false;
+    }
+    
+    const name = xmlAttribute(element, 'name')?.value;
+    if (!name) {
+      this.reportError(
+        'name attribute is required for tool definition',
+        this.xmlElementRange(element)
+      );
+      return true;
+    }
+
+    const description = xmlAttribute(element, 'description')?.value;
+    const inputSchema = this.handleSchema(element, context);
+    if (inputSchema) {
+      if (!this.toolsSchema) {
+        this.toolsSchema = new ToolsSchema();
+      }
+      try {
+        this.toolsSchema.addTool(name, description || undefined, inputSchema);
+      } catch (e) {
+        this.reportError(
+          e instanceof Error ? e.message : 'Error adding tool to tools schema',
+          this.xmlElementRange(element),
+          e
+        );
+      }
+    }
+    return true;
+  };
+
+  private handleRuntime = (element: XMLElement, context?: { [key: string]: any }): boolean => {
+    const elementName = element.name?.toLowerCase();
+    if (elementName !== 'runtime') {
+      return false;
+    }
+
+    // Extract runtime parameters from all attributes
+    const runtimeParams: any = {};
+    for (const attribute of element.attributes) {
+      if (attribute.key && attribute.value) {
+        runtimeParams[attribute.key] = attribute.value;
+      }
+    }
+    this.runtimeParameters = runtimeParams;
+    return true;
+  };
+
   private handleMeta = (element: XMLElement, context?: { [key: string]: any }): boolean => {
     if (element.name?.toLowerCase() !== 'meta') {
       return false;
     }
+
+    // Check if this is an old-style meta with type attribute
     const metaType = xmlAttribute(element, 'type')?.value;
-    if (metaType === 'schema') {
-      if (this.responseSchema) {
-        this.reportError(
-          'Multiple responseSchema meta elements found. Only one is allowed.',
-          this.xmlElementRange(element)
-        );
-        return true;
-      }
-      const schema = this.handleSchema(element, context);
-      if (schema) {
-        this.responseSchema = schema;
-      }
+    if (metaType) {
+      this.reportError(
+        `Meta elements with type attribute has been removed. Use <${metaType === 'schema' ? 'output-schema' : metaType === 'tool' ? 'tool-definition' : metaType === 'runtime' ? 'runtime' : metaType}> instead of <meta type="${metaType}">`,
+        this.xmlElementRange(element)
+      );
       return true;
     }
 
-    if (metaType === 'tool') {
-      const name = xmlAttribute(element, 'name')?.value;
-      if (!name) {
-        this.reportError(
-          'name attribute is required for tool meta type',
-          this.xmlElementRange(element)
-        );
-        return true;
-      }
-      const description = xmlAttribute(element, 'description')?.value;
-      const inputSchema = this.handleSchema(element, context);
-      if (inputSchema) {
-        if (!this.toolsSchema) {
-          this.toolsSchema = new ToolsSchema();
-        }
-        try {
-          this.toolsSchema.addTool(name, description || undefined, inputSchema);
-        } catch (e) {
-          this.reportError(
-            e instanceof Error ? e.message : 'Error adding tool to tools schema',
-            this.xmlElementRange(element),
-            e
-          );
-        }
-      }
-      return true;
-    }
-
-    if (metaType === 'runtime') {
-      // Extra runtime parameters sending to LLM.
-      const runtimeParams: any = {};
-      for (const attribute of element.attributes) {
-        if (attribute.key && attribute.value && attribute.key?.toLowerCase() !== 'type') {
-          runtimeParams[attribute.key] = attribute.value;
-        }
-      }
-      this.runtimeParameters = runtimeParams;
-      return true;
-    }
-
+    // Handle version control
     const minVersion = xmlAttribute(element, 'minVersion')?.value;
     if (minVersion && compareVersions(POML_VERSION, minVersion) < 0) {
       this.reportError(
@@ -988,8 +1015,12 @@ export class PomlFile {
       // Probably already had an invalid syntax error.
       return <></>;
     }
-    const isMeta = tagName.toLowerCase() === 'meta';
-    const isInclude = tagName.toLowerCase() === 'include';
+    const tagNameLower = tagName.toLowerCase();
+    const isMeta = tagNameLower === 'meta';
+    const isInclude = tagNameLower === 'include';
+    const isOutputSchema = tagNameLower === 'output-schema' || tagNameLower === 'outputschema';
+    const isToolDefinition = tagNameLower === 'tool-definition' || tagNameLower === 'tool-def' || tagNameLower === 'tooldef' || tagNameLower === 'tool';
+    const isRuntime = tagNameLower === 'runtime';
 
     // Common logic for handling for-loops
     const forLoops = this.handleForLoop(element, globalContext);
@@ -1004,9 +1035,21 @@ export class PomlFile {
       if (!this.handleIfCondition(element, context)) {
         continue;
       }
-      // Common logic for handling meta elements
+      // Common logic for handling meta elements and new schema/tool elements
       if (isMeta && this.handleMeta(element, context)) {
         // If it's a meta element, we don't render anything.
+        continue;
+      }
+      if (isOutputSchema && this.handleOutputSchema(element, context)) {
+        // If it's an output-schema element, we don't render anything.
+        continue;
+      }
+      if (isToolDefinition && this.handleToolDefinition(element, context)) {
+        // If it's a tool-definition element, we don't render anything.
+        continue;
+      }
+      if (isRuntime && this.handleRuntime(element, context)) {
+        // If it's a runtime element, we don't render anything.
         continue;
       }
 
