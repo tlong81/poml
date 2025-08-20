@@ -74,7 +74,7 @@ jobs:
           set -ex
           for poml_file in examples/*.poml; do
             echo "Testing $poml_file"
-            poml-cli "$poml_file"
+            poml-cli -f "$poml_file"
           done
         shell: bash
       - name: Copy and test API example
