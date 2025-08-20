@@ -72,6 +72,7 @@ jobs:
         shell: bash
       - run: |
           pip install --upgrade --pre --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
+        shell: bash
       - name: Copy and test API example
         run: |
           cp examples/402_py_hello_world.py ${{ runner.temp }}/poml_test/
