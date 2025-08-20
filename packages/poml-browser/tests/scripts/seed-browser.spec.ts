@@ -36,10 +36,15 @@ test.describe('generate cards with pdfs', () => {
       await page.addScriptTag({ path: path.resolve(__dirname, '../../dist/contentScript.js') });
 
       // Call the extractContent function that's exposed by the content script
-      const content = await page.evaluate(async () => {
+      const extractionData = await page.evaluate(async () => {
         // The content script exposes window.extractContent
-        return await (window as any).extractContent();
+        const content = await (window as any).extractContent();
+        // Get visualizations that were stored during PDF extraction
+        const visualizations = (window as any).pdfVisualizations;
+        return { content, visualizations };
       });
+
+      const { content, visualizations } = extractionData;
 
       // Verify extraction was successful
       expect(content).toBeDefined();
@@ -48,16 +53,30 @@ test.describe('generate cards with pdfs', () => {
 
       // Save individual JSON file for this test
       const sanitizedFileName = pdfFile.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filenameWithoutExt = path.basename(pdfFile, '.pdf');
       const outputPath = path.join(artifactDir, `pdf-${sanitizedFileName}.json`);
       const testResult = {
         source: pdfUrl,
         file: pdfFile,
         timestamp: new Date().toISOString(),
-        cards: content
+        cards: content,
+        visualizations: visualizations ? visualizations.length : 0
       };
 
       fs.writeFileSync(outputPath, JSON.stringify(testResult, null, 2));
-      console.log(`Saved PDF cards to ${outputPath}`);
+
+      // Save visualization images if available
+      if (visualizations && Array.isArray(visualizations)) {
+        for (const viz of visualizations) {
+          if (viz.base64 && viz.pageNumber) {
+            const vizFileName = `pdf-${filenameWithoutExt}-page${viz.pageNumber}.png`;
+            const vizPath = path.join(artifactDir, vizFileName);
+            const buffer = Buffer.from(viz.base64, 'base64');
+            fs.writeFileSync(vizPath, buffer);
+            console.log(`Saved visualization for page ${viz.pageNumber} to ${vizPath}`);
+          }
+        }
+      }
     });
   }
 });

@@ -1,4 +1,4 @@
-import { extractPdfContent, isPdfDocument } from '../functions/pdf';
+import { extractPdfContentVisualized, PageVisualization, isPdfDocument } from '../functions/pdf';
 import { extractHtmlContent } from '../functions/html';
 import { extractWordContent, isWordDocument } from '../functions/msword';
 import { notifyInfo, notifyError } from '../functions/notification';
@@ -17,8 +17,11 @@ async function extractContent(): Promise<CardModel[]> {
     
     // Check if this is a PDF document
     if (isPdfDocument()) {
-      notifyInfo('PDF detected, attempting PDF text extraction');
-      return await extractPdfContent(document.location.href);
+      notifyInfo('PDF detected, attempting PDF text extraction with visualization');
+      const result = await extractPdfContentVisualized(document.location.href, true);
+      // Store visualizations globally for later access
+      (window as any).pdfVisualizations = result.visualizations;
+      return result.cards;
     }
     
     // Check if this is a Word document
@@ -56,14 +59,13 @@ async function extractContent(): Promise<CardModel[]> {
 declare global {
   interface Window {
     extractContent: () => Promise<CardModel[]>;
-    convertDomToMarkup: () => CardModel[];
+    extractPdfContentVisualized: () => Promise<{ cards: CardModel[]; visualizations: PageVisualization[] }>;
   }
 }
 
 (window as any).extractContent = extractContent;
 
-// Keep the convertDomToMarkup for backward compatibility
-(window as any).convertDomToMarkup = () => {
-  notifyInfo('convertDomToMarkup called - delegating to Word extraction');
-  return extractWordContent();
-};
+// For debugging purposes
+(window as any).extractPdfContentVisualized = async () => {
+  return await extractPdfContentVisualized(document.location.href, true);
+}

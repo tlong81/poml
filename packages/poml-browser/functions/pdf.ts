@@ -78,12 +78,22 @@ interface GraphicBlock {
   height: number;
 }
 
+export interface PageVisualization {
+  pageNumber: number;
+  base64: string;
+  mimeType: string;
+}
+
 type ContentBlock = TextBlock | GraphicBlock;
 
 /**
  * Extracts structured content from a PDF document with proper image/text interleaving
  */
-export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
+export async function extractPdfContentVisualized(
+  pdfUrl?: string,
+  visualization?: boolean
+): Promise<{ cards: CardModel[]; visualizations: PageVisualization[] }> {
+
   try {
     const targetUrl = pdfUrl || document.location.href;
     notifyDebug('Starting PDF structured extraction', { url: targetUrl });
@@ -179,7 +189,20 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
             } as CardModelSlim
           ];
 
-    return finalCards.map(slim =>
+    // Generate visualizations if requested
+    const visualizations: PageVisualization[] = [];
+    if (visualization) {
+      for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const pageViz = await generatePageVisualization(page, pageNum);
+        if (pageViz) {
+          visualizations.push(pageViz);
+        }
+      }
+    }
+
+    return {
+      cards: finalCards.map(slim =>
       createCardFromSlim(slim, {
         timestamp,
         metadata: {
@@ -188,7 +211,9 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
           tags: ['pdf']
         }
       })
-    );
+    ),
+      visualizations
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     notifyError('PDF extraction failed', error);
@@ -201,7 +226,8 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
       componentType: 'Paragraph'
     };
 
-    return [
+    return {
+      cards: [
       createCardFromSlim(slimCard, {
         metadata: {
           source: 'file',
@@ -209,8 +235,15 @@ export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
           tags: ['error', 'pdf']
         }
       })
-    ];
+    ],
+      visualizations: []
+    };
   }
+}
+
+export async function extractPdfContent(pdfUrl?: string): Promise<CardModel[]> {
+  const result = await extractPdfContentVisualized(pdfUrl, false);
+  return result.cards;
 }
 
 /**
@@ -435,18 +468,9 @@ function shouldSkipAsPageNumber(
 /**
  * Check if position is inside a graphics region
  */
-function isInsideGraphicRegion(
-  x: number,
-  y: number,
-  graphicBlocks: GraphicBlock[]
-): boolean {
+function isInsideGraphicRegion(x: number, y: number, graphicBlocks: GraphicBlock[]): boolean {
   for (const block of graphicBlocks) {
-    if (
-      x >= block.x &&
-      x <= block.x + block.width &&
-      y >= block.y &&
-      y <= block.y + block.height
-    ) {
+    if (x >= block.x && x <= block.x + block.width && y >= block.y && y <= block.y + block.height) {
       return true;
     }
   }
@@ -629,46 +653,56 @@ function isHyphenatedWordSplit(lastWord: string, firstWord: string): boolean {
 }
 
 async function detectGraphicsRegions(page: PDFPageProxy): Promise<GraphicBlock[]> {
-  const scale = 1.; // Base scale for rendering
+  const scale = 1; // Base scale for rendering
   const downsampleFactor = 4; // Downsample for region detection
   const viewport = page.getViewport({ scale });
-  
+
   // Create canvas for full resolution rendering
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d', { willReadFrequently: true })!;
   canvas.width = viewport.width;
   canvas.height = viewport.height;
-  
+
   // Render the page
   await page.render({
     canvasContext: context,
     canvas: canvas,
     viewport: viewport
   }).promise;
-  
+
   // Get text items for text coverage analysis
   const textContent = await page.getTextContent();
   const textBounds = getTextBoundingBoxes(textContent as any, viewport);
-  
+
   // Create downsampled canvas for region detection
   const downsampledCanvas = document.createElement('canvas');
   const downsampledCtx = downsampledCanvas.getContext('2d', { willReadFrequently: true })!;
   downsampledCanvas.width = Math.floor(canvas.width / downsampleFactor);
   downsampledCanvas.height = Math.floor(canvas.height / downsampleFactor);
-  
+
   // Downsample the image
   downsampledCtx.drawImage(
-    canvas, 
-    0, 0, canvas.width, canvas.height,
-    0, 0, downsampledCanvas.width, downsampledCanvas.height
+    canvas,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+    0,
+    0,
+    downsampledCanvas.width,
+    downsampledCanvas.height
   );
-  
+
   // Find inked regions using flood fill
-  const inkedRegions = findInkedRegions(downsampledCtx, downsampledCanvas.width, downsampledCanvas.height);
-  
+  const inkedRegions = findInkedRegions(
+    downsampledCtx,
+    downsampledCanvas.width,
+    downsampledCanvas.height
+  );
+
   // Scale regions back to original size and filter
   const graphicBlocks: GraphicBlock[] = [];
-  
+
   for (const region of inkedRegions) {
     // Scale region back to original coordinates
     const scaledRegion: BoundingBox = {
@@ -677,34 +711,40 @@ async function detectGraphicsRegions(page: PDFPageProxy): Promise<GraphicBlock[]
       width: region.width * downsampleFactor,
       height: region.height * downsampleFactor
     };
-    
+
     // Calculate text coverage for this region
     const textCoverage = calculateTextCoverage(scaledRegion, textBounds);
-    
+
     // Check if region is mostly text or too simple
     if (textCoverage > 0.8) {
       continue; // Skip regions that are mostly text
     }
-    
+
     // Check if the region content outside text is too simple
     if (isRegionTooSimple(context, scaledRegion, textBounds)) {
       continue;
     }
-    
+
     // Extract the region as base64
     const regionCanvas = document.createElement('canvas');
     const regionCtx = regionCanvas.getContext('2d')!;
     regionCanvas.width = scaledRegion.width;
     regionCanvas.height = scaledRegion.height;
-    
+
     regionCtx.drawImage(
       canvas,
-      scaledRegion.x, scaledRegion.y, scaledRegion.width, scaledRegion.height,
-      0, 0, scaledRegion.width, scaledRegion.height
+      scaledRegion.x,
+      scaledRegion.y,
+      scaledRegion.width,
+      scaledRegion.height,
+      0,
+      0,
+      scaledRegion.width,
+      scaledRegion.height
     );
-    
+
     const dataUrl = regionCanvas.toDataURL('image/png');
-    const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
     graphicBlocks.push({
       type: 'image',
       x: scaledRegion.x / scale, // Convert to PDF coordinates
@@ -715,17 +755,21 @@ async function detectGraphicsRegions(page: PDFPageProxy): Promise<GraphicBlock[]
       mimeType: 'image/png'
     });
   }
-  
+
   return graphicBlocks;
 }
 
-function findInkedRegions(ctx: CanvasRenderingContext2D, width: number, height: number): BoundingBox[] {
+function findInkedRegions(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): BoundingBox[] {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
   const visited = new Uint8Array(width * height);
   const regions: BoundingBox[] = [];
   const luminanceThreshold = 240; // Pixels darker than this are considered "inked"
-  
+
   // Helper function to get luminance
   function getLuminance(idx: number): number {
     const r = data[idx];
@@ -733,46 +777,48 @@ function findInkedRegions(ctx: CanvasRenderingContext2D, width: number, height: 
     const b = data[idx + 2];
     return 0.299 * r + 0.587 * g + 0.114 * b;
   }
-  
+
   // Flood fill to find connected regions
   function floodFill(startX: number, startY: number): BoundingBox | null {
     const stack: [number, number][] = [[startX, startY]];
-    let minX = startX, maxX = startX;
-    let minY = startY, maxY = startY;
+    let minX = startX,
+      maxX = startX;
+    let minY = startY,
+      maxY = startY;
     let pixelCount = 0;
-    
+
     while (stack.length > 0) {
       const [x, y] = stack.pop()!;
       const idx = y * width + x;
-      
+
       if (x < 0 || x >= width || y < 0 || y >= height || visited[idx]) {
         continue;
       }
-      
+
       const pixelIdx = idx * 4;
       const luminance = getLuminance(pixelIdx);
-      
+
       if (luminance >= luminanceThreshold) {
         continue; // Too bright, not part of inked region
       }
-      
+
       visited[idx] = 1;
       pixelCount++;
-      
+
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
       minY = Math.min(minY, y);
       maxY = Math.max(maxY, y);
-      
+
       // Add neighbors to stack
       stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
     }
-    
+
     // Filter out very small regions (likely noise)
     if (pixelCount < 20) {
       return null;
     }
-    
+
     return {
       x: minX,
       y: minY,
@@ -780,16 +826,16 @@ function findInkedRegions(ctx: CanvasRenderingContext2D, width: number, height: 
       height: maxY - minY + 1
     };
   }
-  
+
   // Scan for inked regions
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = y * width + x;
       if (visited[idx]) continue;
-      
+
       const pixelIdx = idx * 4;
       const luminance = getLuminance(pixelIdx);
-      
+
       if (luminance < luminanceThreshold) {
         const region = floodFill(x, y);
         if (region) {
@@ -798,79 +844,83 @@ function findInkedRegions(ctx: CanvasRenderingContext2D, width: number, height: 
       }
     }
   }
-  
+
   // Merge overlapping or nearby regions
   return mergeNearbyRegions(regions);
 }
 
 function mergeNearbyRegions(regions: BoundingBox[]): BoundingBox[] {
   if (regions.length <= 1) return regions;
-  
+
   const merged: BoundingBox[] = [];
   const used = new Set<number>();
   const proximityThreshold = 10; // pixels
-  
+
   for (let i = 0; i < regions.length; i++) {
     if (used.has(i)) continue;
-    
+
     let current = { ...regions[i] };
     let didMerge = true;
-    
+
     while (didMerge) {
       didMerge = false;
-      
+
       for (let j = 0; j < regions.length; j++) {
         if (i === j || used.has(j)) continue;
-        
+
         const other = regions[j];
-        
+
         // Check if regions are close enough to merge
-        const xOverlap = !(current.x + current.width + proximityThreshold < other.x || 
-                          other.x + other.width + proximityThreshold < current.x);
-        const yOverlap = !(current.y + current.height + proximityThreshold < other.y || 
-                          other.y + other.height + proximityThreshold < current.y);
-        
+        const xOverlap = !(
+          current.x + current.width + proximityThreshold < other.x ||
+          other.x + other.width + proximityThreshold < current.x
+        );
+        const yOverlap = !(
+          current.y + current.height + proximityThreshold < other.y ||
+          other.y + other.height + proximityThreshold < current.y
+        );
+
         if (xOverlap && yOverlap) {
           // Merge regions
           const minX = Math.min(current.x, other.x);
           const minY = Math.min(current.y, other.y);
           const maxX = Math.max(current.x + current.width, other.x + other.width);
           const maxY = Math.max(current.y + current.height, other.y + other.height);
-          
+
           current = {
             x: minX,
             y: minY,
             width: maxX - minX,
             height: maxY - minY
           };
-          
+
           used.add(j);
           didMerge = true;
         }
       }
     }
-    
+
     merged.push(current);
   }
-  
+
   return merged;
 }
 
 function getTextBoundingBoxes(textContent: TextContent, viewport: any): BoundingBox[] {
   const boxes: BoundingBox[] = [];
-  
+
   for (const item of (textContent as any).items) {
     if ('str' in item && item.str.trim()) {
       const tx = item.transform;
       const fontSize = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1]);
       const angle = Math.atan2(tx[1], tx[0]);
-      
+
       // Calculate bounding box
       const x = tx[4];
       const y = viewport.height - tx[5]; // Flip Y coordinate
       const width = item.width * fontSize;
       const height = item.height * fontSize;
-      
+
       boxes.push({
         x: x,
         y: y - height, // Adjust for top-left origin
@@ -879,73 +929,284 @@ function getTextBoundingBoxes(textContent: TextContent, viewport: any): Bounding
       });
     }
   }
-  
+
   return boxes;
 }
 
 function calculateTextCoverage(region: BoundingBox, textBounds: BoundingBox[]): number {
   let textArea = 0;
   const regionArea = region.width * region.height;
-  
+
   for (const text of textBounds) {
     // Calculate intersection
-    const xOverlap = Math.max(0, Math.min(region.x + region.width, text.x + text.width) - Math.max(region.x, text.x));
-    const yOverlap = Math.max(0, Math.min(region.y + region.height, text.y + text.height) - Math.max(region.y, text.y));
-    
+    const xOverlap = Math.max(
+      0,
+      Math.min(region.x + region.width, text.x + text.width) - Math.max(region.x, text.x)
+    );
+    const yOverlap = Math.max(
+      0,
+      Math.min(region.y + region.height, text.y + text.height) - Math.max(region.y, text.y)
+    );
+
     if (xOverlap > 0 && yOverlap > 0) {
       textArea += xOverlap * yOverlap;
     }
   }
-  
+
   return textArea / regionArea;
 }
 
 function isRegionTooSimple(
-  ctx: CanvasRenderingContext2D, 
-  region: BoundingBox, 
+  ctx: CanvasRenderingContext2D,
+  region: BoundingBox,
   textBounds: BoundingBox[]
 ): boolean {
   // Sample the region excluding text areas
   const sampleSize = 10;
   const samples: [number, number, number][] = [];
-  
+
   for (let i = 0; i < sampleSize; i++) {
     for (let j = 0; j < sampleSize; j++) {
       const x = region.x + (region.width * i) / sampleSize;
       const y = region.y + (region.height * j) / sampleSize;
-      
+
       // Check if this point is inside any text bound
       let insideText = false;
       for (const text of textBounds) {
-        if (x >= text.x && x <= text.x + text.width &&
-            y >= text.y && y <= text.y + text.height) {
+        if (x >= text.x && x <= text.x + text.width && y >= text.y && y <= text.y + text.height) {
           insideText = true;
           break;
         }
       }
-      
+
       if (!insideText) {
         const pixel = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
         samples.push([pixel[0], pixel[1], pixel[2]]);
       }
     }
   }
-  
+
   if (samples.length === 0) return true;
-  
+
   // Calculate color variance
-  const avgColor = samples.reduce(
-    (acc, color) => [acc[0] + color[0], acc[1] + color[1], acc[2] + color[2]],
-    [0, 0, 0]
-  ).map(v => v / samples.length);
-  
-  const variance = samples.reduce((acc, color) => {
-    const diff = Math.abs(color[0] - avgColor[0]) + 
-                 Math.abs(color[1] - avgColor[1]) + 
-                 Math.abs(color[2] - avgColor[2]);
-    return acc + diff;
-  }, 0) / samples.length;
-  
+  const avgColor = samples
+    .reduce((acc, color) => [acc[0] + color[0], acc[1] + color[1], acc[2] + color[2]], [0, 0, 0])
+    .map(v => v / samples.length);
+
+  const variance =
+    samples.reduce((acc, color) => {
+      const diff =
+        Math.abs(color[0] - avgColor[0]) +
+        Math.abs(color[1] - avgColor[1]) +
+        Math.abs(color[2] - avgColor[2]);
+      return acc + diff;
+    }, 0) / samples.length;
+
   // If variance is very low, region is too simple (single color background)
   return variance < 30;
+}
+
+/**
+ * Generate visualization for a page showing detected regions
+ */
+async function generatePageVisualization(
+  page: PDFPageProxy,
+  pageNumber: number
+): Promise<PageVisualization | null> {
+  try {
+    const scale = 2; // Higher scale for better quality
+    const viewport = page.getViewport({ scale });
+
+    // Create canvas for base rendering
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d')!;
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    // Render the page
+    await page.render({
+      canvasContext: context,
+      canvas: canvas,
+      viewport: viewport
+    }).promise;
+
+    // Get text bounds for visualization
+    const textContent = await page.getTextContent();
+    const textBounds = getTextBoundingBoxes(textContent as any, viewport);
+
+    // Detect graphics regions
+    const graphicBlocks = await detectGraphicsRegions(page);
+
+    // Find inked regions for visualization
+    const inkedRegions = await findInkedRegionsForVisualization(context, canvas.width, canvas.height);
+
+    // Draw visualizations on top of the rendered page
+    drawVisualizationOverlays(context, {
+      textBounds,
+      graphicBlocks,
+      inkedRegions,
+      scale
+    });
+
+    // Convert to base64
+    const dataUrl = canvas.toDataURL('image/png');
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+
+    return {
+      pageNumber,
+      base64,
+      mimeType: 'image/png'
+    };
+  } catch (error) {
+    notifyDebug(`Failed to generate visualization for page ${pageNumber}`, error);
+    return null;
+  }
+}
+
+/**
+ * Find inked regions specifically for visualization purposes
+ */
+async function findInkedRegionsForVisualization(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): Promise<BoundingBox[]> {
+  const downsampleFactor = 4;
+  
+  // Create downsampled canvas
+  const downsampledCanvas = document.createElement('canvas');
+  const downsampledCtx = downsampledCanvas.getContext('2d', { willReadFrequently: true })!;
+  downsampledCanvas.width = Math.floor(width / downsampleFactor);
+  downsampledCanvas.height = Math.floor(height / downsampleFactor);
+
+  // Downsample the image
+  downsampledCtx.drawImage(
+    ctx.canvas,
+    0,
+    0,
+    width,
+    height,
+    0,
+    0,
+    downsampledCanvas.width,
+    downsampledCanvas.height
+  );
+
+  // Find inked regions
+  const regions = findInkedRegions(
+    downsampledCtx,
+    downsampledCanvas.width,
+    downsampledCanvas.height
+  );
+
+  // Scale regions back to original size
+  return regions.map(region => ({
+    x: region.x * downsampleFactor,
+    y: region.y * downsampleFactor,
+    width: region.width * downsampleFactor,
+    height: region.height * downsampleFactor
+  }));
+}
+
+/**
+ * Draw visualization overlays on the canvas
+ */
+function drawVisualizationOverlays(
+  ctx: CanvasRenderingContext2D,
+  data: {
+    textBounds: BoundingBox[];
+    graphicBlocks: GraphicBlock[];
+    inkedRegions: BoundingBox[];
+    scale: number;
+  }
+): void {
+  const { textBounds, graphicBlocks, inkedRegions, scale } = data;
+
+  // Set composite operation for transparency
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Draw inked regions in semi-transparent blue
+  ctx.fillStyle = 'rgba(0, 100, 255, 0.2)';
+  ctx.strokeStyle = 'rgba(0, 100, 255, 0.6)';
+  ctx.lineWidth = 2;
+  for (const region of inkedRegions) {
+    ctx.fillRect(region.x, region.y, region.width, region.height);
+    ctx.strokeRect(region.x, region.y, region.width, region.height);
+  }
+
+  // Draw graphic blocks (image regions) in semi-transparent green
+  ctx.fillStyle = 'rgba(0, 255, 100, 0.2)';
+  ctx.strokeStyle = 'rgba(0, 255, 100, 0.6)';
+  ctx.lineWidth = 2;
+  for (const block of graphicBlocks) {
+    const x = block.x * scale;
+    const y = block.y * scale;
+    const width = block.width * scale;
+    const height = block.height * scale;
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeRect(x, y, width, height);
+  }
+
+  // Draw text bounds in semi-transparent red
+  ctx.fillStyle = 'rgba(255, 0, 100, 0.1)';
+  ctx.strokeStyle = 'rgba(255, 0, 100, 0.4)';
+  ctx.lineWidth = 1;
+  for (const textBound of textBounds) {
+    ctx.fillRect(textBound.x, textBound.y, textBound.width, textBound.height);
+    ctx.strokeRect(textBound.x, textBound.y, textBound.width, textBound.height);
+  }
+
+  // Add legend
+  drawLegend(ctx, ctx.canvas.width, ctx.canvas.height);
+}
+
+/**
+ * Draw a legend explaining the visualization colors
+ */
+function drawLegend(ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number): void {
+  const legendItems = [
+    { color: 'rgba(0, 100, 255, 0.6)', label: 'Inked Regions' },
+    { color: 'rgba(0, 255, 100, 0.6)', label: 'Graphics/Images' },
+    { color: 'rgba(255, 0, 100, 0.4)', label: 'Text Bounds' }
+  ];
+
+  const padding = 20;
+  const boxSize = 15;
+  const lineHeight = 25;
+  const fontSize = 14;
+  
+  // Calculate legend dimensions
+  const legendWidth = 150;
+  const legendHeight = padding * 2 + legendItems.length * lineHeight;
+  
+  // Position legend in top-right corner
+  const legendX = canvasWidth - legendWidth - padding;
+  const legendY = padding;
+
+  // Draw semi-transparent background
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
+  
+  // Draw border
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
+
+  // Draw legend items
+  ctx.font = `${fontSize}px Arial`;
+  ctx.textBaseline = 'middle';
+  
+  legendItems.forEach((item, index) => {
+    const y = legendY + padding + index * lineHeight + boxSize / 2;
+    
+    // Draw color box
+    ctx.fillStyle = item.color;
+    ctx.fillRect(legendX + padding, y - boxSize / 2, boxSize, boxSize);
+    ctx.strokeStyle = item.color;
+    ctx.strokeRect(legendX + padding, y - boxSize / 2, boxSize, boxSize);
+    
+    // Draw label
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillText(item.label, legendX + padding + boxSize + 10, y);
+  });
 }
