@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  node-nightly:
+  node-package-test:
     strategy:
       matrix:
         include:
@@ -22,17 +22,31 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Create clean test environment
+        run: |
+          mkdir -p /tmp/poml_test
+          cp -r examples /tmp/poml_test/
       - name: Install POML nightly
         run: |
+          cd /tmp/poml_test
           npm init -y
           npm install pomljs@nightly
-      - run: |
+      - name: Test all .poml examples
+        run: |
+          cd /tmp/poml_test
           set -ex
-          npx poml examples/101_explain_character.poml
-      - run: |
-          node examples/401_pomljs_hello_world.mjs
+          for poml_file in examples/*.poml; do
+            echo "Testing $poml_file"
+            npx poml "$poml_file"
+          done
+        shell: bash
+      - name: Copy and test API example
+        run: |
+          cp examples/401_pomljs_hello_world.mjs /tmp/poml_test/
+          cd /tmp/poml_test
+          node 401_pomljs_hello_world.mjs
 
-  python-nightly:
+  python-package-test:
     strategy:
       matrix:
         include:
@@ -48,9 +62,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Create clean test environment
+        run: |
+          mkdir -p /tmp/poml_test
+          cp -r examples /tmp/poml_test/
       - run: |
           pip install --upgrade --pre --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ poml
-      - run: |
+      - name: Test all .poml examples
+        run: |
+          cd /tmp/poml_test
           set -ex
-          poml-cli examples/101_explain_character.poml
-      - run: python examples/402_pomlpy_hello_world.py
+          for poml_file in examples/*.poml; do
+            echo "Testing $poml_file"
+            poml-cli "$poml_file"
+          done
+        shell: bash
+      - name: Copy and test API example
+        run: |
+          cp examples/402_pomlpy_hello_world.py /tmp/poml_test/
+          cd /tmp/poml_test
+          python 402_pomlpy_hello_world.py
